@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot", "/reset", "/auth", "/p/", "/r/", "/invite/", "/api/cron"];
+// /t.js et /api/t/* : script de tracking et collecte depuis les sites clients ; /l/ : liens courts
+const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot", "/reset", "/auth", "/p/", "/r/", "/l/", "/t.js", "/api/t/", "/invite/", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

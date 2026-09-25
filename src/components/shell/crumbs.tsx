@@ -15,7 +15,7 @@ const NAMES: Record<string, string> = {
   projects: "Projets", tasks: "Tâches", calendar: "Calendrier", timeline: "Timeline", members: "Membres", teams: "Équipes",
   activity: "Activité", archive: "Archives", settings: "Réglages", crm: "CRM", companies: "Clients & prospects",
   contacts: "Contacts", deals: "Deals", proposals: "Propositions", services: "Catalogue de services", reporting: "Reporting",
-  reports: "Rapports", connections: "Connexions publicitaires", integrations: "Connexions publicitaires",
+  reports: "Rapports", connections: "Connexions publicitaires", integrations: "Connexions publicitaires", tracking: "Attribution", links: "Liens trackés", sites: "Sites suivis", journeys: "Parcours",
   pipeline: "Pipeline", profile: "Profil", preferences: "Préférences", workspace: "Espace de travail", labels: "Étiquettes", shortcuts: "Raccourcis",
 };
 

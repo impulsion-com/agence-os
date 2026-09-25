@@ -752,6 +752,142 @@ export type Database = {
           },
         ]
       }
+      link_clicks: {
+        Row: {
+          browser: string | null
+          country: string | null
+          device: string | null
+          id: number
+          is_bot: boolean
+          link_id: string
+          os: string | null
+          referrer: string
+          token: string
+          ts: string
+          workspace_id: string
+        }
+        Insert: {
+          browser?: string | null
+          country?: string | null
+          device?: string | null
+          id?: never
+          is_bot?: boolean
+          link_id: string
+          os?: string | null
+          referrer?: string
+          token?: string
+          ts?: string
+          workspace_id: string
+        }
+        Update: {
+          browser?: string | null
+          country?: string | null
+          device?: string | null
+          id?: never
+          is_bot?: boolean
+          link_id?: string
+          os?: string | null
+          referrer?: string
+          token?: string
+          ts?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_clicks_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_clicks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      links: {
+        Row: {
+          active: boolean
+          clicks: number
+          code: string | null
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          destination: string
+          expires_at: string | null
+          final_url: string
+          id: string
+          last_click_at: string | null
+          name: string
+          site_id: string | null
+          tags: string[]
+          utm: Json
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          clicks?: number
+          code?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination: string
+          expires_at?: string | null
+          final_url: string
+          id?: string
+          last_click_at?: string | null
+          name?: string
+          site_id?: string | null
+          tags?: string[]
+          utm?: Json
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          clicks?: number
+          code?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination?: string
+          expires_at?: string | null
+          final_url?: string
+          id?: string
+          last_click_at?: string | null
+          name?: string
+          site_id?: string | null
+          tags?: string[]
+          utm?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "links_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "links_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           actor_id: string | null
@@ -1558,6 +1694,351 @@ export type Database = {
           },
         ]
       }
+      touchpoints: {
+        Row: {
+          ad_key: string | null
+          adset_key: string | null
+          campaign_key: string | null
+          channel: string
+          click_id: string | null
+          click_id_type: string | null
+          id: number
+          landing_url: string
+          link_click_id: number | null
+          link_id: string | null
+          platform: string | null
+          referrer: string
+          site_id: string
+          ts: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_id: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visitor_id: string
+          workspace_id: string
+        }
+        Insert: {
+          ad_key?: string | null
+          adset_key?: string | null
+          campaign_key?: string | null
+          channel?: string
+          click_id?: string | null
+          click_id_type?: string | null
+          id?: never
+          landing_url?: string
+          link_click_id?: number | null
+          link_id?: string | null
+          platform?: string | null
+          referrer?: string
+          site_id: string
+          ts?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_id?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id: string
+          workspace_id: string
+        }
+        Update: {
+          ad_key?: string | null
+          adset_key?: string | null
+          campaign_key?: string | null
+          channel?: string
+          click_id?: string | null
+          click_id_type?: string | null
+          id?: never
+          landing_url?: string
+          link_click_id?: number | null
+          link_id?: string | null
+          platform?: string | null
+          referrer?: string
+          site_id?: string
+          ts?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_id?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "touchpoints_link_fk"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "touchpoints_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "touchpoints_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "visitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "touchpoints_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracking_events: {
+        Row: {
+          currency: string | null
+          id: number
+          name: string | null
+          order_id: string | null
+          props: Json
+          site_id: string
+          source: string
+          ts: string
+          type: string
+          url: string | null
+          value: number | null
+          visitor_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          currency?: string | null
+          id?: never
+          name?: string | null
+          order_id?: string | null
+          props?: Json
+          site_id: string
+          source?: string
+          ts?: string
+          type: string
+          url?: string | null
+          value?: number | null
+          visitor_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          currency?: string | null
+          id?: never
+          name?: string | null
+          order_id?: string | null
+          props?: Json
+          site_id?: string
+          source?: string
+          ts?: string
+          type?: string
+          url?: string | null
+          value?: number | null
+          visitor_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_events_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_events_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "visitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracking_sites: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          domains: string[]
+          id: string
+          last_event_at: string | null
+          name: string
+          public_key: string
+          secret_key: string
+          settings: Json
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          domains?: string[]
+          id?: string
+          last_event_at?: string | null
+          name: string
+          public_key?: string
+          secret_key?: string
+          settings?: Json
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          domains?: string[]
+          id?: string
+          last_event_at?: string | null
+          name?: string
+          public_key?: string
+          secret_key?: string
+          settings?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_sites_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_sites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      utm_presets: {
+        Row: {
+          extra_params: string
+          id: string
+          name: string
+          position: number
+          utm_campaign: string
+          utm_content: string
+          utm_medium: string
+          utm_source: string
+          utm_term: string
+          workspace_id: string
+        }
+        Insert: {
+          extra_params?: string
+          id?: string
+          name: string
+          position?: number
+          utm_campaign?: string
+          utm_content?: string
+          utm_medium?: string
+          utm_source?: string
+          utm_term?: string
+          workspace_id: string
+        }
+        Update: {
+          extra_params?: string
+          id?: string
+          name?: string
+          position?: number
+          utm_campaign?: string
+          utm_content?: string
+          utm_medium?: string
+          utm_source?: string
+          utm_term?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "utm_presets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visitors: {
+        Row: {
+          anon_id: string
+          contact_id: string | null
+          country: string | null
+          device: string | null
+          email: string | null
+          first_seen: string
+          id: string
+          identified_at: string | null
+          last_seen: string
+          name: string | null
+          phone: string | null
+          site_id: string
+          workspace_id: string
+        }
+        Insert: {
+          anon_id: string
+          contact_id?: string | null
+          country?: string | null
+          device?: string | null
+          email?: string | null
+          first_seen?: string
+          id?: string
+          identified_at?: string | null
+          last_seen?: string
+          name?: string | null
+          phone?: string | null
+          site_id: string
+          workspace_id: string
+        }
+        Update: {
+          anon_id?: string
+          contact_id?: string | null
+          country?: string | null
+          device?: string | null
+          email?: string | null
+          first_seen?: string
+          id?: string
+          identified_at?: string | null
+          last_seen?: string
+          name?: string | null
+          phone?: string | null
+          site_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visitors_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitors_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitors_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           joined_at: string
@@ -1724,6 +2205,7 @@ export type Database = {
           spend: number
         }[]
       }
+      bump_link: { Args: { p_link: string }; Returns: undefined }
       can_write: { Args: { ws: string }; Returns: boolean }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
       create_workspace: {
@@ -1770,6 +2252,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      seed_utm_presets: { Args: { ws: string }; Returns: undefined }
       seed_workspace_defaults: { Args: { ws: string }; Returns: undefined }
       shares_workspace: { Args: { other: string }; Returns: boolean }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }

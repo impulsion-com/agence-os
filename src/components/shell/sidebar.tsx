@@ -149,6 +149,8 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
 
         <Section id="perf" title="Performance">
           <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />
+          <Item href={`${b}/tracking`} icon="mouse-pointer-click" label="Attribution" />
+          <Item href={`${b}/links`} icon="link" label="Liens trackés" />
         </Section>
 
         <Section id="team" title="Agence" defaultOpen={false}>

@@ -88,7 +88,7 @@ export function CommandPalette() {
       ["Vue d'ensemble", "layout-dashboard", `${b}/overview`], ["Projets", "folder-kanban", `${b}/projects`], ["Tâches", "list-checks", `${b}/tasks`],
       ["Calendrier", "calendar", `${b}/calendar`], ["Timeline", "chart-gantt", `${b}/timeline`], ["Pipeline", "handshake", `${b}/crm`],
       ["Clients & prospects", "building-2", `${b}/crm/companies`], ["Contacts", "contact", `${b}/crm/contacts`], ["Propositions", "file-signature", `${b}/proposals`],
-      ["Reporting", "chart-column", `${b}/reporting`], ["Membres", "users", `${b}/members`], ["Équipes", "layers", `${b}/teams`],
+      ["Reporting", "chart-column", `${b}/reporting`], ["Attribution", "mouse-pointer-click", `${b}/tracking`], ["Liens trackés", "link", `${b}/links`], ["Membres", "users", `${b}/members`], ["Équipes", "layers", `${b}/teams`],
       ["Activité", "activity", `${b}/activity`], ["Réglages", "settings", `${b}/settings`],
     ];
     const act = (fn: () => void) => () => { close(); fn(); };
