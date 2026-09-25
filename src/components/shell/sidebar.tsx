@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronsUpDown, PanelLeft, Plus, Star } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronsUpDown, PanelLeft, Plus, Star } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
@@ -38,6 +39,36 @@ function Item({ href, icon, label, count, accent, exact }: { href: string; icon:
       <span className="trunc">{label}</span>
       {!!count && <span className={`count${accent ? " accent" : ""}`}>{count}</span>}
     </Link>
+  );
+}
+
+// Section repliable, état mémorisé par navigateur
+function Section({ id, title, action, children, defaultOpen = true }: { id: string; title: string; action?: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(`aos-side-${id}`);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (v !== null) setOpen(v === "1");
+    } catch {}
+  }, [id]);
+  const toggle = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(`aos-side-${id}`, open ? "0" : "1");
+    } catch {}
+  };
+  return (
+    <div className="side-sec">
+      <div className="side-title">
+        <button type="button" onClick={toggle} aria-expanded={open} className="side-title-btn">
+          {title}
+          <ChevronDown size={11} style={{ transform: open ? undefined : "rotate(-90deg)", transition: "transform var(--dur)" }} />
+        </button>
+        {action}
+      </div>
+      {open && children}
+    </div>
   );
 }
 
@@ -101,44 +132,42 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <kbd style={{ marginLeft: "auto" }}>⌘K</kbd>
         </button>
 
-        <div className="side-sec">
-          <div className="side-title">Production</div>
+        <Section id="prod" title="Production">
           <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
           <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
           <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
           <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
           <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
-        </div>
+        </Section>
 
-        <div className="side-sec">
-          <div className="side-title">Commercial</div>
+        <Section id="com" title="Commercial">
           <Item href={`${b}/crm`} icon="handshake" label="Pipeline" exact />
           <Item href={`${b}/crm/companies`} icon="building-2" label="Clients & prospects" />
           <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />
           <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />
-        </div>
+        </Section>
 
-        <div className="side-sec">
-          <div className="side-title">Performance</div>
+        <Section id="perf" title="Performance">
           <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />
-        </div>
+        </Section>
 
-        <div className="side-sec">
-          <div className="side-title">Agence</div>
+        <Section id="team" title="Agence" defaultOpen={false}>
           <Item href={`${b}/members`} icon="users" label="Membres" />
           <Item href={`${b}/teams`} icon="layers" label="Équipes" />
           <Item href={`${b}/activity`} icon="activity" label="Activité" />
-        </div>
+        </Section>
 
-        <div className="side-sec">
-          <div className="side-title">
-            Projets
-            {ws.canWrite && (
+        <Section
+          id="proj"
+          title="Projets"
+          action={
+            ws.canWrite && (
               <button className="btn btn-ghost btn-sm btn-icon" style={{ ["--h" as string]: "20px" }} aria-label="Nouveau projet" onClick={() => ui.create({ kind: "project" })}>
                 <Plus size={13} />
               </button>
-            )}
-          </div>
+            )
+          }
+        >
           {sideProjects.map((p) => {
             const href = `${b}/projects/${p.key}`;
             const on = path.startsWith(href);
@@ -169,7 +198,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             );
           })}
           {!sideProjects.length && <div className="faint" style={{ padding: "4px 8px", fontSize: "var(--fs-sm)" }}>Aucun projet pour l&apos;instant</div>}
-        </div>
+        </Section>
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", padding: 8 }}>

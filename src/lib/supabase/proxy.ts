@@ -27,6 +27,9 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = path === "/" ? false : PUBLIC_PREFIXES.some((p) => path.startsWith(p));
 
+  if (!data?.claims && !isPublic && path.startsWith("/api/")) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
   if (!data?.claims && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

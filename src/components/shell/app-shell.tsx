@@ -62,10 +62,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ws = useWorkspace();
   const path = usePathname();
   const [hidden, setHidden] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // Ouvert sur mobile pour une route donnée : se referme de lui-même à la navigation
+  const [openAt, setOpenAt] = useState<string | null>(null);
+  const mobileOpen = openAt === path;
+  const setMobileOpen = (v: boolean | ((x: boolean) => boolean)) =>
+    setOpenAt(((typeof v === "function" ? v(mobileOpen) : v) ? path : null));
 
   useEffect(() => applyPrefs(ws.me.prefs ?? {}, ws.workspace.accent), [ws.me.prefs, ws.workspace.accent]);
-  useEffect(() => setMobileOpen(false), [path]);
 
   const toggle = () => {
     if (window.innerWidth < 900) setMobileOpen((v) => !v);

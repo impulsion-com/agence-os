@@ -230,13 +230,17 @@ kbd, .kbd {
 }
 .app.side-hidden .side { margin-left: calc(var(--side-w) * -1); }
 .side-scroll { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
-.side-sec { margin-top: 18px; }
+.side-sec { margin-top: 14px; }
+.side-title-btn { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; }
+.side-title-btn:hover { color: var(--text); }
+.side-title-btn svg { opacity: 0; transition: opacity var(--dur); }
+.side-sec:hover .side-title-btn svg, .side-title-btn[aria-expanded="false"] svg { opacity: 1; }
 .side-title {
   font-size: var(--fs-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3);
   padding: 0 8px 6px; display: flex; align-items: center; justify-content: space-between;
 }
 .side-item {
-  display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 8px; border-radius: var(--r-sm);
+  display: flex; align-items: center; gap: 9px; height: 29px; padding: 0 8px; border-radius: var(--r-sm);
   color: var(--text-2); font-size: var(--fs); font-weight: 450; width: 100%; text-align: left;
   transition: background var(--dur), color var(--dur);
 }
@@ -329,7 +333,7 @@ kbd, .kbd {
 }
 
 /* État vide */
-.empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 48px 24px; gap: 8px; color: var(--text-2); }
+.empty:not(.pill):not(.av) { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 48px 24px; gap: 8px; color: var(--text-2); }
 .empty .ic { width: 40px; height: 40px; border-radius: var(--r); background: var(--surface-3); display: grid; place-items: center; color: var(--text-3); margin-bottom: 6px; }
 .empty h3 { font-size: var(--fs-md); color: var(--text); }
 .empty p { max-width: 360px; font-size: var(--fs-sm); }

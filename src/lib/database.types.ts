@@ -86,6 +86,7 @@ export type Database = {
           created_at: string
           currency: string
           external_id: string
+          first_synced_at: string | null
           id: string
           last_synced_at: string | null
           login_customer_id: string | null
@@ -100,6 +101,7 @@ export type Database = {
           created_at?: string
           currency?: string
           external_id: string
+          first_synced_at?: string | null
           id?: string
           last_synced_at?: string | null
           login_customer_id?: string | null
@@ -114,6 +116,7 @@ export type Database = {
           created_at?: string
           currency?: string
           external_id?: string
+          first_synced_at?: string | null
           id?: string
           last_synced_at?: string | null
           login_customer_id?: string | null
@@ -156,33 +159,45 @@ export type Database = {
       ad_connections: {
         Row: {
           access_token: string
+          accounts: Json
+          accounts_refreshed_at: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
+          external_user_id: string | null
           id: string
           label: string
+          last_error: string | null
           platform: string
           refresh_token: string | null
           workspace_id: string
         }
         Insert: {
           access_token: string
+          accounts?: Json
+          accounts_refreshed_at?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          external_user_id?: string | null
           id?: string
           label?: string
+          last_error?: string | null
           platform: string
           refresh_token?: string | null
           workspace_id: string
         }
         Update: {
           access_token?: string
+          accounts?: Json
+          accounts_refreshed_at?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          external_user_id?: string | null
           id?: string
           label?: string
+          last_error?: string | null
           platform?: string
           refresh_token?: string | null
           workspace_id?: string
@@ -1626,26 +1641,38 @@ export type Database = {
     Views: {
       ad_connections_public: {
         Row: {
+          accounts: Json | null
+          accounts_refreshed_at: string | null
           created_at: string | null
+          created_by: string | null
           expires_at: string | null
           id: string | null
           label: string | null
+          last_error: string | null
           platform: string | null
           workspace_id: string | null
         }
         Insert: {
+          accounts?: Json | null
+          accounts_refreshed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
           expires_at?: string | null
           id?: string | null
           label?: string | null
+          last_error?: string | null
           platform?: string | null
           workspace_id?: string | null
         }
         Update: {
+          accounts?: Json | null
+          accounts_refreshed_at?: string | null
           created_at?: string | null
+          created_by?: string | null
           expires_at?: string | null
           id?: string | null
           label?: string | null
+          last_error?: string | null
           platform?: string | null
           workspace_id?: string | null
         }
@@ -1662,6 +1689,41 @@ export type Database = {
     }
     Functions: {
       accept_invitation: { Args: { p_token: string }; Returns: string }
+      ad_campaigns: {
+        Args: {
+          p_company: string
+          p_end: string
+          p_start: string
+          p_ws: string
+        }
+        Returns: {
+          ad_account_id: string
+          campaign_id: string
+          campaign_name: string
+          clicks: number
+          conversion_value: number
+          conversions: number
+          impressions: number
+          spend: number
+        }[]
+      }
+      ad_daily: {
+        Args: {
+          p_company?: string
+          p_end: string
+          p_start: string
+          p_ws: string
+        }
+        Returns: {
+          ad_account_id: string
+          clicks: number
+          conversion_value: number
+          conversions: number
+          date: string
+          impressions: number
+          spend: number
+        }[]
+      }
       can_write: { Args: { ws: string }; Returns: boolean }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
       create_workspace: {
@@ -1710,6 +1772,7 @@ export type Database = {
       }
       seed_workspace_defaults: { Args: { ws: string }; Returns: undefined }
       shares_workspace: { Args: { other: string }; Returns: boolean }
+      spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }
     }
     Enums: {

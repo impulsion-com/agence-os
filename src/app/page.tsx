@@ -14,5 +14,9 @@ export default async function Root() {
     .order("joined_at", { ascending: false })
     .limit(1);
   const slug = (data?.[0]?.workspace as unknown as { slug: string } | null)?.slug;
-  redirect(slug ? `/w/${slug}` : "/onboarding");
+  if (!slug) redirect("/onboarding");
+  // Page d'accueil choisie dans Réglages > Préférences (chemin relatif à l'espace)
+  const { data: me } = await sb.from("profiles").select("prefs").eq("id", auth.user.id).single();
+  const home = (me?.prefs as { home?: string } | null)?.home?.replace(/^\/+/, "") ?? "";
+  redirect(`/w/${slug}${/^[a-z-]+$/.test(home) ? `/${home}` : ""}`);
 }

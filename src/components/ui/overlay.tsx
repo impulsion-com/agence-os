@@ -4,18 +4,30 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
+// Pile des couches ouvertes : Échap ne ferme que la plus haute (menu avant modale).
+const layers: symbol[] = [];
+
 function useEscape(onClose: () => void, active = true) {
+  const cb = useRef(onClose);
+  useEffect(() => {
+    cb.current = onClose;
+  });
   useEffect(() => {
     if (!active) return;
+    const id = Symbol();
+    layers.push(id);
     const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && layers[layers.length - 1] === id) {
         e.stopPropagation();
-        onClose();
+        cb.current();
       }
     };
     window.addEventListener("keydown", h, true);
-    return () => window.removeEventListener("keydown", h, true);
-  }, [onClose, active]);
+    return () => {
+      window.removeEventListener("keydown", h, true);
+      layers.splice(layers.indexOf(id), 1);
+    };
+  }, [active]);
 }
 
 /**

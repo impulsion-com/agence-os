@@ -73,7 +73,7 @@ export const GROUPS: { id: GroupKey; name: string }[] = [
 export const PLATFORMS: { id: string; name: string; color: string }[] = [
   { id: "meta", name: "Meta Ads", color: "#3B82C4" },
   { id: "google", name: "Google Ads", color: "#C48A1E" },
-  { id: "tiktok", name: "TikTok Ads", color: "#1D1C1A" },
+  { id: "tiktok", name: "TikTok Ads", color: "#E1306C" },
   { id: "linkedin", name: "LinkedIn Ads", color: "#23918A" },
   { id: "snapchat", name: "Snapchat Ads", color: "#C48A1E" },
   { id: "pinterest", name: "Pinterest Ads", color: "#B23C30" },

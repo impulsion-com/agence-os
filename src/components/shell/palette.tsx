@@ -11,6 +11,7 @@ import { StatusIcon } from "@/components/ui/status";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace/context";
 import type { TaskStatus } from "@/lib/types";
+import { openTask } from "@/components/tasks/view-state";
 import { useUI } from "./ui-context";
 
 interface Cmd {
@@ -23,6 +24,12 @@ interface Cmd {
 }
 
 // Palette ⌘K : navigation, actions, recherche de tâches, deals et contacts.
+// Ouvre le tiroir de la tâche sur place si on est déjà sur la page, sinon navigue.
+function openTaskFrom(href: string, id: string, push: (u: string) => void) {
+  if (location.pathname.includes("/projects/") || location.pathname.endsWith("/tasks") || location.pathname.endsWith("/my-tasks")) openTask(id);
+  else push(`${href}?task=${id}`);
+}
+
 export function CommandPalette() {
   const ws = useWorkspace();
   const ui = useUI();
@@ -50,10 +57,7 @@ export function CommandPalette() {
 
   // Recherche serveur : tâches, deals, contacts
   useEffect(() => {
-    if (!open || q.trim().length < 2) {
-      setRemote([]);
-      return;
-    }
+    if (!open || q.trim().length < 2) return;
     const t = setTimeout(async () => {
       const sb = supabaseBrowser();
       const like = `%${q.trim()}%`;
@@ -66,7 +70,7 @@ export function CommandPalette() {
       setRemote([
         ...(tasks.data ?? []).map((t) => {
           const p = ws.project(t.project_id);
-          return { id: "t" + t.id, group: "Tâches", label: t.title, icon: <StatusIcon status={t.status as TaskStatus} />, hint: p ? `${p.key}-${t.number}` : "", run: go(`${ws.base}/projects/${p?.key}/board?task=${t.id}`) };
+          return { id: "t" + t.id, group: "Tâches", label: t.title, icon: <StatusIcon status={t.status as TaskStatus} />, hint: p ? `${p.key}-${t.number}` : "", run: () => { close(); openTaskFrom(`${ws.base}/projects/${p?.key}/board`, t.id, router.push); } };
         }),
         ...(deals.data ?? []).map((d) => ({ id: "d" + d.id, group: "Deals", label: d.title, icon: <Icon name="handshake" size={15} />, run: go(`${ws.base}/crm/deals/${d.id}`) })),
         ...(contacts.data ?? []).map((c) => ({ id: "c" + c.id, group: "Contacts", label: `${c.first_name} ${c.last_name}`.trim() || c.email, icon: <Icon name="contact" size={15} />, hint: c.email, run: go(`${ws.base}/crm/contacts/${c.id}`) })),
@@ -106,7 +110,7 @@ export function CommandPalette() {
   }, [ws]);
 
   const ql = q.trim().toLowerCase();
-  const items = [...local.filter((c) => !ql || c.label.toLowerCase().includes(ql) || c.hint?.toLowerCase().includes(ql)).slice(0, ql ? 30 : 14), ...remote];
+  const items = [...local.filter((c) => !ql || c.label.toLowerCase().includes(ql) || c.hint?.toLowerCase().includes(ql)).slice(0, ql ? 30 : 14), ...(q.trim().length >= 2 ? remote : [])];
   if (!open) return null;
   let lastGroup = "";
   return createPortal(

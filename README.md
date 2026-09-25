@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agence OS
 
-## Getting Started
+L'espace de travail open source des agences marketing, media buying et creative strategy.
+Projets, CRM, propositions commerciales et reporting publicitaire au même endroit, dans
+une interface sobre et rapide, pensée pour le quotidien d'une agence.
 
-First, run the development server:
+Projet libre (licence MIT) porté par [Impulsion](https://impulsion.com) pour ses élèves :
+chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Ce que ça fait
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Gestion de projet**
+- Projets par client avec modèles prêts à l'emploi : onboarding client, lancement Meta Ads,
+  audit Google Ads, sprint créa mensuel, suivi mensuel.
+- Vues Tableau (kanban), Liste, Table, Calendrier, Timeline (Gantt avec dépendances et
+  jalons), Fichiers (créas, briefs, exports), Activité, et vues enregistrées.
+- Tâches avec statuts (jusqu'à « Validation client »), priorités, étiquettes métier (Créa,
+  Copy, Média, Tracking, Landing, Reporting…), sous-tâches, dépendances, récurrence,
+  commentaires et pièces jointes.
+- Boîte de réception, mes tâches, favoris, palette de commandes ⌘K et raccourcis clavier.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**CRM**
+- Pipeline de deals en kanban (de « Nouveau lead » à « Gagné »), valeur mensuelle ou
+  ponctuelle, prévisionnel pondéré, MRR signé.
+- Clients et prospects, contacts, historique des échanges et relances.
+- Un deal gagné crée le projet d'onboarding du client.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Propositions commerciales**
+- Éditeur par blocs (contexte, approche, calendrier, KPI, prix) et catalogue de services.
+- Lien public à envoyer au client, options cochables, acceptation en ligne.
 
-## Learn More
+**Reporting**
+- Connexion Meta Ads et Google Ads, synchronisation quotidienne des campagnes.
+- Tableau de bord par client : dépense, conversions, CPA, ROAS, CTR, CPC, objectifs.
+- Rapports mensuels commentés, partagés par lien et imprimables en PDF.
 
-To learn more about Next.js, take a look at the following resources:
+**Équipe**
+- Espaces multi-agences, invitations, rôles (propriétaire, admin, membre, invité en lecture
+  seule), équipes (Media buying, Creative strategy, Account management, Tracking & data).
+- Thème clair et sombre, couleur d'accent, densité.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Démarrer
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase + Vercel, gratuit,
+environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md).
 
-## Deploy on Vercel
+## Stack technique
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [Next.js 16](https://nextjs.org) (App Router) et React 19, TypeScript.
+- [Supabase](https://supabase.com) : Postgres, authentification, stockage de fichiers et
+  règles d'accès (RLS) qui cloisonnent chaque agence.
+- Pas de librairie de composants : un petit design system maison dans
+  `src/app/globals.css`, icônes [Lucide](https://lucide.dev).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+L'organisation du code et les conventions sont décrites dans [CLAUDE.md](CLAUDE.md), qui
+sert aussi de guide à Claude Code si tu veux faire évoluer l'outil avec lui.
+
+## Contribuer
+
+Les suggestions et corrections sont les bienvenues : ouvre une issue ou une pull request.
+
+## Licence
+
+MIT, voir [LICENSE](LICENSE).

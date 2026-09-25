@@ -13,18 +13,16 @@ export interface Crumb {
 const NAMES: Record<string, string> = {
   inbox: "Boîte de réception", "my-tasks": "Mes tâches", favorites: "Favoris", search: "Recherche", overview: "Vue d'ensemble",
   projects: "Projets", tasks: "Tâches", calendar: "Calendrier", timeline: "Timeline", members: "Membres", teams: "Équipes",
-  activity: "Activité", archive: "Archives", settings: "Réglages", crm: "Pipeline", companies: "Clients & prospects",
+  activity: "Activité", archive: "Archives", settings: "Réglages", crm: "CRM", companies: "Clients & prospects",
   contacts: "Contacts", deals: "Deals", proposals: "Propositions", services: "Catalogue de services", reporting: "Reporting",
-  reports: "Rapports", connections: "Connexions publicitaires",
+  reports: "Rapports", connections: "Connexions publicitaires", integrations: "Connexions publicitaires",
+  pipeline: "Pipeline", profile: "Profil", preferences: "Préférences", workspace: "Espace de travail", labels: "Étiquettes", shortcuts: "Raccourcis",
 };
 
 const Ctx = createContext<{ set: (c: Crumb[] | null) => void; value: Crumb[] | null }>({ set: () => {}, value: null });
 
 export function CrumbsProvider({ children }: { children: ReactNode }) {
   const [value, set] = useState<Crumb[] | null>(null);
-  const path = usePathname();
-  // Réinitialise la surcharge à chaque navigation
-  useEffect(() => set(null), [path]);
   return <Ctx.Provider value={{ value, set }}>{children}</Ctx.Provider>;
 }
 
@@ -34,6 +32,8 @@ export function SetCrumbs({ items }: { items: Crumb[] }) {
   const key = JSON.stringify(items);
   useEffect(() => {
     set(JSON.parse(key));
+    // La surcharge disparaît avec la page qui l'a posée
+    return () => set(null);
   }, [key, set]);
   return null;
 }

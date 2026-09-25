@@ -1,0 +1,109 @@
+/* =====================================================================
+   Timeline (Gantt)
+   ===================================================================== */
+.gantt { --gt-lw: 300px; --rh: 36px; display: flex; flex-direction: column; min-height: 380px; height: calc(100dvh - var(--gt-top, 220px) - 1px); border-top: 1px solid var(--border); min-width: 0; }
+.gt-tools { display: flex; align-items: center; gap: 8px; padding: 8px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0; }
+.gt-tools .sp { flex: 1; }
+.gt-tools .hint { font-size: var(--fs-xs); color: var(--text-3); }
+.gt-scroll { flex: 1; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; }
+.gt-inner { position: relative; min-width: 100%; }
+
+.gt-head { position: sticky; top: 0; z-index: 6; display: flex; height: 52px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.gt-corner {
+  position: sticky; left: 0; z-index: 7; width: var(--gt-lw); flex-shrink: 0; background: var(--bg); border-right: 1px solid var(--border);
+  display: flex; align-items: flex-end; justify-content: space-between; padding: 0 12px 8px; font-size: var(--fs-xs); color: var(--text-3); font-weight: 500;
+}
+.gt-scale { position: relative; flex-shrink: 0; }
+.gt-months, .gt-days { position: absolute; left: 0; height: 26px; display: flex; }
+.gt-months { top: 0; }
+.gt-days { top: 26px; border-top: 1px solid var(--divider); }
+.gt-months div { border-left: 1px solid var(--border); font-size: var(--fs-xs); font-weight: 600; padding: 5px 8px; white-space: nowrap; overflow: hidden; text-transform: capitalize; flex-shrink: 0; }
+.gt-days div { font-size: 11px; color: var(--text-3); display: grid; place-items: center; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.gt-days div.wk { border-left: 1px solid var(--divider); }
+.gt-days div.we { color: var(--text-4); }
+.gt-days div.today { color: var(--accent); font-weight: 700; }
+.gt-days.m div { justify-content: start; padding-left: 5px; border-left: 1px solid var(--divider); }
+
+.gt-body { display: flex; }
+.gt-left { position: sticky; left: 0; z-index: 5; width: var(--gt-lw); flex-shrink: 0; background: var(--bg); border-right: 1px solid var(--border); }
+.gt-row {
+  height: var(--rh); display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; width: 100%; text-align: left;
+}
+.gt-row:hover { background: var(--surface-2); }
+.gt-row .trunc { flex: 1; }
+.gt-row.done .trunc { color: var(--text-3); }
+.gt-row .key { font-size: 11px; color: var(--text-4); font-family: var(--mono); flex-shrink: 0; }
+.gt-row .sub { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.gt-row.g { font-weight: 600; font-size: var(--fs-xs); color: var(--text-2); background: var(--sunken); gap: 7px; }
+.gt-row.g:hover { background: var(--surface-3); }
+.gt-row.g .cnt { font-weight: 500; color: var(--text-3); }
+.gt-row.g .chev { color: var(--text-3); display: inline-flex; transition: transform var(--dur); }
+.gt-row.g.closed .chev { transform: rotate(-90deg); }
+.gt-row.msr { cursor: default; font-weight: 600; font-size: var(--fs-xs); color: var(--text-2); }
+.gt-row.msr:hover { background: transparent; }
+.gt-row .plan { margin-left: auto; opacity: 0; }
+.gt-row:hover .plan, .gt-row .plan:focus-visible { opacity: 1; }
+
+.gt-grid { position: relative; flex-shrink: 0; }
+.gt-bg { position: absolute; inset: 0; pointer-events: none; }
+.gt-gband { position: absolute; left: 0; right: 0; height: var(--rh); background: color-mix(in srgb, var(--sunken) 80%, transparent); border-bottom: 1px solid var(--divider); }
+.gt-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); opacity: 0.75; z-index: 2; pointer-events: none; }
+.gt-today::before { content: ""; position: absolute; top: -1px; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+.gt-bar {
+  --c: var(--gray); position: absolute; height: 24px; border-radius: 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  background: color-mix(in srgb, var(--c) 15%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  font-size: var(--fs-xs); color: var(--text); cursor: grab; white-space: nowrap; z-index: 3; user-select: none; touch-action: pan-y;
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.gt-bar.ro { cursor: pointer; }
+.gt-bar:hover, .gt-bar:focus-visible { border-color: var(--c); z-index: 4; }
+.gt-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gt-bar .pf { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px 0 0 5px; background: color-mix(in srgb, var(--c) 28%, transparent); pointer-events: none; }
+.gt-bar .pf.full { border-radius: 5px; }
+.gt-bar .lbl { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; pointer-events: none; }
+.gt-bar .lbl .trunc { font-weight: 500; }
+.gt-bar.done { opacity: 0.6; }
+.gt-bar.late { box-shadow: inset -2px 0 0 var(--red); }
+.gt-bar.dragging { cursor: grabbing; box-shadow: var(--shadow-drag); z-index: 8; border-color: var(--c); }
+.gt-bar .hd { position: absolute; top: -1px; bottom: -1px; width: 9px; cursor: ew-resize; z-index: 2; display: grid; place-items: center; }
+.gt-bar .hd::after { content: ""; width: 2px; height: 10px; border-radius: 2px; background: var(--c); opacity: 0; transition: opacity var(--dur); }
+.gt-bar:hover .hd::after, .gt-bar.dragging .hd::after { opacity: 0.8; }
+.gt-bar .hd.l { left: -1px; }
+.gt-bar .hd.r { right: -1px; }
+.gt-out { position: absolute; font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; display: flex; align-items: center; gap: 6px; pointer-events: none; z-index: 3; height: 24px; }
+.gt-tip {
+  position: absolute; z-index: 9; transform: translate(-50%, -100%); margin-top: -6px; padding: 3px 7px; border-radius: var(--r-xs);
+  background: var(--text); color: var(--text-inv); font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+
+.gt-ms {
+  --c: var(--text); position: absolute; width: 14px; height: 14px; margin-left: -7px; transform: rotate(45deg); border-radius: 3px;
+  background: var(--c); z-index: 4; cursor: grab; box-shadow: 0 0 0 2px var(--bg); border: 0; padding: 0;
+}
+.gt-ms.ro { cursor: pointer; }
+.gt-ms.done { opacity: 0.55; }
+.gt-ms:hover { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--c); }
+.gt-ms.dragging { box-shadow: var(--shadow-drag); }
+.gt-msl { position: absolute; font-size: var(--fs-xs); font-weight: 500; white-space: nowrap; z-index: 3; pointer-events: none; height: 14px; line-height: 14px; }
+.gt-msl.faint { font-weight: 400; }
+
+.gt-deps { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; overflow: visible; }
+.gt-deps path { fill: none; stroke: var(--text-4); stroke-width: 1.4; }
+.gt-deps path.bad { stroke: var(--red); stroke-dasharray: 4 3; }
+.gt-deps path.hi { stroke: var(--accent); stroke-width: 1.8; }
+
+.gt-ghost {
+  position: absolute; height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border-radius: 6px;
+  border: 1px dashed var(--border-strong); color: var(--text-3); font-size: var(--fs-xs); background: var(--surface); z-index: 3; white-space: nowrap;
+}
+.gt-ghost:hover { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+
+@media (max-width: 760px) {
+  .gantt { --gt-lw: 150px; }
+  .gt-tools { padding: 8px 12px; }
+  .gt-tools .hint { display: none; }
+  .gt-row { padding: 0 8px; gap: 6px; }
+  .gt-row .key, .gt-row .sub, .gt-row .av { display: none; }
+}
