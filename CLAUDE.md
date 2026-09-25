@@ -55,7 +55,12 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 - `ad_connections` (jetons OAuth) n'a aucune policy : lecture/écriture uniquement via le
   service role. La vue `ad_connections_public` expose les colonnes sans secret.
 - Pages publiques via RPC `security definer` : `public_proposal`, `respond_proposal`, `public_report`.
-- Données de démo : `load_demo_data(ws)` / `clear_demo_data(ws)`.
+- Données de démo : chargées et supprimées par `POST /api/demo` (`src/lib/demo.ts`), qui enchaîne
+  `load_demo_data` (droits de l'utilisateur), puis `_demo_links` et `demo_tracking_seed` en service role
+  (le seed du tracking dépasse le délai de 8 s des requêtes `authenticated`).
+- Tracking : `tracking_sites.secret_key` n'est pas lisible directement (privilège par colonne) ;
+  passer par la RPC `tracking_site_secret`. Tests du moteur :
+  `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs`.
 
 ## Développement
 

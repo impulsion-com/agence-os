@@ -42,7 +42,10 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
   },
   {
     title: "Reporting",
-    items: [{ href: "integrations", icon: "plug", label: "Connexions publicitaires" }],
+    items: [
+      { href: "integrations", icon: "plug", label: "Connexions publicitaires" },
+      { href: "utm", icon: "link", label: "Conventions UTM" },
+    ],
   },
 ];
 

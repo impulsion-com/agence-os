@@ -1,5 +1,6 @@
 "use client";
 
+import { runDemo as callDemo } from "@/lib/demo";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Database, LogOut, Trash2 } from "lucide-react";
@@ -66,10 +67,7 @@ export function WorkspaceSettings({ hasDemo }: { hasDemo: boolean }) {
   const runDemo = async (kind: "load" | "clear") => {
     setDemoBusy(true);
     await mutate(
-      async (sb) => {
-        const { error } = kind === "load" ? await sb.rpc("load_demo_data", { ws: w.id }) : await sb.rpc("clear_demo_data", { ws: w.id });
-        if (error) throw new Error(error.message);
-      },
+      async () => callDemo(w.id, kind),
       { success: kind === "load" ? "Données de démo chargées" : "Données de démo supprimées" },
     );
     setDemoBusy(false);

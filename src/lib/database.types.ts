@@ -809,6 +809,35 @@ export type Database = {
           },
         ]
       }
+      link_settings: {
+        Row: {
+          naming_help: string
+          naming_rule: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          naming_help?: string
+          naming_rule?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          naming_help?: string
+          naming_rule?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       links: {
         Row: {
           active: boolean
@@ -821,6 +850,7 @@ export type Database = {
           expires_at: string | null
           final_url: string
           id: string
+          is_demo: boolean
           last_click_at: string | null
           name: string
           site_id: string | null
@@ -839,6 +869,7 @@ export type Database = {
           expires_at?: string | null
           final_url: string
           id?: string
+          is_demo?: boolean
           last_click_at?: string | null
           name?: string
           site_id?: string | null
@@ -857,6 +888,7 @@ export type Database = {
           expires_at?: string | null
           final_url?: string
           id?: string
+          is_demo?: boolean
           last_click_at?: string | null
           name?: string
           site_id?: string | null
@@ -2169,6 +2201,8 @@ export type Database = {
       }
     }
     Functions: {
+      _clear_demo_links: { Args: { ws: string }; Returns: undefined }
+      _demo_links: { Args: { ws: string }; Returns: undefined }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
         Args: {
@@ -2208,6 +2242,8 @@ export type Database = {
       bump_link: { Args: { p_link: string }; Returns: undefined }
       can_write: { Args: { ws: string }; Returns: boolean }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
+      clear_demo_links: { Args: { ws: string }; Returns: undefined }
+      clear_demo_tracking: { Args: { ws: string }; Returns: undefined }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
         Returns: string
@@ -2228,6 +2264,26 @@ export type Database = {
         }
         Returns: string
       }
+      demo_tracking_seed: { Args: { ws: string }; Returns: number }
+      demo_tracking_seed_part: {
+        Args: { p_company: string; p_from: number; p_to: number; ws: string }
+        Returns: number
+      }
+      demo_tracking_touch: {
+        Args: {
+          p_ad: string
+          p_adset: string
+          p_camp: string
+          p_ch: string
+          p_domain: string
+          p_pages: string[]
+          p_site: string
+          p_ts: string
+          p_vis: string
+          p_ws: string
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           roles: Database["public"]["Enums"]["member_role"][]
@@ -2237,7 +2293,31 @@ export type Database = {
       }
       is_admin: { Args: { ws: string }; Returns: boolean }
       is_member: { Args: { ws: string }; Returns: boolean }
+      link_attribution: {
+        Args: { p_from?: string; p_link?: string; p_to?: string; p_ws: string }
+        Returns: {
+          leads: number
+          link_id: string
+          revenue: number
+          sales: number
+          visitors: number
+        }[]
+      }
+      link_code_available: { Args: { p_code: string }; Returns: boolean }
+      link_stats: {
+        Args: {
+          p_from: string
+          p_link: string
+          p_prev_from?: string
+          p_prev_to?: string
+          p_to: string
+          p_tz?: string
+        }
+        Returns: Json
+      }
       load_demo_data: { Args: { ws: string }; Returns: undefined }
+      load_demo_links: { Args: { ws: string }; Returns: undefined }
+      load_demo_tracking: { Args: { ws: string }; Returns: undefined }
       project_ws: { Args: { p: string }; Returns: string }
       proposal_ws: { Args: { p: string }; Returns: string }
       public_proposal: { Args: { p_token: string }; Returns: Json }
@@ -2257,6 +2337,49 @@ export type Database = {
       shares_workspace: { Args: { other: string }; Returns: boolean }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }
+      tracking_conversions: {
+        Args: {
+          p_end: string
+          p_site: string
+          p_start: string
+          p_types?: string[]
+          p_window?: number
+        }
+        Returns: {
+          currency: string
+          email: string
+          id: string
+          name: string
+          person: string
+          source: string
+          touches: Json
+          ts: string
+          type: string
+          value: number
+          visitor_id: string
+        }[]
+      }
+      tracking_people: {
+        Args: { p_limit?: number; p_q?: string; p_site: string }
+        Returns: {
+          contact_id: string
+          email: string
+          first_seen: string
+          identified_at: string
+          last_seen: string
+          leads: number
+          name: string
+          phone: string
+          purchases: number
+          revenue: number
+          visitors: number
+        }[]
+      }
+      tracking_site_secret: { Args: { p_site: string }; Returns: string }
+      tracking_stats: {
+        Args: { p_end: string; p_site: string; p_start: string }
+        Returns: Json
+      }
     }
     Enums: {
       member_role: "owner" | "admin" | "member" | "guest"

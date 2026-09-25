@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { runDemo } from "@/lib/demo";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { slugify } from "@/lib/format";
 
@@ -29,7 +30,7 @@ export function OnboardingForm() {
           setBusy(false);
           return setErr(error.message.includes("duplicate") ? "Cette adresse est déjà prise, choisis-en une autre." : error.message);
         }
-        if (demo) await sb.rpc("load_demo_data", { ws });
+        if (demo) await runDemo(ws, "load").catch(() => undefined);
         router.push(`/w/${s}`);
         router.refresh();
       }}

@@ -1,0 +1,148 @@
+/* =====================================================================
+   Tracking et attribution (/tracking). S'appuie sur reporting.css
+   (cartes KPI, graphiques, tableaux rp-*) et les tokens de globals.css.
+   ===================================================================== */
+
+/* ---------- Statut d'un site ---------- */
+.trk-status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; }
+.trk-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); flex-shrink: 0; }
+.trk-status.live i { background: var(--st-good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-good) 20%, transparent); }
+.trk-status.stale i { background: var(--st-near); }
+.trk-status.never { color: var(--text-3); }
+
+.trk-ch { display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; }
+
+/* ---------- Liste des sites ---------- */
+.trk-sites { list-style: none; margin: 0; padding: 0; }
+.trk-sites li { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--divider); padding-right: 10px; }
+.trk-site { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 14px; }
+.trk-sites li:hover { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
+.trk-site .main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.trk-site .t { font-weight: 500; }
+.trk-site .s { font-size: var(--fs-xs); color: var(--text-3); }
+.trk-site .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: var(--fs-xs); }
+.trk-agency { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+.trk-agency.lg { width: 34px; height: 34px; }
+
+/* ---------- En-tête du site ---------- */
+.trk-switch { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border-radius: var(--r-sm); padding: 0 4px; margin-left: -4px; }
+.trk-switch:hover { background: var(--surface-3); }
+.trk-switch h1 { font-size: var(--fs-2xl); }
+.trk-head-sub { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; margin-top: 4px; color: var(--text-2); font-size: var(--fs-sm); }
+.trk-tabs { margin-bottom: 16px; }
+
+.trk-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.trk-filters .rp-filters { margin-bottom: 0; }
+.trk-filters .seg { flex-wrap: wrap; }
+
+/* ---------- Indicateurs : 4 colonnes ---------- */
+.rp-kpis.trk-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ---------- Tableau d'attribution ---------- */
+.trk-views { flex-wrap: wrap; }
+.trk-tree td.nm { max-width: 360px; }
+.trk-tree td:first-child, .trk-tree th:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.trk-tree thead th:first-child { z-index: 2; }
+.trk-tree tr.lv0 td { font-weight: 500; }
+.trk-tree tr.lv1 td, .trk-tree tr.lv2 td { font-size: var(--fs-sm); }
+.trk-tree tr.lv2 td { color: var(--text-2); }
+.trk-tree td.strong { font-weight: 600; color: var(--text); }
+.trk-tree td.muted { color: var(--text-3); }
+.trk-tree tbody tr:hover td:first-child { background: color-mix(in srgb, var(--text) 2.5%, var(--surface)); }
+.trk-indent { display: flex; align-items: center; gap: 4px; min-width: 0; padding-left: calc(var(--lv) * 20px); }
+.trk-toggle { width: 20px; height: 20px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--text-3); flex-shrink: 0; }
+.trk-toggle:hover { background: var(--surface-3); color: var(--text); }
+.trk-toggle-sp { width: 20px; flex-shrink: 0; }
+.trk-foot { display: flex; gap: 6px; align-items: flex-start; padding: 10px 14px 14px; font-size: var(--fs-xs); color: var(--text-3); border-top: 1px solid var(--divider); }
+.trk-foot svg { flex-shrink: 0; margin-top: 2px; }
+p.trk-foot { border-top: 0; display: block; }
+
+/* ---------- Parcours ---------- */
+.trk-journeys { list-style: none; margin: 0; padding: 0; }
+.trk-journey { border-top: 1px solid var(--divider); }
+.trk-journey .head {
+  width: 100%; display: grid; grid-template-columns: auto minmax(160px, 0.9fr) minmax(0, 2fr) auto; align-items: center; gap: 10px;
+  padding: 10px 14px; text-align: left;
+}
+.trk-journey .head:hover { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
+.trk-journey .who { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-sm); }
+.trk-journey .who b { font-weight: 500; font-size: var(--fs); font-family: var(--mono); letter-spacing: -0.01em; }
+.trk-journey .chips { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.trk-journey .chips .chip i { background: var(--c); }
+.trk-journey .val { display: flex; flex-direction: column; align-items: flex-end; font-weight: 600; font-variant-numeric: tabular-nums; }
+.trk-journey .val small { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+.trk-timeline { list-style: none; margin: 0; padding: 2px 14px 16px 44px; position: relative; }
+.trk-timeline li { position: relative; padding: 0 0 12px 18px; }
+.trk-timeline li::before { content: ""; position: absolute; left: 4px; top: 12px; bottom: -2px; width: 2px; background: var(--divider); }
+.trk-timeline li:last-child::before { display: none; }
+.trk-timeline .dot { position: absolute; left: 0; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--text-4)); box-shadow: 0 0 0 3px var(--surface); }
+.trk-timeline li.conv .dot { background: var(--st-good); border-radius: 3px; }
+.trk-timeline .top { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-sm); }
+.trk-timeline .top b { font-weight: 600; white-space: nowrap; }
+.trk-timeline .w { margin-left: auto; font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--surface-3); padding: 1px 6px; border-radius: var(--r-full); white-space: nowrap; }
+.trk-timeline .meta { display: flex; gap: 4px 12px; flex-wrap: wrap; margin-top: 2px; font-size: var(--fs-xs); color: var(--text-3); min-width: 0; }
+.trk-timeline .meta .mono { max-width: 100%; }
+
+/* ---------- Visiteurs identifiés ---------- */
+.trk-search { display: flex; align-items: center; gap: 8px; height: var(--h-md); padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); width: min(340px, 100%); }
+.trk-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.trk-search input { font-size: var(--fs-sm); }
+
+/* ---------- Installation / API ---------- */
+.trk-install { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.trk-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.trk-prose { display: flex; flex-direction: column; gap: 10px; font-size: var(--fs-sm); color: var(--text-2); min-width: 0; }
+.trk-prose code, .trk-install code { font-family: var(--mono); font-size: 0.92em; background: var(--surface-3); padding: 1px 4px; border-radius: 3px; color: var(--text); overflow-wrap: anywhere; }
+.trk-guides { flex-wrap: wrap; align-self: flex-start; }
+.trk-code { border: 1px solid var(--border); border-radius: var(--r); background: var(--sunken); overflow: hidden; min-width: 0; }
+.trk-code .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--divider); font-size: var(--fs-2xs); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.trk-code .bar .btn { text-transform: none; letter-spacing: 0; }
+.trk-code pre { margin: 0; padding: 10px 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; color: var(--text); }
+.trk-code pre code { background: none; padding: 0; }
+.trk-key { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.trk-key .input { flex: 1 1 240px; font-size: var(--fs-xs); }
+
+.trk-live { position: sticky; top: 16px; }
+.trk-live-state { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--border); font-size: var(--fs-sm); color: var(--text-2); margin-bottom: 10px; }
+.trk-live-state svg { flex-shrink: 0; margin-top: 1px; color: var(--text-3); }
+.trk-live-state.ok { background: color-mix(in srgb, var(--st-good) 10%, transparent); border-color: color-mix(in srgb, var(--st-good) 28%, transparent); color: var(--text); }
+.trk-live-state.ok svg { color: var(--st-good); }
+.trk-feed { list-style: none; margin: 0; padding: 0; }
+.trk-feed li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 8px; padding: 7px 0; border-top: 1px solid var(--divider); font-size: var(--fs-sm); animation: trkIn 0.3s var(--ease); }
+.trk-feed .t { min-width: 0; }
+.trk-feed .t b { font-weight: 500; }
+.trk-feed .when { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+.trk-feed .d { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--text-3); }
+@keyframes trkIn { from { opacity: 0; transform: translateY(-2px); } }
+.trk-pulse { color: var(--st-good); animation: trkPulse 1.6s ease-in-out infinite; }
+@keyframes trkPulse { 50% { opacity: 0.35; } }
+
+/* ---------- Formulaire du site ---------- */
+.trk-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.trk-form .trk-span { grid-column: 1 / -1; }
+.trk-form .seg { align-self: flex-start; }
+.trk-check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.trk-check .toggle { margin-top: 2px; }
+.trk-check span { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
+.trk-check b { font-weight: 500; }
+.trk-check small { font-size: var(--fs-xs); color: var(--text-3); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .trk-install { grid-template-columns: minmax(0, 1fr); }
+  .trk-live { position: static; order: -1; }
+}
+@media (max-width: 900px) {
+  .rp-kpis.trk-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .trk-site { grid-template-columns: auto minmax(0, 1fr); }
+  .trk-site .meta { grid-column: 2; align-items: flex-start; }
+  .trk-sites li .install { display: none; }
+  .trk-journey .head { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .trk-journey .chips { grid-column: 2 / -1; grid-row: 2; }
+  .trk-timeline { padding-left: 24px; }
+  .trk-form { grid-template-columns: minmax(0, 1fr); }
+  .trk-switch h1 { font-size: var(--fs-xl); }
+  .trk-tree td.nm { max-width: 200px; }
+}
