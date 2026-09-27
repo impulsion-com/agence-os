@@ -6,8 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Check, CircleAlert, Copy, Ellipsis, ExternalLink, FolderPlus, Handshake, Link2, LoaderCircle, Lock, Mail,
-  RotateCcw, Send, Trash2, UserRound,
+  ArrowLeft, Check, CircleAlert, Copy, Download, Ellipsis, ExternalLink, FileSignature, FolderPlus, Handshake, Link2, LoaderCircle, Lock, Mail,
+  PenLine, RotateCcw, Send, ShieldCheck, Trash2, UserRound,
 } from "lucide-react";
 
 import { SetCrumbs } from "@/components/shell/crumbs";
@@ -18,6 +18,7 @@ import { ConfirmModal, Menu, Modal } from "@/components/ui/overlay";
 import { useToast } from "@/components/ui/toast";
 import type { Database, Json } from "@/lib/database.types";
 import { ago, dayOffset, fmtDate, money, parseDay, today } from "@/lib/format";
+import { fmtParis, type SignatureSnapshot } from "@/lib/signature/types";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Contact, Deal, PipelineStage, Proposal, ProposalBlock, ProposalItem, ProposalStatus, Service } from "@/lib/types";
 import { logActivity, useWorkspace } from "@/lib/workspace/context";
@@ -27,6 +28,7 @@ import { SelectPill } from "./fields";
 import { PROPOSAL_STATUS, STATUS_ORDER, computeTotals, effectiveStatus } from "./lib";
 import { PricingEditor, type EditItem } from "./pricing-editor";
 import { contactName } from "./proposal-create-modal";
+import { CountersignModal, SignatureProof, type ProofData } from "./signature-proof";
 
 type ContactLite = Pick<Contact, "id" | "first_name" | "last_name" | "email" | "company_id">;
 type DealLite = Pick<Deal, "id" | "title" | "company_id" | "contact_id" | "stage_id" | "closed_at">;
@@ -39,9 +41,14 @@ export interface EditorData {
   contacts: ContactLite[];
   deals: DealLite[];
   stages: StageLite[];
+  /** Instantané figé de la version signée (null tant que le client n'a pas signé) */
+  snapshot: SignatureSnapshot | null;
+  proof: ProofData | null;
+  emailEnabled: boolean;
+  events: { kind: string; at: string }[];
 }
 
-type Meta = Omit<Proposal, "blocks">;
+type Meta = Omit<Proposal, "blocks"> & { countersign?: boolean };
 type ProposalUpdate = Database["public"]["Tables"]["proposals"]["Update"];
 type SaveState = "idle" | "pending" | "saving" | "saved" | "error";
 
@@ -54,7 +61,7 @@ function useOrigin() {
   return useSyncExternalStore(noop, () => window.location.origin, () => process.env.NEXT_PUBLIC_APP_URL || "");
 }
 
-export function ProposalEditor({ data }: { data: EditorData }) {
+export function ProposalEditor({ data, signatureFont }: { data: EditorData; signatureFont: string }) {
   const ws = useWorkspace();
   const ui = useUI();
   const router = useRouter();
@@ -71,6 +78,8 @@ export function ProposalEditor({ data }: { data: EditorData }) {
   const [sendOpen, setSendOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [view, setView] = useState<"edit" | "preview">("edit");
+  const [tab, setTab] = useState<"doc" | "proof">("doc");
+  const [countersignOpen, setCountersignOpen] = useState(false);
 
   // ---------------------------------------------------------------
   // Sauvegarde automatique (debounce 800 ms)
@@ -206,7 +215,14 @@ export function ProposalEditor({ data }: { data: EditorData }) {
   // Données dérivées
   // ---------------------------------------------------------------
   const status = effectiveStatus(meta);
-  const locked = !ws.canWrite || meta.status === "accepted" || meta.status === "declined";
+  const proof = data.proof;
+  const snap = data.snapshot;
+  const signed = !!proof;
+  const bothSigned = !!proof?.signature.countersigned_at;
+  const waitingCounter = !!proof && proof.signature.countersign_required && !bothSigned;
+  const locked = !ws.canWrite || signed || meta.status === "accepted" || meta.status === "declined";
+  const statusLabel = bothSigned ? "Signée par les deux parties" : waitingCounter ? "Signée, à contre-signer" : PROPOSAL_STATUS[status].name;
+  const lastSend = [...data.events].reverse().find((e) => e.kind === "email_sent" || e.kind === "reminder_sent");
   const totals = useMemo(() => computeTotals(items, meta.discount_pct, meta.tax_pct), [items, meta.discount_pct, meta.tax_pct]);
   const company = ws.company(meta.company_id);
   const contact = data.contacts.find((c) => c.id === meta.contact_id);
@@ -389,7 +405,7 @@ export function ProposalEditor({ data }: { data: EditorData }) {
           <ArrowLeft size={15} />
         </Link>
         <span className="mono faint">#{meta.number}</span>
-        <Badge color={PROPOSAL_STATUS[status].color}>{PROPOSAL_STATUS[status].name}</Badge>
+        <Badge color={PROPOSAL_STATUS[status].color}>{statusLabel}</Badge>
         <span className={`pe-save${save === "error" ? " err" : ""}`} aria-live="polite">
           {!locked && saveLabel}
           {locked && (
@@ -399,6 +415,16 @@ export function ProposalEditor({ data }: { data: EditorData }) {
           )}
         </span>
         <div className="pe-bar-actions">
+          {signed && (
+            <div className="seg pe-view" role="tablist" aria-label="Affichage">
+              <button role="tab" aria-selected={tab === "doc"} className={tab === "doc" ? "on" : ""} onClick={() => setTab("doc")}>
+                Document signé
+              </button>
+              <button role="tab" aria-selected={tab === "proof"} className={tab === "proof" ? "on" : ""} onClick={() => setTab("proof")}>
+                Preuve de signature
+              </button>
+            </div>
+          )}
           {!locked && (
             <div className="seg pe-view" role="tablist" aria-label="Mode d'affichage">
               <button role="tab" aria-selected={view === "edit"} className={view === "edit" ? "on" : ""} onClick={() => setView("edit")}>
@@ -413,13 +439,25 @@ export function ProposalEditor({ data }: { data: EditorData }) {
             <ExternalLink size={13} />
             <span className="pe-hide-sm">Aperçu</span>
           </button>
-          {meta.status === "accepted" && ws.canWrite && (
+          {signed && (
+            <a className="btn btn-sm" href={`/api/signature/${meta.public_token}/pdf`} title="PDF signé avec le certificat de signature">
+              <Download size={13} />
+              <span className="pe-hide-sm">PDF signé</span>
+            </a>
+          )}
+          {waitingCounter && ws.canWrite && (
+            <button className="btn btn-sm btn-primary" onClick={() => setCountersignOpen(true)}>
+              <PenLine size={13} />
+              Contre-signer
+            </button>
+          )}
+          {meta.status === "accepted" && ws.canWrite && !waitingCounter && (
             <button className="btn btn-sm btn-primary" onClick={() => ui.create({ kind: "project", defaults: { company_id: meta.company_id, name: meta.title } })}>
               <FolderPlus size={13} />
               Créer le projet
             </button>
           )}
-          {ws.canWrite && meta.status !== "accepted" && meta.status !== "declined" && (
+          {ws.canWrite && !signed && meta.status !== "accepted" && meta.status !== "declined" && (
             <button className="btn btn-sm btn-primary" onClick={() => setSendOpen(true)}>
               <Send size={13} />
               {meta.status === "draft" ? "Envoyer" : "Renvoyer"}
@@ -437,11 +475,15 @@ export function ProposalEditor({ data }: { data: EditorData }) {
               ...(ws.canWrite
                 ? [
                     { label: "Dupliquer", icon: <Copy size={14} />, onSelect: () => void duplicate() },
-                    ...(meta.status !== "draft"
+                    ...(meta.status !== "draft" && !signed
                       ? [{ label: "Repasser en brouillon", icon: <RotateCcw size={14} />, onSelect: () => void setStatus("draft") }]
                       : []),
-                    { separator: true, label: "" },
-                    { label: "Supprimer", icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirmDelete(true) },
+                    ...(signed
+                      ? []
+                      : [
+                          { separator: true, label: "" },
+                          { label: "Supprimer", icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirmDelete(true) },
+                        ]),
                   ]
                 : []),
             ]}
@@ -451,12 +493,22 @@ export function ProposalEditor({ data }: { data: EditorData }) {
 
       <div className="pe-layout">
         <div className="pe-main">
-          {meta.status === "accepted" && (
+          {signed && proof && (
+            <div className="pe-banner ok">
+              <ShieldCheck size={15} />
+              <span>
+                Signée électroniquement par <strong>{`${proof.signature.signer_first_name} ${proof.signature.signer_last_name}`}</strong> le {fmtParis(proof.signature.signed_at)}
+                {bothSigned && proof.signature.countersigned_at && <>, contre-signée par {proof.signature.countersigner_name} le {fmtParis(proof.signature.countersigned_at)}</>}
+                {waitingCounter && <>. Ta contre-signature est attendue</>}. Le document signé est figé : duplique-le pour en faire une nouvelle version.
+              </span>
+            </div>
+          )}
+          {meta.status === "accepted" && !signed && (
             <div className="pe-banner ok">
               <Check size={15} />
               <span>
                 Acceptée par <strong>{meta.accepted_name ?? "le client"}</strong>
-                {meta.accepted_at && <> le {fmtDate(meta.accepted_at.slice(0, 10), true)}</>}. Le document est figé : duplique-le pour en faire une nouvelle version.
+                {meta.accepted_at && <> le {fmtDate(meta.accepted_at.slice(0, 10), true)}</>}, sans signature électronique (ancienne acceptation ou statut changé à la main). Le document est figé : duplique-le pour en faire une nouvelle version.
               </span>
             </div>
           )}
@@ -475,7 +527,26 @@ export function ProposalEditor({ data }: { data: EditorData }) {
             </div>
           )}
 
-          {locked || view === "preview" ? (
+          {signed && snap && tab === "proof" && proof ? (
+            <SignatureProof proof={proof} token={meta.public_token} onCountersign={() => setCountersignOpen(true)} />
+          ) : signed && snap ? (
+            <div className="pe-paper pe-paper-ro">
+              <ProposalDocument
+                data={{ ...snap.document, sent_at: snap.document.date, created_at: snap.document.date }}
+                items={snap.items}
+                agency={snap.parties.agency}
+                client={snap.parties.client}
+                contact={snap.parties.contact}
+                selected={new Set(snap.items.filter((i) => i.optional && i.selected).map((i) => i.id))}
+              />
+              <div className="pe-signed-foot">
+                <FileSignature size={14} />
+                <span>
+                  Version signée le {fmtParis(snap.signed_at)} · empreinte <code>{proof?.signature.document_hash.slice(0, 16)}…</code>
+                </span>
+              </div>
+            </div>
+          ) : locked || view === "preview" ? (
             <div className="pe-paper pe-paper-ro">
               <ProposalDocument
                 data={{ ...meta, blocks }}
@@ -628,7 +699,7 @@ export function ProposalEditor({ data }: { data: EditorData }) {
                 %
               </span>
               <span className="pe-k">Statut</span>
-              {ws.canWrite ? (
+              {ws.canWrite && !signed ? (
                 <Menu
                   trigger={(open) => (
                     <button type="button" className="pill" onClick={open}>
@@ -642,10 +713,38 @@ export function ProposalEditor({ data }: { data: EditorData }) {
                   }))}
                 />
               ) : (
-                <Badge color={PROPOSAL_STATUS[status].color}>{PROPOSAL_STATUS[status].name}</Badge>
+                <Badge color={PROPOSAL_STATUS[status].color}>{statusLabel}</Badge>
               )}
             </div>
-            {ws.canWrite && <p className="pe-hint">Le statut suit l&apos;envoi et la réponse du client. Change-le à la main seulement pour corriger.</p>}
+            {ws.canWrite && !signed && <p className="pe-hint">Le statut suit l&apos;envoi et la signature du client. Change-le à la main seulement pour corriger.</p>}
+          </section>
+
+          <section className="pe-sec">
+            <h3>Signature électronique</h3>
+            <label className="pe-toggle">
+              <input
+                type="checkbox"
+                className="check"
+                checked={signed ? proof!.signature.countersign_required : !!meta.countersign}
+                disabled={locked}
+                onChange={(e) => setField("countersign", e.target.checked)}
+              />
+              <span>Contre-signature de l&apos;agence</span>
+            </label>
+            <p className="pe-hint">
+              {signed
+                ? bothSigned
+                  ? "Signée par les deux parties. Le PDF signé contient le document, les deux signatures et le certificat."
+                  : waitingCounter
+                    ? "Le client a signé : contre-signe depuis l'onglet « Preuve de signature »."
+                    : "Signée par le client. Tu peux tout de même contre-signer depuis l'onglet « Preuve de signature »."
+                : `Le client signe en ligne (identité, ${data.emailEnabled ? "code reçu par email, " : ""}mention « Bon pour accord », signature manuscrite). Coche la case pour signer à ton tour après lui.`}
+            </p>
+            {!data.emailEnabled && !signed && (
+              <p className="pe-hint">
+                L&apos;envoi d&apos;emails n&apos;est pas configuré : pas de code de vérification, l&apos;email du signataire sera noté comme déclaré dans le dossier de preuve.
+              </p>
+            )}
           </section>
 
           <section className="pe-sec">
@@ -678,18 +777,30 @@ export function ProposalEditor({ data }: { data: EditorData }) {
                 <span />
                 {meta.viewed_at ? <>Vue par le client {ago(meta.viewed_at)}</> : "Pas encore ouverte"}
               </li>
+              {lastSend && (
+                <li className="on">
+                  <span />
+                  {lastSend.kind === "reminder_sent" ? "Relancée par email" : "Envoyée par email"} {ago(lastSend.at)}
+                </li>
+              )}
               <li className={meta.accepted_at || meta.status === "declined" ? "on" : ""}>
                 <span />
                 {meta.status === "accepted" && meta.accepted_at ? (
                   <>
-                    Acceptée par {meta.accepted_name} {ago(meta.accepted_at)}
+                    {signed ? "Signée" : "Acceptée"} par {meta.accepted_name} {ago(meta.accepted_at)}
                   </>
                 ) : meta.status === "declined" ? (
                   "Refusée"
                 ) : (
-                  "En attente de réponse"
+                  "En attente de signature"
                 )}
               </li>
+              {(proof?.signature.countersign_required || bothSigned || (!signed && meta.countersign)) && (
+                <li className={bothSigned ? "on" : ""}>
+                  <span />
+                  {bothSigned && proof?.signature.countersigned_at ? <>Contre-signée {ago(proof.signature.countersigned_at)}</> : "Contre-signature de l'agence"}
+                </li>
+              )}
             </ol>
           </section>
         </aside>
@@ -702,6 +813,26 @@ export function ProposalEditor({ data }: { data: EditorData }) {
           contactLabel={contact ? contactName(contact) : null}
           url={url}
           hasItems={items.length > 0}
+          emailEnabled={data.emailEnabled}
+          onSendEmail={async (to, message) => {
+            const wasDraft = meta.status === "draft";
+            const ok = await markSent();
+            if (!ok) return false;
+            const res = await fetch(`/api/signature/${meta.public_token}/send`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to, message, reminder: !wasDraft }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) {
+              toast(json.error ?? "Envoi impossible", { error: true });
+              return false;
+            }
+            toast(wasDraft ? `Proposition envoyée à ${to}` : `Relance envoyée à ${to}`);
+            setSendOpen(false);
+            router.refresh();
+            return true;
+          }}
           onClose={() => setSendOpen(false)}
           onEmail={async () => {
             const ok = await markSent();
@@ -720,6 +851,7 @@ export function ProposalEditor({ data }: { data: EditorData }) {
           }}
         />
       )}
+      {countersignOpen && <CountersignModal token={meta.public_token} fontFamily={signatureFont} onClose={() => setCountersignOpen(false)} />}
       {confirmDelete && (
         <ConfirmModal
           title="Supprimer la proposition ?"
@@ -738,6 +870,8 @@ function SendModal({
   contactLabel,
   url,
   hasItems,
+  emailEnabled,
+  onSendEmail,
   onClose,
   onEmail,
   onCopy,
@@ -747,16 +881,63 @@ function SendModal({
   contactLabel: string | null;
   url: string;
   hasItems: boolean;
+  emailEnabled: boolean;
+  onSendEmail: (to: string, message: string) => Promise<boolean>;
   onClose: () => void;
   onEmail: () => Promise<void>;
   onCopy: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  const run = (fn: () => Promise<void>) => async () => {
+  const [to, setTo] = useState(email);
+  const [message, setMessage] = useState("");
+  const run = (fn: () => Promise<unknown>) => async () => {
     setBusy(true);
     await fn();
     setBusy(false);
   };
+  const toValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim());
+  if (emailEnabled)
+    return (
+      <Modal
+        title={first ? "Envoyer la proposition" : "Relancer le client"}
+        onClose={onClose}
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={run(onCopy)} disabled={busy}>
+              <Copy size={14} />
+              Copier le lien
+            </button>
+            <button className="btn" onClick={run(onEmail)} disabled={busy} title="Ouvre un email pré-rempli dans ta messagerie">
+              <Mail size={14} />
+              Ma messagerie
+            </button>
+            <button className="btn btn-primary" onClick={run(() => onSendEmail(to.trim(), message))} disabled={busy || !toValid} autoFocus>
+              <Send size={14} />
+              {busy ? "Envoi…" : first ? "Envoyer l'email" : "Envoyer la relance"}
+            </button>
+          </>
+        }
+      >
+        <p className="muted">
+          {first
+            ? "Le client reçoit un email avec le lien de la proposition : il la relit, choisit ses options et la signe en ligne. Tu es prévenu à l'ouverture et à la signature."
+            : "Le client reçoit un email de rappel avec le même lien de signature."}
+        </p>
+        <div className="field">
+          <label htmlFor="pe-send-to">Destinataire</label>
+          <input id="pe-send-to" className="input" type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="client@exemple.fr" />
+          {contactLabel && email && to.trim() === email && <span className="hint">{contactLabel}</span>}
+        </div>
+        <div className="field">
+          <label htmlFor="pe-send-msg">Message personnel (facultatif)</label>
+          <textarea id="pe-send-msg" className="textarea" rows={3} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} placeholder="Comme convenu lors de notre appel…" />
+        </div>
+        <div className="pe-linkbox">
+          <input className="input" readOnly value={url} aria-label="Lien public" onFocus={(e) => e.target.select()} />
+        </div>
+        {!hasItems && <p className="pe-warn">Attention : aucune ligne de prix pour l&apos;instant.</p>}
+      </Modal>
+    );
   return (
     <Modal
       title={first ? "Envoyer la proposition" : "Renvoyer la proposition"}

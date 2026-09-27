@@ -31,6 +31,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "members", icon: "user-plus", label: "Membres et invitations" },
       { href: "teams", icon: "layers", label: "Équipes" },
       { href: "labels", icon: "filter", label: "Étiquettes" },
+      { href: "api", icon: "code", label: "API et MCP" },
     ],
   },
   {

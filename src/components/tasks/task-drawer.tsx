@@ -9,6 +9,7 @@ import {
   FolderKanban, GitBranch, GripVertical, Link2, Paperclip, Pencil, Plus, Repeat, SignalHigh, Tag, Trash2, Upload, UserRound, X,
 } from "lucide-react";
 
+import { CreativeTaskLink, isCreativeTask } from "@/components/creatives/task-link";
 import { AssigneePicker, DatePicker, LabelsPicker, PriorityPicker, StatusPicker } from "@/components/pickers";
 import { Avatar } from "@/components/ui/avatar";
 import { ObjIcon } from "@/components/ui/misc";
@@ -500,6 +501,9 @@ function TaskBody(props: BodyProps) {
       {task.recurrence && <p className="faint td-note">À la fin de cette tâche, la prochaine occurrence sera créée automatiquement.</p>}
 
       <Description task={task} ro={ro} onSave={(description) => up({ description })} />
+      {isCreativeTask(task.label_ids.map((id) => ws.label(id)?.name ?? "")) && (
+        <CreativeTaskLink taskId={task.id} projectId={task.project_id} taskTitle={task.title} />
+      )}
       <Subtasks {...props} ro={ro} />
       <Dependencies {...props} ro={ro} />
       <Files {...props} ro={ro} />

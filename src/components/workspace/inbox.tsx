@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CheckCheck, CircleDot, FileSignature, Handshake, Mail, MailOpen,
-  MessageSquare, UserPlus,
-} from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CalendarClock, CheckCheck, CircleDot, ClipboardCheck, FileSignature, Handshake, Mail, MailOpen, MessageSquare, UserPlus } from "lucide-react";
 
 import "@/styles/workspace.css";
 import { Avatar } from "@/components/ui/avatar";
@@ -53,7 +50,7 @@ const match = (n: InboxItem, f: Filter) => {
   if (f === "unread") return !n.read_at;
   if (f === "assigned") return n.kind === "assigned" || n.kind === "mentioned";
   if (f === "comments") return n.kind === "commented" || n.kind === "mentioned";
-  if (f === "sales") return n.kind === "deal" || n.kind === "proposal";
+  if (f === "sales") return n.kind === "deal" || n.kind === "proposal" || n.kind === "onboarding" || n.kind === "booking";
   return true;
 };
 
@@ -66,6 +63,8 @@ const KIND_ICON: Record<Notification["kind"], ReactNode> = {
   invited: <UserPlus size={11} />,
   deal: <Handshake size={11} />,
   proposal: <FileSignature size={11} />,
+  onboarding: <ClipboardCheck size={11} />,
+  booking: <CalendarClock size={11} />,
 };
 
 const typing = (e: KeyboardEvent) => {

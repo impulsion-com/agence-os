@@ -1,7 +1,7 @@
 import "server-only";
 
 import { AdsError, META_GRAPH_VERSION, META_SCOPES, sleep } from "./config";
-import type { AvailableAccount, FetchedRow } from "./types";
+import type { AvailableAccount, FetchedAd, FetchedAdRow, FetchedRow } from "./types";
 
 // Connecteur Meta Marketing API (Graph). Tout se passe côté serveur.
 
@@ -187,6 +187,149 @@ export async function metaInsights(token: string, accountId: string, since: stri
       clicks: Number(r.inline_link_clicks ?? r.clicks ?? 0),
       conversions: pick(r.actions, types),
       conversion_value: pick(r.action_values, types),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------
+// Niveau annonce (bibliothèque créa)
+// ---------------------------------------------------------------------
+// Vidéo (champs vérifiés sur le SDK officiel v26.0) :
+//  - vues de 3 secondes = action « video_view » dans actions (il n'existe plus de champ dédié) ;
+//  - video_p25/p50/p75/p100_watched_actions : lectures jusqu'à 25/50/75/100 % ;
+//  - video_thruplay_watched_actions : ThruPlay (15 s ou fin de la vidéo).
+// Même règle « conversions » que le niveau campagne (famille achats si la campagne en a).
+
+interface AdInsightRow extends InsightRow {
+  adset_id?: string;
+  ad_id: string;
+  ad_name?: string;
+  reach?: string;
+  video_p25_watched_actions?: Action[];
+  video_p50_watched_actions?: Action[];
+  video_p75_watched_actions?: Action[];
+  video_p100_watched_actions?: Action[];
+  video_thruplay_watched_actions?: Action[];
+}
+
+const total = (list: Action[] | undefined) => (list?.length ? list.reduce((s, a) => s + (Number(a.value) || 0), 0) : null);
+
+export async function metaAdInsights(token: string, accountId: string, since: string, until: string): Promise<FetchedAdRow[]> {
+  const raw: AdInsightRow[] = [];
+  for (const [a, b] of chunks(since, until)) {
+    raw.push(
+      ...(await all<AdInsightRow>(
+        `${GRAPH}/${accountId}/insights?${qs({
+          level: "ad",
+          time_increment: 1,
+          time_range: JSON.stringify({ since: a, until: b }),
+          fields: [
+            "campaign_id", "adset_id", "ad_id", "ad_name", "spend", "impressions", "reach", "clicks", "inline_link_clicks", "actions", "action_values",
+            "video_p25_watched_actions", "video_p50_watched_actions", "video_p75_watched_actions", "video_p100_watched_actions", "video_thruplay_watched_actions",
+          ].join(","),
+          use_unified_attribution_setting: "true",
+          limit: 500,
+          access_token: token,
+        })}`,
+        400,
+      )),
+    );
+  }
+  const hasPurchase = new Set(raw.filter((r) => pick(r.actions, PURCHASE) > 0).map((r) => r.campaign_id));
+  return raw.map((r) => {
+    const types = hasPurchase.has(r.campaign_id) ? PURCHASE : LEAD;
+    const v3 = r.actions?.find((x) => x.action_type === "video_view");
+    return {
+      date: r.date_start,
+      campaign_id: r.campaign_id ?? "",
+      adset_id: r.adset_id ?? "",
+      ad_id: r.ad_id,
+      ad_name: r.ad_name ?? "",
+      spend: Number(r.spend ?? 0),
+      impressions: Number(r.impressions ?? 0),
+      reach: r.reach !== undefined ? Number(r.reach) : null,
+      clicks: Number(r.inline_link_clicks ?? r.clicks ?? 0),
+      conversions: pick(r.actions, types),
+      conversion_value: pick(r.action_values, types),
+      video_3s: v3 ? Number(v3.value) || 0 : null,
+      video_p25: total(r.video_p25_watched_actions),
+      video_p50: total(r.video_p50_watched_actions),
+      video_p75: total(r.video_p75_watched_actions),
+      video_p100: total(r.video_p100_watched_actions),
+      thruplay: total(r.video_thruplay_watched_actions),
+    };
+  });
+}
+
+interface AdNode {
+  id: string;
+  name?: string;
+  effective_status?: string;
+  campaign?: { id: string; name?: string };
+  adset?: { id: string; name?: string };
+  creative?: { id: string; object_type?: string; thumbnail_url?: string; image_url?: string; video_id?: string; product_set_id?: string };
+}
+
+const FORMAT: Record<string, string> = { VIDEO: "video", PHOTO: "image", SHARE: "image", STATUS: "other", APPLICATION: "other" };
+
+/**
+ * Catalogue des annonces vues dans les insights : nom, statut, format et vignette
+ * (adcreatives : image_url pour un visuel, sinon thumbnail_url en 480 px), plus
+ * la fréquence et la couverture des 7 derniers jours.
+ */
+export async function metaAdCatalog(token: string, accountId: string, adIds: string[]): Promise<FetchedAd[]> {
+  const nodes: AdNode[] = [];
+  for (let i = 0; i < adIds.length; i += 50) {
+    const ids = adIds.slice(i, i + 50);
+    const res = await graph<Record<string, AdNode>>(
+      `${GRAPH}/?${qs({
+        ids: ids.join(","),
+        fields: "id,name,effective_status,campaign{id,name},adset{id,name},creative{id,object_type,thumbnail_url,image_url,video_id,product_set_id}",
+        access_token: token,
+      })}`,
+    );
+    nodes.push(...Object.values(res));
+  }
+  // Vignettes plus grandes (la vignette par défaut fait 64 px)
+  const creativeIds = [...new Set(nodes.map((n) => n.creative?.id).filter((x): x is string => !!x))];
+  const thumbs = new Map<string, string>();
+  for (let i = 0; i < creativeIds.length; i += 50) {
+    try {
+      const res = await graph<Record<string, { id: string; thumbnail_url?: string }>>(
+        `${GRAPH}/?${qs({ ids: creativeIds.slice(i, i + 50).join(","), fields: "thumbnail_url", thumbnail_width: 480, thumbnail_height: 480, access_token: token })}`,
+      );
+      for (const c of Object.values(res)) if (c.thumbnail_url) thumbs.set(c.id, c.thumbnail_url);
+    } catch {
+      /* vignette facultative */
+    }
+  }
+  // Fréquence 7 jours
+  const freq = new Map<string, { frequency: number; reach: number }>();
+  try {
+    const rows = await all<{ ad_id: string; frequency?: string; reach?: string }>(
+      `${GRAPH}/${accountId}/insights?${qs({ level: "ad", date_preset: "last_7d", fields: "ad_id,frequency,reach", limit: 500, access_token: token })}`,
+      50,
+    );
+    for (const r of rows) freq.set(r.ad_id, { frequency: Number(r.frequency ?? 0), reach: Number(r.reach ?? 0) });
+  } catch {
+    /* fréquence facultative */
+  }
+  return nodes.map((n) => {
+    const c = n.creative;
+    const f = freq.get(n.id);
+    const format = c?.product_set_id ? "dpa" : c?.video_id ? "video" : (FORMAT[c?.object_type ?? ""] ?? null);
+    return {
+      ad_id: n.id,
+      name: n.name ?? "",
+      campaign_id: n.campaign?.id ?? null,
+      campaign_name: n.campaign?.name ?? "",
+      adset_id: n.adset?.id ?? null,
+      adset_name: n.adset?.name ?? "",
+      status: n.effective_status ?? null,
+      format,
+      thumbnail_url: (format === "image" ? c?.image_url : null) || (c?.id ? thumbs.get(c.id) : null) || c?.thumbnail_url || c?.image_url || null,
+      frequency_7d: f ? Math.round(f.frequency * 100) / 100 : null,
+      reach_7d: f ? f.reach : null,
     };
   });
 }

@@ -1,5 +1,5 @@
 -- Agence OS : installation complète (généré par scripts/build-setup-sql.mjs, ne pas modifier à la main)
--- Migrations incluses : 0001_schema.sql, 0002_member_profile_fk.sql, 0003_demo_data.sql, 0005_revoke_anon_helpers.sql, 0020_workspace_notifications.sql, 0040_proposals.sql, 0050_reporting.sql, 0060_tracking_links.sql, 0061_tracking_attribution.sql, 0062_links.sql, 0063_tracking_secret.sql, 0064_demo_tracking_chunks.sql
+-- Migrations incluses : 0001_schema.sql, 0002_member_profile_fk.sql, 0003_demo_data.sql, 0005_revoke_anon_helpers.sql, 0020_workspace_notifications.sql, 0040_proposals.sql, 0050_reporting.sql, 0060_tracking_links.sql, 0061_tracking_attribution.sql, 0062_links.sql, 0063_tracking_secret.sql, 0064_demo_tracking_chunks.sql, 0070_proposal_signature.sql, 0071_onboarding.sql, 0072_creatives.sql, 0073_booking.sql, 0074_api_tokens.sql
 
 -- =====================================================================
 -- 0001_schema.sql
@@ -2406,3 +2406,1738 @@ revoke execute on function public.demo_tracking_seed(uuid) from anon, authentica
 -- Points d'entrée pour l'interface (réservés aux admins de l'espace)
 revoke execute on function public.demo_tracking_seed_part(uuid, text, int, int) from anon, authenticated, public;
 grant execute on function public.demo_tracking_seed_part(uuid, text, int, int) to service_role;
+
+-- =====================================================================
+-- 0070_proposal_signature.sql
+-- =====================================================================
+-- =====================================================================
+-- Signature électronique des propositions (eIDAS « simple »)
+-- 1. proposals.countersign : contre-signature de l'agence demandée
+-- 2. proposal_signatures : instantané figé, empreinte SHA-256, identité du
+--    signataire, preuve (IP tronquée + hachée, user-agent), contre-signature
+-- 3. proposal_signature_events : piste d'audit horodatée
+-- 4. proposal_otps : codes de vérification d'email (hachés, 5 essais, 10 min)
+-- 5. Verrou : une proposition signée n'est plus modifiable (ni ses lignes)
+-- 6. Toute modification des lignes rafraîchit proposals.updated_at (sert de
+--    version : le client signe exactement ce qu'il a relu)
+-- 7. sign_proposal_commit : enregistrement atomique (service role seulement)
+-- 8. respond_proposal : l'acceptation sans signature n'est plus possible
+-- 9. Bucket Storage privé « signatures »
+-- Écritures réservées au service role (routes /api/signature/*).
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. Réglage par proposition
+-- ---------------------------------------------------------------------
+alter table public.proposals add column if not exists countersign boolean not null default false;
+
+-- ---------------------------------------------------------------------
+-- 2. Signatures
+-- ---------------------------------------------------------------------
+create table if not exists public.proposal_signatures (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null unique references public.proposals(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  -- Contenu figé (blocs, lignes, options retenues, totaux, parties, signataire)
+  snapshot jsonb not null,
+  document_hash text not null,
+  signed_at timestamptz not null,
+  signer_first_name text not null,
+  signer_last_name text not null,
+  signer_role text not null default '',
+  signer_company text not null default '',
+  signer_email text not null,
+  email_verified boolean not null default false,
+  email_verified_at timestamptz,
+  mention text not null default '',
+  consent_text text not null,
+  signature_method text not null check (signature_method in ('drawn','typed')),
+  signature_path text not null,
+  signature_hash text not null,
+  ip_trunc text,
+  ip_hash text,
+  user_agent text,
+  pdf_path text,
+  pdf_hash text,
+  pdf_generated_at timestamptz,
+  -- Contre-signature de l'agence
+  countersign_required boolean not null default false,
+  countersigned_at timestamptz,
+  countersigner_id uuid references auth.users(id) on delete set null,
+  countersigner_name text,
+  countersigner_role text,
+  countersign_method text check (countersign_method in ('drawn','typed')),
+  countersign_path text,
+  countersign_hash text,
+  countersign_ip_trunc text,
+  countersign_user_agent text,
+  created_at timestamptz not null default now()
+);
+create index if not exists proposal_signatures_ws on public.proposal_signatures (workspace_id);
+
+-- ---------------------------------------------------------------------
+-- 3. Piste d'audit
+-- ---------------------------------------------------------------------
+create table if not exists public.proposal_signature_events (
+  id bigint generated always as identity primary key,
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  kind text not null check (kind in (
+    'sent','email_sent','reminder_sent','opened','otp_sent','otp_failed','otp_verified',
+    'signed','pdf_generated','countersigned','declined','emails_sent'
+  )),
+  at timestamptz not null default now(),
+  ip_trunc text,
+  ip_hash text,
+  user_agent text,
+  meta jsonb not null default '{}'::jsonb
+);
+create index if not exists proposal_signature_events_p on public.proposal_signature_events (proposal_id, at);
+
+-- ---------------------------------------------------------------------
+-- 4. Codes de vérification (jamais lisibles côté client)
+-- ---------------------------------------------------------------------
+create table if not exists public.proposal_otps (
+  id uuid primary key default gen_random_uuid(),
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  email text not null,
+  code_hash text not null,
+  attempts int not null default 0,
+  expires_at timestamptz not null,
+  verified_at timestamptz,
+  -- Jeton remis au navigateur une fois le code validé, exigé à la signature
+  proof_hash text,
+  created_at timestamptz not null default now()
+);
+create index if not exists proposal_otps_p on public.proposal_otps (proposal_id, created_at desc);
+
+alter table public.proposal_signatures enable row level security;
+alter table public.proposal_signature_events enable row level security;
+alter table public.proposal_otps enable row level security;
+
+drop policy if exists "lecture" on public.proposal_signatures;
+create policy "lecture" on public.proposal_signatures for select using (public.is_member(workspace_id));
+drop policy if exists "lecture" on public.proposal_signature_events;
+create policy "lecture" on public.proposal_signature_events for select using (public.is_member(workspace_id));
+-- proposal_otps : aucune policy, service role uniquement.
+
+-- ---------------------------------------------------------------------
+-- 5. Verrou des propositions signées
+-- ---------------------------------------------------------------------
+create or replace function public.proposal_signed_lock()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if exists (select 1 from proposal_signatures where proposal_id = old.id)
+     and (new.title, new.blocks, new.currency, new.discount_pct, new.tax_pct, new.valid_until, new.status,
+          new.company_id, new.contact_id, new.public_token, new.accepted_at, new.accepted_name, new.countersign, new.workspace_id)
+         is distinct from
+         (old.title, old.blocks, old.currency, old.discount_pct, old.tax_pct, old.valid_until, old.status,
+          old.company_id, old.contact_id, old.public_token, old.accepted_at, old.accepted_name, old.countersign, old.workspace_id)
+  then
+    raise exception 'Proposition signée : elle n''est plus modifiable. Duplique-la pour créer une nouvelle version.';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists proposals_signed_lock on public.proposals;
+create trigger proposals_signed_lock before update on public.proposals
+  for each row execute function public.proposal_signed_lock();
+
+create or replace function public.proposal_items_signed_lock()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare pid uuid := coalesce(new.proposal_id, old.proposal_id);
+begin
+  -- La jointure sur proposals laisse passer les suppressions en cascade
+  -- (la proposition n'existe déjà plus à ce moment-là).
+  if exists (select 1 from proposal_signatures s join proposals p on p.id = s.proposal_id where s.proposal_id = pid)
+     or (tg_op = 'UPDATE' and old.proposal_id is distinct from new.proposal_id
+         and exists (select 1 from proposal_signatures where proposal_id = old.proposal_id)) then
+    raise exception 'Proposition signée : ses lignes ne sont plus modifiables.';
+  end if;
+  return coalesce(new, old);
+end $$;
+
+drop trigger if exists proposal_items_signed_lock on public.proposal_items;
+create trigger proposal_items_signed_lock before insert or update or delete on public.proposal_items
+  for each row execute function public.proposal_items_signed_lock();
+
+-- ---------------------------------------------------------------------
+-- 6. Les lignes font partie du document : leur modification change la version
+-- ---------------------------------------------------------------------
+create or replace function public.proposal_items_touch()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update proposals set updated_at = now()
+  where id = coalesce(new.proposal_id, old.proposal_id)
+    and not exists (select 1 from proposal_signatures s where s.proposal_id = proposals.id);
+  return null;
+end $$;
+
+drop trigger if exists proposal_items_touch on public.proposal_items;
+create trigger proposal_items_touch after insert or update or delete on public.proposal_items
+  for each row execute function public.proposal_items_touch();
+
+-- Envoi : journalisé dans la piste d'audit dès que sent_at est posé
+create or replace function public.proposal_sent_event()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.sent_at is not null and (tg_op = 'INSERT' or old.sent_at is distinct from new.sent_at) then
+    insert into proposal_signature_events (proposal_id, workspace_id, kind, at, meta)
+    values (new.id, new.workspace_id, 'sent', new.sent_at, jsonb_build_object('by', auth.uid()));
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists proposals_sent_event on public.proposals;
+create trigger proposals_sent_event after insert or update of sent_at on public.proposals
+  for each row execute function public.proposal_sent_event();
+
+-- ---------------------------------------------------------------------
+-- 7. Enregistrement atomique d'une signature (appelé par la route serveur)
+-- p_sig : colonnes de proposal_signatures (hors id, proposal_id, workspace_id)
+-- ---------------------------------------------------------------------
+create or replace function public.sign_proposal_commit(p_proposal uuid, p_version timestamptz, p_selected uuid[], p_sig jsonb, p_event jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  p proposals;
+  d deals;
+  won uuid;
+  full_name text := left(trim(coalesce(p_sig->>'signer_first_name', '') || ' ' || coalesce(p_sig->>'signer_last_name', '')), 120);
+  at timestamptz := (p_sig->>'signed_at')::timestamptz;
+begin
+  select * into p from proposals where id = p_proposal for update;
+  if p.id is null or p.status not in ('sent','viewed') then
+    raise exception 'Cette proposition n''est plus disponible à la signature.';
+  end if;
+  if p.valid_until is not null and p.valid_until < current_date then
+    raise exception 'Cette proposition a expiré.';
+  end if;
+  if exists (select 1 from proposal_signatures where proposal_id = p.id) then
+    raise exception 'Cette proposition est déjà signée.';
+  end if;
+  if date_trunc('milliseconds', p.updated_at) <> date_trunc('milliseconds', p_version) then
+    raise exception 'VERSION: La proposition a été mise à jour depuis votre ouverture.';
+  end if;
+
+  update proposal_items set selected = (not optional) or id = any(coalesce(p_selected, '{}'))
+  where proposal_id = p.id;
+
+  update proposals set status = 'accepted', accepted_at = at, accepted_name = full_name, declined_reason = null
+  where id = p.id;
+
+  insert into proposal_signatures (
+    proposal_id, workspace_id, snapshot, document_hash, signed_at,
+    signer_first_name, signer_last_name, signer_role, signer_company, signer_email,
+    email_verified, email_verified_at, mention, consent_text, signature_method, signature_path, signature_hash,
+    ip_trunc, ip_hash, user_agent, countersign_required
+  ) values (
+    p.id, p.workspace_id, p_sig->'snapshot', p_sig->>'document_hash', at,
+    p_sig->>'signer_first_name', p_sig->>'signer_last_name', coalesce(p_sig->>'signer_role', ''), coalesce(p_sig->>'signer_company', ''), p_sig->>'signer_email',
+    coalesce((p_sig->>'email_verified')::boolean, false), (p_sig->>'email_verified_at')::timestamptz,
+    coalesce(p_sig->>'mention', ''), p_sig->>'consent_text', p_sig->>'signature_method', p_sig->>'signature_path', p_sig->>'signature_hash',
+    p_sig->>'ip_trunc', p_sig->>'ip_hash', p_sig->>'user_agent', p.countersign
+  );
+
+  insert into proposal_signature_events (proposal_id, workspace_id, kind, at, ip_trunc, ip_hash, user_agent, meta)
+  values (p.id, p.workspace_id, 'signed', at, p_event->>'ip_trunc', p_event->>'ip_hash', p_event->>'user_agent',
+    jsonb_build_object('name', full_name, 'email', p_sig->>'signer_email', 'hash', p_sig->>'document_hash'));
+
+  insert into activity (workspace_id, deal_id, actor_id, verb, meta)
+  values (p.workspace_id, p.deal_id, null, 'proposal.accepted',
+    jsonb_build_object('proposal_id', p.id, 'number', p.number, 'title', p.title, 'name', full_name, 'signed', true));
+
+  -- Deal lié : gagné à la signature
+  if p.deal_id is not null then
+    select * into d from deals where id = p.deal_id;
+    select id into won from pipeline_stages
+      where workspace_id = p.workspace_id and kind = 'won' order by position limit 1;
+    if d.id is not null and won is not null and d.stage_id is distinct from won then
+      update deals set stage_id = won, closed_at = now() where id = d.id;
+      insert into activity (workspace_id, deal_id, actor_id, verb, meta)
+      values (p.workspace_id, d.id, null, 'deal.won',
+        jsonb_build_object('title', d.title, 'from', d.stage_id, 'to', won, 'via', 'proposal', 'proposal_id', p.id));
+    end if;
+  end if;
+
+  if p.owner_id is not null then
+    insert into notifications (workspace_id, user_id, kind, proposal_id, deal_id, body)
+    values (p.workspace_id, p.owner_id, 'proposal', p.id, p.deal_id,
+      'Proposition signée par ' || full_name || ' : ' || p.title
+      || case when p.countersign then ' (contre-signature attendue)' else '' end);
+  end if;
+end $$;
+
+revoke execute on function public.sign_proposal_commit(uuid, timestamptz, uuid[], jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.sign_proposal_commit(uuid, timestamptz, uuid[], jsonb, jsonb) to service_role;
+
+-- ---------------------------------------------------------------------
+-- 8. Réponse du client : le refus reste possible par RPC, l'acceptation
+--    passe désormais par la signature électronique (/api/signature/…/sign).
+-- ---------------------------------------------------------------------
+create or replace function public.respond_proposal(p_token text, p_accept boolean, p_name text, p_reason text, p_selected uuid[])
+returns void language plpgsql security definer set search_path = public as $$
+declare p proposals;
+begin
+  if p_accept then
+    raise exception 'L''acceptation se fait par signature électronique depuis la page de la proposition.';
+  end if;
+  select * into p from proposals where public_token = p_token and status in ('sent','viewed') for update;
+  if p.id is null then raise exception 'Cette proposition n''est plus disponible.'; end if;
+  if p.valid_until is not null and p.valid_until < current_date then
+    raise exception 'Cette proposition a expiré.';
+  end if;
+
+  update proposals set status = 'declined', accepted_at = null, accepted_name = null,
+    declined_reason = nullif(left(trim(coalesce(p_reason, '')), 500), '')
+  where id = p.id;
+
+  insert into activity (workspace_id, deal_id, actor_id, verb, meta)
+  values (p.workspace_id, p.deal_id, null, 'proposal.declined',
+    jsonb_build_object('proposal_id', p.id, 'number', p.number, 'title', p.title));
+
+  insert into proposal_signature_events (proposal_id, workspace_id, kind, meta)
+  values (p.id, p.workspace_id, 'declined', jsonb_build_object('reason', nullif(left(trim(coalesce(p_reason, '')), 500), '')));
+
+  if p.owner_id is not null then
+    insert into notifications (workspace_id, user_id, kind, proposal_id, deal_id, body)
+    values (p.workspace_id, p.owner_id, 'proposal', p.id, p.deal_id, 'Proposition refusée : ' || p.title);
+  end if;
+end $$;
+
+revoke execute on function public.respond_proposal(text, boolean, text, text, uuid[]) from public;
+grant execute on function public.respond_proposal(text, boolean, text, text, uuid[]) to anon, authenticated;
+
+revoke execute on function public.proposal_items_signed_lock() from public, anon;
+revoke execute on function public.proposal_items_touch() from public, anon;
+revoke execute on function public.proposal_sent_event() from public, anon;
+
+-- ---------------------------------------------------------------------
+-- 9. Stockage privé : <workspace_id>/<proposal_id>/{client,agency}-signature.png, signed.pdf
+-- Lecture par les membres de l'espace, écriture par le service role seulement.
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('signatures', 'signatures', false, 10485760, array['image/png', 'application/pdf'])
+on conflict (id) do nothing;
+
+drop policy if exists "signatures lecture" on storage.objects;
+create policy "signatures lecture" on storage.objects for select
+  using (case when bucket_id = 'signatures' then public.is_member(((storage.foldername(name))[1])::uuid) else false end);
+
+-- =====================================================================
+-- 0071_onboarding.sql
+-- =====================================================================
+-- =====================================================================
+-- Onboarding client par formulaire
+-- 1. Réglages d'onboarding par espace (identifiants de l'agence affichés
+--    au client : Business Manager Meta, compte administrateur Google Ads,
+--    email à inviter ; automatisations par défaut)
+-- 2. Modèles de formulaire (sections et questions en jsonb), trois modèles
+--    fournis par défaut pour les espaces existants et futurs
+-- 3. Formulaires envoyés : copie figée du modèle, réponses, progression,
+--    lien public /f/<token>, vérification des accès par l'agence
+-- 4. Fichiers déposés par le client (bucket privé « attachments »,
+--    chemin <workspace_id>/onboarding/<form_id>/...)
+-- 5. Nouveau type de notification « onboarding » (ajouté à la liste
+--    existante, quelle qu'elle soit)
+-- 6. Données de démo : load_demo_onboarding / clear_demo_onboarding
+--    (admins) et _demo_onboarding / _clear_demo_onboarding (service role)
+-- La page publique passe exclusivement par les routes /api/onboarding/*
+-- en service role : aucune policy ne vise le rôle anon.
+-- Migration additive : aucune table existante modifiée (hors contrainte
+-- de type des notifications, élargie).
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. Réglages
+-- ---------------------------------------------------------------------
+create table if not exists public.onboarding_settings (
+  workspace_id uuid primary key references public.workspaces(id) on delete cascade,
+  meta_business_id text not null default '',
+  google_mcc_id text not null default '',
+  access_email text not null default '',
+  intro text not null default '',
+  auto_project boolean not null default true,
+  auto_kpis boolean not null default true,
+  auto_company boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------
+-- 2. Modèles
+-- sections : [{ id, title, description, questions: [{ id, type, label, help,
+--   required, placeholder, options, unit, map, accept, items }] }]
+-- ---------------------------------------------------------------------
+create table if not exists public.onboarding_templates (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  key text,
+  name text not null,
+  description text not null default '',
+  icon text not null default 'list-checks',
+  sections jsonb not null default '[]'::jsonb,
+  position int not null default 0,
+  archived boolean not null default false,
+  created_by uuid references auth.users(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists onboarding_templates_ws on public.onboarding_templates (workspace_id);
+create unique index if not exists onboarding_templates_key on public.onboarding_templates (workspace_id, key) where key is not null;
+
+-- ---------------------------------------------------------------------
+-- 3. Formulaires envoyés
+-- answers  : { <question_id>: texte | [choix] | { <item_id>: { done, value } } }
+-- verified : { "<question_id>:<item_id>": { at, by } } (accès vérifiés par l'agence)
+-- options  : { project, kpis, company } automatisations à la fin
+-- automation : compte rendu des automatisations exécutées
+-- ---------------------------------------------------------------------
+create table if not exists public.onboarding_forms (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  template_id uuid references public.onboarding_templates(id) on delete set null,
+  company_id uuid references public.companies(id) on delete set null,
+  contact_id uuid references public.contacts(id) on delete set null,
+  project_id uuid references public.projects(id) on delete set null,
+  title text not null,
+  intro text not null default '',
+  sections jsonb not null default '[]'::jsonb,
+  answers jsonb not null default '{}'::jsonb,
+  verified jsonb not null default '{}'::jsonb,
+  status text not null default 'sent' check (status in ('sent','in_progress','completed')),
+  progress int not null default 0 check (progress between 0 and 100),
+  token text not null unique default encode(gen_random_bytes(16), 'hex'),
+  options jsonb not null default '{"project": true, "kpis": true, "company": true}'::jsonb,
+  automation jsonb not null default '{}'::jsonb,
+  sent_at timestamptz not null default now(),
+  email_sent_at timestamptz,
+  opened_at timestamptz,
+  last_activity_at timestamptz,
+  completed_at timestamptz,
+  reminded_at timestamptz,
+  remind_count int not null default 0,
+  is_demo boolean not null default false,
+  created_by uuid references auth.users(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists onboarding_forms_ws on public.onboarding_forms (workspace_id, created_at desc);
+create index if not exists onboarding_forms_company on public.onboarding_forms (company_id);
+
+-- ---------------------------------------------------------------------
+-- 4. Fichiers
+-- ---------------------------------------------------------------------
+create table if not exists public.onboarding_files (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  form_id uuid not null references public.onboarding_forms(id) on delete cascade,
+  question_id text not null,
+  name text not null,
+  path text not null unique,
+  size bigint not null default 0,
+  mime text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists onboarding_files_form on public.onboarding_files (form_id);
+
+-- updated_at
+create or replace function public.touch_onboarding()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists onboarding_templates_touch on public.onboarding_templates;
+create trigger onboarding_templates_touch before update on public.onboarding_templates
+  for each row execute function public.touch_onboarding();
+drop trigger if exists onboarding_forms_touch on public.onboarding_forms;
+create trigger onboarding_forms_touch before update on public.onboarding_forms
+  for each row execute function public.touch_onboarding();
+drop trigger if exists onboarding_settings_touch on public.onboarding_settings;
+create trigger onboarding_settings_touch before update on public.onboarding_settings
+  for each row execute function public.touch_onboarding();
+
+-- RLS : lecture pour tout membre, écriture pour les non-invités
+alter table public.onboarding_settings enable row level security;
+alter table public.onboarding_templates enable row level security;
+alter table public.onboarding_forms enable row level security;
+alter table public.onboarding_files enable row level security;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['onboarding_settings','onboarding_templates','onboarding_forms','onboarding_files'] loop
+    execute format('drop policy if exists "lecture membres" on public.%I', t);
+    execute format('drop policy if exists "ajout membres" on public.%I', t);
+    execute format('drop policy if exists "modif membres" on public.%I', t);
+    execute format('drop policy if exists "suppression membres" on public.%I', t);
+    execute format('create policy "lecture membres" on public.%I for select using (public.is_member(workspace_id))', t);
+    execute format('create policy "ajout membres" on public.%I for insert with check (public.can_write(workspace_id))', t);
+    execute format('create policy "modif membres" on public.%I for update using (public.can_write(workspace_id))', t);
+    execute format('create policy "suppression membres" on public.%I for delete using (public.can_write(workspace_id))', t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 5. Type de notification « onboarding » : on relit la contrainte
+--    actuelle et on y ajoute la valeur, pour ne pas écraser les types
+--    ajoutés par d'autres migrations.
+-- ---------------------------------------------------------------------
+do $$
+declare def text; kinds text[];
+begin
+  select pg_get_constraintdef(oid) into def from pg_constraint
+    where conrelid = 'public.notifications'::regclass and conname = 'notifications_kind_check';
+  if def is not null and def !~ '\monboarding\M' then
+    select array_agg(m[1]) into kinds from regexp_matches(def, '''([a-z_]+)''', 'g') as m;
+    alter table public.notifications drop constraint notifications_kind_check;
+    execute 'alter table public.notifications add constraint notifications_kind_check check (kind = any (array['
+      || (select string_agg(quote_literal(k), ', ') from unnest(kinds || 'onboarding'::text) k) || ']))';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 2 bis. Modèles par défaut
+-- ---------------------------------------------------------------------
+create or replace function public.onboarding_default_templates()
+returns table (key text, name text, description text, icon text, sections jsonb, "position" int)
+language sql immutable set search_path = public as $$
+  values
+    ('ecommerce', 'Onboarding e-commerce',
+      'Boutique en ligne : produits, panier moyen, ROAS cible, catalogue et accès Meta, Google, Shopify.',
+      'shopping-bag', $j$[{"id":"company","title":"Votre entreprise et votre offre","description":"Quelques informations pour bien comprendre votre marque et ce que vous vendez.","questions":[{"id":"brand_name","type":"short","label":"Nom commercial de la marque","required":true},{"id":"website","type":"url","label":"Adresse de votre boutique en ligne","required":true,"placeholder":"https://","map":"company.website"},{"id":"industry","type":"single","label":"Secteur d'activité","required":true,"options":["E-commerce","SaaS","Formation","Immobilier","Santé","Restauration","Services B2B","Local","Autre"],"map":"company.industry"},{"id":"pitch","type":"long","label":"Présentez votre activité en quelques phrases","required":true,"placeholder":"Ce que vous vendez, à qui, depuis quand..."},{"id":"hero_products","type":"long","label":"Vos produits phares et leur prix","required":true,"placeholder":"Un produit par ligne"},{"id":"aov","type":"number","label":"Panier moyen","unit":"€"},{"id":"margin","type":"number","label":"Marge brute moyenne","unit":"%"},{"id":"usp","type":"long","label":"Qu'est-ce qui vous différencie de vos concurrents ?"},{"id":"promos","type":"long","label":"Offres, lancements ou promotions prévus dans les 3 prochains mois"}]},{"id":"personas","title":"Vos clients et personas","description":"Plus nous connaissons vos clients, plus vos publicités leur parleront.","questions":[{"id":"ideal_customer","type":"long","label":"Qui est votre client idéal ?","required":true,"placeholder":"Âge, situation, centres d'intérêt, ce qui le décide à acheter..."},{"id":"markets","type":"multi","label":"Pays où vous livrez","required":true,"options":["France","Belgique","Suisse","Canada","Reste de l'Europe","International"]},{"id":"pains","type":"long","label":"Quels problèmes ou envies votre produit résout-il ?"},{"id":"objections","type":"long","label":"Les freins les plus fréquents avant l'achat","placeholder":"Prix, délais de livraison, doute sur la qualité..."},{"id":"repeat","type":"number","label":"Part de clients qui rachètent","unit":"%"}]},{"id":"competitors","title":"Concurrents","description":"Nous analyserons leurs publicités actives dans les bibliothèques publicitaires.","questions":[{"id":"competitors","type":"long","label":"Vos 3 principaux concurrents","required":true,"placeholder":"Nom ou site, un par ligne"},{"id":"admired","type":"short","label":"Une marque dont vous admirez la publicité"}]},{"id":"goals","title":"Objectifs et KPI","description":"Ces chiffres servent de référence à nos rapports mensuels.","questions":[{"id":"main_goal","type":"single","label":"Votre objectif principal","required":true,"options":["Augmenter les ventes en ligne","Rentabiliser les campagnes existantes","Lancer un nouveau produit","Conquérir un nouveau pays","Développer la notoriété"]},{"id":"roas_target","type":"number","label":"ROAS cible","unit":"x","map":"kpi.roas","help":"Chiffre d'affaires généré pour 1 € de publicité. 3 signifie 3 € de ventes pour 1 € dépensé."},{"id":"cpa_target","type":"number","label":"Coût par achat maximum acceptable","unit":"€","map":"kpi.cpa"},{"id":"revenue","type":"number","label":"Chiffre d'affaires mensuel en ligne actuel","unit":"€"},{"id":"start_date","type":"date","label":"Date de lancement souhaitée"}]},{"id":"budget","title":"Budget","description":"Le budget publicitaire est payé directement aux plateformes, en dehors de nos honoraires.","questions":[{"id":"budget","type":"single","label":"Budget publicitaire mensuel prévu","required":true,"options":["Moins de 1 000 €","1 000 à 3 000 €","3 000 à 10 000 €","10 000 à 30 000 €","Plus de 30 000 €"]},{"id":"platforms","type":"multi","label":"Plateformes envisagées","options":["Meta (Facebook, Instagram)","Google Ads","TikTok","Pinterest","Je ne sais pas encore"]},{"id":"seasonality","type":"long","label":"Saisonnalité et temps forts de l'année","placeholder":"Black Friday, Noël, soldes, fête des mères..."}]},{"id":"history","title":"Historique publicitaire","description":"Pour repartir de ce qui a déjà été appris, plutôt que de zéro.","questions":[{"id":"ads_before","type":"single","label":"Avez-vous déjà fait de la publicité en ligne ?","required":true,"options":["Oui, en interne","Oui, avec une agence ou un freelance","Non, jamais"]},{"id":"learnings","type":"long","label":"Ce qui a fonctionné, ou pas, jusqu'ici"},{"id":"past_spend","type":"number","label":"Dépense publicitaire mensuelle moyenne ces 3 derniers mois","unit":"€"}]},{"id":"brand","title":"Marque et créations","description":"Tout ce qui nous aide à produire des publicités fidèles à votre marque.","questions":[{"id":"logo","type":"file","label":"Votre logo","required":true,"accept":"images","help":"Idéalement en SVG ou en PNG haute définition sur fond transparent."},{"id":"charter","type":"file","label":"Charte graphique (couleurs, typographies)","accept":"docs"},{"id":"creatives","type":"file","label":"Créations publicitaires existantes","accept":"any","help":"Visuels, vidéos, publicités qui ont bien fonctionné. Jusqu'à 50 Mo par fichier."},{"id":"assets_link","type":"url","label":"Lien vers un dossier partagé (photos, vidéos)","placeholder":"https://drive.google.com/..."},{"id":"tone","type":"multi","label":"Le ton de votre marque","options":["Premium","Chaleureux","Expert","Décalé","Engagé","Minimaliste","Pédagogue"]},{"id":"never","type":"long","label":"Ce qu'il ne faut jamais dire ou montrer","placeholder":"Mots, images, sujets, concurrents à ne pas citer..."}]},{"id":"legal","title":"Contraintes légales","description":"Pour ne jamais diffuser une publicité refusée ou non conforme.","questions":[{"id":"legal_regulated","type":"single","label":"Votre secteur est-il soumis à une réglementation publicitaire particulière ?","required":true,"options":["Non","Oui (santé, alcool, finance, compléments alimentaires...)","Je ne sais pas"]},{"id":"legal_mentions","type":"long","label":"Mentions obligatoires ou allégations interdites","placeholder":"Ex. : « Sous réserve d'acceptation du dossier », pas de promesse de résultat..."},{"id":"legal_validator","type":"short","label":"Qui valide les publicités avant leur diffusion ?","placeholder":"Prénom, nom et email"}]},{"id":"access","title":"Accès aux outils","description":"Nous travaillons dans vos comptes, qui restent votre propriété : vous pouvez retirer nos accès à tout moment.","questions":[{"id":"access","type":"access","label":"Donnez-nous accès à vos comptes","required":true,"help":"Suivez les étapes de chaque outil, puis cochez « C'est fait ». Vous n'avez aucun mot de passe à nous transmettre.","items":[{"id":"meta_bm","name":"Business Manager Meta","platform":"meta_bm","link":"https://business.facebook.com/settings","idLabel":"ID de votre Business Manager","steps":["Ouvrez business.facebook.com/settings avec le compte administrateur de votre entreprise.","Copiez l'identifiant affiché sous le nom de votre entreprise (Informations sur l'entreprise) et collez-le ci-dessous.","Allez dans Utilisateurs > Partenaires, cliquez sur Ajouter puis « Donner à un partenaire l'accès à vos ressources ».","Saisissez l'ID de partenaire de {agence} : {meta_bm_id}, puis validez."]},{"id":"meta_ads","name":"Compte publicitaire, page et pixel Meta","platform":"meta_ads","link":"https://business.facebook.com/settings/ad-accounts","idLabel":"ID du compte publicitaire (act_...)","steps":["Dans les paramètres du Business Manager, ouvrez Comptes > Comptes publicitaires.","Sélectionnez votre compte publicitaire et copiez son identifiant.","Cliquez sur Attribuer des partenaires, saisissez l'ID {meta_bm_id} et cochez « Gérer les campagnes ».","Faites de même pour votre page Facebook, votre compte Instagram et votre pixel (Sources de données > Ensembles de données)."]},{"id":"google_ads","name":"Google Ads","platform":"google_ads","link":"https://ads.google.com","idLabel":"Numéro client Google Ads (123-456-7890)","steps":["Connectez-vous à ads.google.com : votre numéro client s'affiche en haut à droite (format 123-456-7890).","Collez-le ci-dessous : {agence} vous enverra une demande d'association depuis son compte administrateur {google_mcc_id}.","Dans Google Ads, ouvrez Administration > Accès et sécurité > Gestionnaires, puis acceptez la demande de {agence}."]},{"id":"ga4","name":"Google Analytics 4","platform":"ga4","link":"https://analytics.google.com","idLabel":"ID de la propriété GA4 (facultatif)","steps":["Ouvrez analytics.google.com, puis Administration (roue crantée en bas à gauche).","Dans la colonne Propriété, cliquez sur Gestion des accès à la propriété.","Cliquez sur +, puis Ajouter des utilisateurs, et saisissez {email_acces}.","Choisissez le rôle Éditeur et cliquez sur Ajouter."]},{"id":"gtm","name":"Google Tag Manager","platform":"gtm","link":"https://tagmanager.google.com","idLabel":"ID du conteneur (GTM-XXXXXXX)","steps":["Ouvrez tagmanager.google.com et sélectionnez le conteneur de votre site.","Cliquez sur Administration, puis Gestion des utilisateurs dans la colonne Conteneur.","Ajoutez {email_acces} avec l'autorisation Publier, puis envoyez l'invitation.","Pas encore de conteneur ? Cochez simplement la case : nous le créerons avec vous."]},{"id":"shopify","name":"Shopify (ou votre CMS)","platform":"cms","link":"https://admin.shopify.com","idLabel":"Adresse de votre boutique (xxx.myshopify.com)","steps":["Dans l'administration Shopify, ouvrez Paramètres > Utilisateurs et autorisations.","Cliquez sur Ajouter du personnel et saisissez {email_acces}.","Cochez Commandes, Produits, Canaux de vente et Événements clients (pixels), puis envoyez l'invitation.","Sur WooCommerce, PrestaShop ou un autre CMS : créez un compte Gestionnaire pour {email_acces}."]},{"id":"search_console","name":"Google Search Console","platform":"search_console","link":"https://search.google.com/search-console","steps":["Ouvrez search.google.com/search-console et sélectionnez votre site.","Allez dans Paramètres > Utilisateurs et autorisations.","Cliquez sur Ajouter un utilisateur, saisissez {email_acces} avec l'autorisation Complète."]}]},{"id":"access_notes","type":"long","label":"Un accès pose problème ? Dites-le nous ici","placeholder":"Ex. : le Business Manager appartient à notre ancien prestataire..."}]}]$j$::jsonb, 0),
+    ('leads', 'Onboarding génération de leads',
+      'Services et B2B : définition du lead qualifié, coût par lead cible, suivi commercial, accès Meta, Google et CRM.',
+      'target', $j$[{"id":"company","title":"Votre entreprise et votre offre","description":"Quelques informations pour bien comprendre votre activité.","questions":[{"id":"brand_name","type":"short","label":"Nom de l'entreprise","required":true},{"id":"website","type":"url","label":"Site web","required":true,"placeholder":"https://","map":"company.website"},{"id":"industry","type":"single","label":"Secteur d'activité","required":true,"options":["E-commerce","SaaS","Formation","Immobilier","Santé","Restauration","Services B2B","Local","Autre"],"map":"company.industry"},{"id":"pitch","type":"long","label":"Présentez votre activité en quelques phrases","required":true},{"id":"offer","type":"long","label":"L'offre à promouvoir en priorité et son prix","required":true,"placeholder":"Prestation, formation, abonnement..."},{"id":"customer_value","type":"number","label":"Valeur moyenne d'un client signé","unit":"€","help":"Sur la première vente ou sur toute la durée de la relation, précisez-le dans les notes si besoin."},{"id":"usp","type":"long","label":"Pourquoi vos clients vous choisissent plutôt qu'un concurrent ?"}]},{"id":"personas","title":"Vos cibles et personas","description":"À qui s'adressent les campagnes.","questions":[{"id":"ideal_customer","type":"long","label":"Décrivez votre client idéal","required":true,"placeholder":"Particulier ou entreprise, fonction, taille, situation..."},{"id":"area","type":"short","label":"Zone géographique ciblée","required":true,"placeholder":"France entière, Île-de-France, Lyon + 50 km..."},{"id":"pains","type":"long","label":"Quels problèmes votre offre résout-elle ?"},{"id":"objections","type":"long","label":"Les objections les plus fréquentes en rendez-vous"}]},{"id":"funnel","title":"Qualification et suivi des leads","description":"Un lead n'a de valeur que s'il est rappelé vite et bien.","questions":[{"id":"qualified","type":"long","label":"Qu'est-ce qu'un lead qualifié pour vous ?","required":true,"placeholder":"Budget, besoin, délai, zone, statut..."},{"id":"followup","type":"single","label":"Délai de rappel d'un nouveau lead","required":true,"options":["Moins d'une heure","Dans la journée","Sous 48 h","Plus de 48 h"]},{"id":"followup_who","type":"short","label":"Qui rappelle les leads ?","placeholder":"Prénom, rôle"},{"id":"close_rate","type":"number","label":"Taux de transformation lead vers client","unit":"%"},{"id":"lead_form","type":"single","label":"Où arrivent les demandes aujourd'hui ?","options":["Formulaire du site","Appels téléphoniques","Prise de rendez-vous en ligne","Messages (WhatsApp, Messenger)","Plusieurs canaux"]}]},{"id":"competitors","title":"Concurrents","description":"Nous analyserons leurs publicités et leurs pages.","questions":[{"id":"competitors","type":"long","label":"Vos 3 principaux concurrents","required":true,"placeholder":"Nom ou site, un par ligne"}]},{"id":"goals","title":"Objectifs et KPI","description":"Ces chiffres servent de référence à nos rapports mensuels.","questions":[{"id":"leads_goal","type":"number","label":"Nombre de leads souhaités par mois","required":true},{"id":"cpa_target","type":"number","label":"Coût par lead cible","unit":"€","map":"kpi.cpa"},{"id":"start_date","type":"date","label":"Date de lancement souhaitée"}]},{"id":"budget","title":"Budget et historique","description":"Le budget publicitaire est payé directement aux plateformes, en dehors de nos honoraires.","questions":[{"id":"budget","type":"single","label":"Budget publicitaire mensuel prévu","required":true,"options":["Moins de 1 000 €","1 000 à 3 000 €","3 000 à 10 000 €","Plus de 10 000 €"]},{"id":"platforms","type":"multi","label":"Plateformes envisagées","options":["Meta (Facebook, Instagram)","Google Ads","LinkedIn Ads","TikTok","Je ne sais pas encore"]},{"id":"ads_before","type":"single","label":"Avez-vous déjà fait de la publicité en ligne ?","required":true,"options":["Oui, en interne","Oui, avec une agence ou un freelance","Non, jamais"]},{"id":"learnings","type":"long","label":"Ce qui a fonctionné, ou pas, jusqu'ici"}]},{"id":"brand","title":"Marque et créations","description":"Tout ce qui nous aide à produire des publicités fidèles à votre marque.","questions":[{"id":"logo","type":"file","label":"Votre logo","required":true,"accept":"images","help":"Idéalement en SVG ou en PNG haute définition sur fond transparent."},{"id":"charter","type":"file","label":"Charte graphique (couleurs, typographies)","accept":"docs"},{"id":"creatives","type":"file","label":"Publicités, brochures ou présentations existantes","accept":"any","help":"Visuels, vidéos, publicités qui ont bien fonctionné. Jusqu'à 50 Mo par fichier."},{"id":"assets_link","type":"url","label":"Lien vers un dossier partagé (photos, vidéos)","placeholder":"https://drive.google.com/..."},{"id":"tone","type":"multi","label":"Le ton de votre marque","options":["Premium","Chaleureux","Expert","Décalé","Engagé","Minimaliste","Pédagogue"]},{"id":"never","type":"long","label":"Ce qu'il ne faut jamais dire ou montrer","placeholder":"Mots, images, sujets, concurrents à ne pas citer..."}]},{"id":"legal","title":"Contraintes légales","description":"Pour ne jamais diffuser une publicité refusée ou non conforme.","questions":[{"id":"legal_regulated","type":"single","label":"Votre secteur est-il soumis à une réglementation publicitaire particulière ?","required":true,"options":["Non","Oui (santé, alcool, finance, compléments alimentaires...)","Je ne sais pas"]},{"id":"legal_mentions","type":"long","label":"Mentions obligatoires ou allégations interdites","placeholder":"Ex. : « Sous réserve d'acceptation du dossier », pas de promesse de résultat..."},{"id":"legal_validator","type":"short","label":"Qui valide les publicités avant leur diffusion ?","placeholder":"Prénom, nom et email"}]},{"id":"access","title":"Accès aux outils","description":"Nous travaillons dans vos comptes, qui restent votre propriété : vous pouvez retirer nos accès à tout moment.","questions":[{"id":"access","type":"access","label":"Donnez-nous accès à vos comptes","required":true,"help":"Suivez les étapes de chaque outil, puis cochez « C'est fait ». Vous n'avez aucun mot de passe à nous transmettre.","items":[{"id":"meta_bm","name":"Business Manager Meta","platform":"meta_bm","link":"https://business.facebook.com/settings","idLabel":"ID de votre Business Manager","steps":["Ouvrez business.facebook.com/settings avec le compte administrateur de votre entreprise.","Copiez l'identifiant affiché sous le nom de votre entreprise (Informations sur l'entreprise) et collez-le ci-dessous.","Allez dans Utilisateurs > Partenaires, cliquez sur Ajouter puis « Donner à un partenaire l'accès à vos ressources ».","Saisissez l'ID de partenaire de {agence} : {meta_bm_id}, puis validez."]},{"id":"meta_ads","name":"Compte publicitaire, page et pixel Meta","platform":"meta_ads","link":"https://business.facebook.com/settings/ad-accounts","idLabel":"ID du compte publicitaire (act_...)","steps":["Dans les paramètres du Business Manager, ouvrez Comptes > Comptes publicitaires.","Sélectionnez votre compte publicitaire et copiez son identifiant.","Cliquez sur Attribuer des partenaires, saisissez l'ID {meta_bm_id} et cochez « Gérer les campagnes ».","Faites de même pour votre page Facebook, votre compte Instagram et votre pixel (Sources de données > Ensembles de données)."]},{"id":"google_ads","name":"Google Ads","platform":"google_ads","link":"https://ads.google.com","idLabel":"Numéro client Google Ads (123-456-7890)","steps":["Connectez-vous à ads.google.com : votre numéro client s'affiche en haut à droite (format 123-456-7890).","Collez-le ci-dessous : {agence} vous enverra une demande d'association depuis son compte administrateur {google_mcc_id}.","Dans Google Ads, ouvrez Administration > Accès et sécurité > Gestionnaires, puis acceptez la demande de {agence}."]},{"id":"ga4","name":"Google Analytics 4","platform":"ga4","link":"https://analytics.google.com","idLabel":"ID de la propriété GA4 (facultatif)","steps":["Ouvrez analytics.google.com, puis Administration (roue crantée en bas à gauche).","Dans la colonne Propriété, cliquez sur Gestion des accès à la propriété.","Cliquez sur +, puis Ajouter des utilisateurs, et saisissez {email_acces}.","Choisissez le rôle Éditeur et cliquez sur Ajouter."]},{"id":"gtm","name":"Google Tag Manager","platform":"gtm","link":"https://tagmanager.google.com","idLabel":"ID du conteneur (GTM-XXXXXXX)","steps":["Ouvrez tagmanager.google.com et sélectionnez le conteneur de votre site.","Cliquez sur Administration, puis Gestion des utilisateurs dans la colonne Conteneur.","Ajoutez {email_acces} avec l'autorisation Publier, puis envoyez l'invitation.","Pas encore de conteneur ? Cochez simplement la case : nous le créerons avec vous."]},{"id":"cms","name":"Site web (WordPress, Webflow...)","platform":"cms","idLabel":"Outil utilisé pour votre site","steps":["Connectez-vous à l'administration de votre site.","Créez un compte utilisateur pour {email_acces} avec le rôle Éditeur (ou Administrateur si nous devons installer le suivi).","Si votre site est géré par un prestataire, transmettez-lui simplement cette demande et cochez la case une fois l'accès créé."]},{"id":"crm","name":"Votre CRM (HubSpot, Pipedrive, Axonaut...)","platform":"other","idLabel":"Nom de votre CRM","steps":["Invitez {email_acces} comme utilisateur de votre CRM, en lecture seule si possible.","Nous en avons besoin pour relier les leads aux campagnes et mesurer le coût par client signé.","Pas de CRM ? Cochez la case et précisez où arrivent vos demandes (email, tableur...)."]}]},{"id":"access_notes","type":"long","label":"Un accès pose problème ? Dites-le nous ici","placeholder":"Ex. : le Business Manager appartient à notre ancien prestataire..."}]}]$j$::jsonb, 1),
+    ('local', 'Onboarding local / prise de RDV',
+      'Commerces et prestataires locaux : zone de chalandise, prestations, prise de rendez-vous, fiche Google.',
+      'calendar', $j$[{"id":"company","title":"Votre établissement","description":"Pour cibler les bonnes personnes, au bon endroit.","questions":[{"id":"brand_name","type":"short","label":"Nom de l'établissement","required":true},{"id":"website","type":"url","label":"Site web","placeholder":"https://","map":"company.website"},{"id":"industry","type":"single","label":"Secteur d'activité","required":true,"options":["E-commerce","SaaS","Formation","Immobilier","Santé","Restauration","Services B2B","Local","Autre"],"map":"company.industry"},{"id":"address","type":"long","label":"Adresse(s) de l'établissement","required":true,"placeholder":"Une adresse par ligne"},{"id":"radius","type":"number","label":"Rayon de votre zone de chalandise","required":true,"unit":"km"},{"id":"hours","type":"long","label":"Horaires d'ouverture"},{"id":"phone","type":"phone","label":"Téléphone affiché dans les publicités"}]},{"id":"offer","title":"Vos prestations","description":"Ce que vous voulez remplir en priorité.","questions":[{"id":"services","type":"long","label":"Prestations proposées et leurs prix","required":true,"placeholder":"Une prestation par ligne"},{"id":"priority_service","type":"short","label":"La prestation à mettre en avant en priorité","required":true},{"id":"customer_value","type":"number","label":"Valeur moyenne d'un client","unit":"€"},{"id":"usp","type":"long","label":"Pourquoi vos clients vous choisissent ?"}]},{"id":"personas","title":"Votre clientèle","description":"Qui sont les clients que vous aimeriez voir plus souvent ?","questions":[{"id":"ideal_customer","type":"long","label":"Décrivez votre client idéal","required":true},{"id":"competitors","type":"long","label":"Vos principaux concurrents dans le secteur","placeholder":"Nom ou site, un par ligne"}]},{"id":"booking","title":"Prise de rendez-vous","description":"Pour mesurer chaque rendez-vous obtenu grâce aux publicités.","questions":[{"id":"booking_tool","type":"single","label":"Comment vos clients prennent-ils rendez-vous ?","required":true,"options":["Calendly","Planity","Doctolib","Formulaire du site","Téléphone uniquement","Autre outil"]},{"id":"booking_link","type":"url","label":"Lien de prise de rendez-vous","placeholder":"https://"},{"id":"capacity","type":"number","label":"Nombre de rendez-vous supplémentaires que vous pouvez absorber par semaine"}]},{"id":"goals","title":"Objectifs et budget","description":"Le budget publicitaire est payé directement aux plateformes, en dehors de nos honoraires.","questions":[{"id":"appointments_goal","type":"number","label":"Nombre de rendez-vous souhaités par mois","required":true},{"id":"cpa_target","type":"number","label":"Coût par rendez-vous cible","unit":"€","map":"kpi.cpa"},{"id":"budget","type":"single","label":"Budget publicitaire mensuel prévu","required":true,"options":["Moins de 500 €","500 à 1 000 €","1 000 à 3 000 €","Plus de 3 000 €"]},{"id":"ads_before","type":"single","label":"Avez-vous déjà fait de la publicité en ligne ?","required":true,"options":["Oui","Non, jamais"]},{"id":"start_date","type":"date","label":"Date de lancement souhaitée"}]},{"id":"brand","title":"Marque et créations","description":"Tout ce qui nous aide à produire des publicités fidèles à votre marque.","questions":[{"id":"logo","type":"file","label":"Votre logo","required":true,"accept":"images","help":"Idéalement en SVG ou en PNG haute définition sur fond transparent."},{"id":"charter","type":"file","label":"Charte graphique (couleurs, typographies)","accept":"docs"},{"id":"creatives","type":"file","label":"Photos de l'établissement, de l'équipe ou de vos réalisations","accept":"any","help":"Visuels, vidéos, publicités qui ont bien fonctionné. Jusqu'à 50 Mo par fichier."},{"id":"assets_link","type":"url","label":"Lien vers un dossier partagé (photos, vidéos)","placeholder":"https://drive.google.com/..."},{"id":"tone","type":"multi","label":"Le ton de votre marque","options":["Premium","Chaleureux","Expert","Décalé","Engagé","Minimaliste","Pédagogue"]},{"id":"never","type":"long","label":"Ce qu'il ne faut jamais dire ou montrer","placeholder":"Mots, images, sujets, concurrents à ne pas citer..."}]},{"id":"legal","title":"Contraintes légales","description":"Pour ne jamais diffuser une publicité refusée ou non conforme.","questions":[{"id":"legal_regulated","type":"single","label":"Votre secteur est-il soumis à une réglementation publicitaire particulière ?","required":true,"options":["Non","Oui (santé, alcool, finance, compléments alimentaires...)","Je ne sais pas"]},{"id":"legal_mentions","type":"long","label":"Mentions obligatoires ou allégations interdites","placeholder":"Ex. : « Sous réserve d'acceptation du dossier », pas de promesse de résultat..."},{"id":"legal_validator","type":"short","label":"Qui valide les publicités avant leur diffusion ?","placeholder":"Prénom, nom et email"}]},{"id":"access","title":"Accès aux outils","description":"Vos comptes restent votre propriété : vous pouvez retirer nos accès à tout moment.","questions":[{"id":"access","type":"access","label":"Donnez-nous accès à vos comptes","required":true,"help":"Suivez les étapes de chaque outil, puis cochez « C'est fait ». Vous n'avez aucun mot de passe à nous transmettre.","items":[{"id":"gbp","name":"Fiche d'établissement Google","platform":"gbp","link":"https://business.google.com","idLabel":"Nom exact de la fiche","steps":["Recherchez le nom de votre établissement sur Google en étant connecté au compte propriétaire de la fiche.","Cliquez sur les trois points du panneau de gestion, puis Paramètres de la fiche > Personnes et accès.","Cliquez sur Ajouter, saisissez {email_acces} et choisissez le rôle Gestionnaire."]},{"id":"meta_bm","name":"Business Manager Meta","platform":"meta_bm","link":"https://business.facebook.com/settings","idLabel":"ID de votre Business Manager","steps":["Ouvrez business.facebook.com/settings avec le compte administrateur de votre entreprise.","Copiez l'identifiant affiché sous le nom de votre entreprise (Informations sur l'entreprise) et collez-le ci-dessous.","Allez dans Utilisateurs > Partenaires, cliquez sur Ajouter puis « Donner à un partenaire l'accès à vos ressources ».","Saisissez l'ID de partenaire de {agence} : {meta_bm_id}, puis validez."]},{"id":"meta_ads","name":"Compte publicitaire, page et pixel Meta","platform":"meta_ads","link":"https://business.facebook.com/settings/ad-accounts","idLabel":"ID du compte publicitaire (act_...)","steps":["Dans les paramètres du Business Manager, ouvrez Comptes > Comptes publicitaires.","Sélectionnez votre compte publicitaire et copiez son identifiant.","Cliquez sur Attribuer des partenaires, saisissez l'ID {meta_bm_id} et cochez « Gérer les campagnes ».","Faites de même pour votre page Facebook, votre compte Instagram et votre pixel (Sources de données > Ensembles de données)."]},{"id":"google_ads","name":"Google Ads","platform":"google_ads","link":"https://ads.google.com","idLabel":"Numéro client Google Ads (123-456-7890)","steps":["Connectez-vous à ads.google.com : votre numéro client s'affiche en haut à droite (format 123-456-7890).","Collez-le ci-dessous : {agence} vous enverra une demande d'association depuis son compte administrateur {google_mcc_id}.","Dans Google Ads, ouvrez Administration > Accès et sécurité > Gestionnaires, puis acceptez la demande de {agence}."]},{"id":"ga4","name":"Google Analytics 4","platform":"ga4","link":"https://analytics.google.com","idLabel":"ID de la propriété GA4 (facultatif)","steps":["Ouvrez analytics.google.com, puis Administration (roue crantée en bas à gauche).","Dans la colonne Propriété, cliquez sur Gestion des accès à la propriété.","Cliquez sur +, puis Ajouter des utilisateurs, et saisissez {email_acces}.","Choisissez le rôle Éditeur et cliquez sur Ajouter."]},{"id":"gtm","name":"Google Tag Manager","platform":"gtm","link":"https://tagmanager.google.com","idLabel":"ID du conteneur (GTM-XXXXXXX)","steps":["Ouvrez tagmanager.google.com et sélectionnez le conteneur de votre site.","Cliquez sur Administration, puis Gestion des utilisateurs dans la colonne Conteneur.","Ajoutez {email_acces} avec l'autorisation Publier, puis envoyez l'invitation.","Pas encore de conteneur ? Cochez simplement la case : nous le créerons avec vous."]},{"id":"cms","name":"Site web (WordPress, Webflow...)","platform":"cms","idLabel":"Outil utilisé pour votre site","steps":["Connectez-vous à l'administration de votre site.","Créez un compte utilisateur pour {email_acces} avec le rôle Éditeur (ou Administrateur si nous devons installer le suivi).","Si votre site est géré par un prestataire, transmettez-lui simplement cette demande et cochez la case une fois l'accès créé."]}]},{"id":"access_notes","type":"long","label":"Un accès pose problème ? Dites-le nous ici","placeholder":"Ex. : le Business Manager appartient à notre ancien prestataire..."}]}]$j$::jsonb, 2)
+$$;
+
+-- Crée les réglages et les modèles par défaut manquants (idempotent)
+create or replace function public.seed_onboarding(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  insert into onboarding_settings (workspace_id) values (ws) on conflict (workspace_id) do nothing;
+  insert into onboarding_templates (workspace_id, key, name, description, icon, sections, position, created_by)
+  select ws, d.key, d.name, d.description, d.icon, d.sections, d.position, null
+  from onboarding_default_templates() d
+  on conflict (workspace_id, key) where key is not null do nothing;
+end $$;
+revoke execute on function public.seed_onboarding(uuid) from anon, authenticated, public;
+grant execute on function public.seed_onboarding(uuid) to service_role;
+
+-- Bouton « Restaurer les modèles par défaut » : désarchive et recrée les manquants
+create or replace function public.restore_onboarding_templates(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.can_write(ws) then raise exception 'réservé aux membres de l''espace'; end if;
+  update onboarding_templates set archived = false where workspace_id = ws and key in (select key from onboarding_default_templates());
+  perform seed_onboarding(ws);
+end $$;
+revoke execute on function public.restore_onboarding_templates(uuid) from anon, public;
+grant execute on function public.restore_onboarding_templates(uuid) to authenticated;
+
+create or replace function public.seed_workspace_defaults_onboarding()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform seed_onboarding(new.id);
+  return new;
+end $$;
+drop trigger if exists workspaces_seed_onboarding on public.workspaces;
+create trigger workspaces_seed_onboarding after insert on public.workspaces
+  for each row execute function public.seed_workspace_defaults_onboarding();
+
+select public.seed_onboarding(id) from public.workspaces;
+
+-- ---------------------------------------------------------------------
+-- 6. Données de démo : un onboarding terminé (Maison Lumen) et un en
+--    cours (Atelier Brun). À appeler après load_demo_data.
+-- ---------------------------------------------------------------------
+create or replace function public._clear_demo_onboarding(ws uuid)
+returns void language sql security definer set search_path = public as $$
+  delete from onboarding_forms where workspace_id = ws and is_demo;
+$$;
+revoke execute on function public._clear_demo_onboarding(uuid) from anon, authenticated, public;
+grant execute on function public._clear_demo_onboarding(uuid) to service_role;
+
+create or replace function public._demo_onboarding(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := coalesce(auth.uid(), (select user_id from workspace_members where workspace_id = ws order by (role = 'owner') desc, joined_at limit 1));
+  c_lumen uuid; k_lumen uuid; c_brun uuid; k_brun uuid; p_lumen uuid;
+  t_ecom onboarding_templates; t_local onboarding_templates;
+begin
+  perform _clear_demo_onboarding(ws);
+  perform seed_onboarding(ws);
+  select * into t_ecom from onboarding_templates where workspace_id = ws and key = 'ecommerce';
+  select * into t_local from onboarding_templates where workspace_id = ws and key = 'local';
+  select id into c_lumen from companies where workspace_id = ws and name = 'Maison Lumen' order by created_at limit 1;
+  select id into c_brun from companies where workspace_id = ws and name = 'Atelier Brun' order by created_at limit 1;
+  select id into k_lumen from contacts where workspace_id = ws and company_id = c_lumen order by created_at limit 1;
+  select id into k_brun from contacts where workspace_id = ws and company_id = c_brun order by created_at limit 1;
+  select id into p_lumen from projects where workspace_id = ws and company_id = c_lumen and archived_at is null order by created_at limit 1;
+
+  if c_lumen is not null then
+    insert into onboarding_forms (workspace_id, template_id, company_id, contact_id, project_id, title, sections, answers, verified,
+      status, progress, options, automation, sent_at, email_sent_at, opened_at, last_activity_at, completed_at, is_demo, created_by)
+    values (ws, t_ecom.id, c_lumen, k_lumen, p_lumen, 'Onboarding e-commerce · Maison Lumen', t_ecom.sections,
+      jsonb_build_object(
+        'brand_name', 'Maison Lumen',
+        'website', 'https://maisonlumen.fr',
+        'industry', 'E-commerce',
+        'pitch', 'Nous dessinons et éditons des luminaires en petites séries, fabriqués dans des ateliers en France. Vente en ligne uniquement depuis 2021, avec un showroom sur rendez-vous à Lyon.',
+        'hero_products', E'Suspension Halo : 240 €\nLampe à poser Dune : 165 €\nApplique Arc : 129 €\nCoffret ampoules vintage : 39 €',
+        'aov', '180',
+        'margin', '62',
+        'usp', 'Design signé, fabrication française, garantie 5 ans et livraison offerte dès 100 €.',
+        'promos', 'Collection hiver le 15 octobre, Black Friday (-20 % sur tout le site), coffrets cadeaux de Noël.',
+        'ideal_customer', 'Femmes et hommes de 30 à 55 ans, propriétaires, qui refont leur intérieur et suivent des comptes déco sur Instagram et Pinterest. Sensibles au made in France.',
+        'markets', jsonb_build_array('France', 'Belgique', 'Suisse'),
+        'pains', 'Trouver un luminaire qui sort de l''ordinaire sans payer le prix d''une galerie.',
+        'objections', E'Peur que le rendu ne corresponde pas aux photos\nDélais de fabrication (10 jours)',
+        'repeat', '18',
+        'competitors', E'Market Set\nHay\nSammode',
+        'admired', 'Caravane',
+        'main_goal', 'Augmenter les ventes en ligne',
+        'roas_target', '3,5',
+        'cpa_target', '45',
+        'revenue', '38000',
+        'start_date', to_char(current_date + 7, 'YYYY-MM-DD'),
+        'budget', '10 000 à 30 000 €',
+        'platforms', jsonb_build_array('Meta (Facebook, Instagram)', 'Google Ads', 'Pinterest'),
+        'seasonality', 'Novembre et décembre représentent 35 % du chiffre d''affaires annuel. Creux en juillet et août.',
+        'ads_before', 'Oui, en interne',
+        'learnings', 'Les vidéos d''ambiance en intérieur marchent mieux que les photos produit sur fond blanc. Le retargeting catalogue est très rentable.',
+        'past_spend', '9000',
+        'assets_link', 'https://drive.google.com/drive/folders/maison-lumen-medias',
+        'tone', jsonb_build_array('Premium', 'Chaleureux', 'Minimaliste'),
+        'never', 'Ne jamais parler de « pas cher » ni de « promo » hors Black Friday.',
+        'legal_regulated', 'Non',
+        'legal_validator', 'Claire Dubois, claire@maisonlumen.fr',
+        'access', jsonb_build_object(
+          'meta_bm', jsonb_build_object('done', true, 'value', '1029384756102938'),
+          'meta_ads', jsonb_build_object('done', true, 'value', 'act_556677889900'),
+          'google_ads', jsonb_build_object('done', true, 'value', '482-193-7765'),
+          'ga4', jsonb_build_object('done', true, 'value', '391827364'),
+          'gtm', jsonb_build_object('done', true, 'value', 'GTM-K7LMN2P'),
+          'shopify', jsonb_build_object('done', true, 'value', 'maison-lumen.myshopify.com'),
+          'search_console', jsonb_build_object('skip', true)),
+        'access_notes', 'La Search Console est gérée par notre développeur : il vous ajoute cette semaine.'),
+      jsonb_build_object(
+        'access:meta_bm', jsonb_build_object('at', now() - interval '8 days', 'by', me),
+        'access:meta_ads', jsonb_build_object('at', now() - interval '8 days', 'by', me),
+        'access:ga4', jsonb_build_object('at', now() - interval '7 days', 'by', me),
+        'access:shopify', jsonb_build_object('at', now() - interval '7 days', 'by', me)),
+      'completed', 100, '{"project": true, "kpis": true, "company": true}'::jsonb,
+      jsonb_build_object('at', now() - interval '9 days', 'project_id', p_lumen, 'project_created', false, 'tasks', 0,
+        'kpis', jsonb_build_object('roas', 3.5, 'cpa', 45), 'company', '[]'::jsonb),
+      now() - interval '12 days', now() - interval '12 days', now() - interval '12 days', now() - interval '9 days', now() - interval '9 days', true, me);
+  end if;
+
+  if c_brun is not null then
+    insert into onboarding_forms (workspace_id, template_id, company_id, contact_id, title, sections, answers,
+      status, progress, sent_at, email_sent_at, opened_at, last_activity_at, reminded_at, remind_count, is_demo, created_by)
+    values (ws, t_local.id, c_brun, k_brun, 'Onboarding local / prise de RDV · Atelier Brun', t_local.sections,
+      jsonb_build_object(
+        'brand_name', 'Atelier Brun',
+        'website', 'https://atelier-brun.fr',
+        'industry', 'Local',
+        'address', '12 rue des Tanneurs, 59000 Lille',
+        'radius', '40',
+        'hours', 'Du lundi au vendredi, 8 h - 18 h. Showroom le samedi matin sur rendez-vous.',
+        'phone', '06 55 44 33 22',
+        'services', E'Cuisine sur mesure : à partir de 12 000 €\nDressing : à partir de 3 500 €\nBibliothèque et agencement : sur devis',
+        'priority_service', 'Cuisine sur mesure',
+        'ideal_customer', 'Propriétaires de maisons anciennes dans la métropole lilloise, 35-60 ans, projet de rénovation dans les 6 mois.',
+        'booking_tool', 'Téléphone uniquement',
+        'access', jsonb_build_object('gbp', jsonb_build_object('done', true, 'value', 'Atelier Brun Menuiserie'))),
+      'in_progress', 32, now() - interval '4 days', now() - interval '4 days', now() - interval '3 days', now() - interval '1 day', now() - interval '1 day', 1, true, me);
+  end if;
+end $$;
+revoke execute on function public._demo_onboarding(uuid) from anon, authenticated, public;
+grant execute on function public._demo_onboarding(uuid) to service_role;
+
+create or replace function public.load_demo_onboarding(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  perform _demo_onboarding(ws);
+end $$;
+revoke execute on function public.load_demo_onboarding(uuid) from anon, public;
+grant execute on function public.load_demo_onboarding(uuid) to authenticated;
+
+create or replace function public.clear_demo_onboarding(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  perform _clear_demo_onboarding(ws);
+end $$;
+revoke execute on function public.clear_demo_onboarding(uuid) from anon, public;
+grant execute on function public.clear_demo_onboarding(uuid) to authenticated;
+
+revoke execute on function public.onboarding_default_templates() from anon, public;
+grant execute on function public.onboarding_default_templates() to authenticated, service_role;
+
+-- =====================================================================
+-- 0072_creatives.sql
+-- =====================================================================
+-- =====================================================================
+-- 0072 : bibliothèque créative (creative strategy) + métriques par annonce
+-- Additive : nouvelles tables, RPC de lecture, données de démo.
+--  - ad_ads : catalogue des annonces synchronisées (nom, vignette, fréquence 7 j)
+--  - ad_metrics_ad_daily : métriques quotidiennes par annonce (dont vidéo)
+--  - creative_concepts / creative_variants / creative_assets / creative_ads :
+--    concepts créatifs par client, variantes, fichiers et annonces liées
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Annonces (catalogue) : alimenté par la synchro (service role)
+-- ---------------------------------------------------------------------
+create table if not exists public.ad_ads (
+  ad_account_id uuid not null references public.ad_accounts(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  ad_id text not null,
+  name text not null default '',
+  campaign_id text,
+  campaign_name text not null default '',
+  adset_id text,
+  adset_name text not null default '',
+  status text,
+  -- image, video, carousel, dpa, search, other
+  format text,
+  thumbnail_url text,
+  -- fréquence et couverture sur les 7 derniers jours (Meta)
+  frequency_7d numeric(8,2),
+  reach_7d bigint,
+  synced_at timestamptz not null default now(),
+  primary key (ad_account_id, ad_id)
+);
+create index if not exists ad_ads_ws on public.ad_ads (workspace_id);
+
+-- ---------------------------------------------------------------------
+-- Métriques quotidiennes par annonce
+--  video_3s : vues de 3 secondes (Meta : action « video_view »)
+--  thruplay : Meta ThruPlay (15 s ou fin) ; Google : vues TrueView
+--  video_p25…p100 : lectures jusqu'à 25/50/75/100 % (Google : taux × impressions)
+-- ---------------------------------------------------------------------
+create table if not exists public.ad_metrics_ad_daily (
+  ad_account_id uuid not null references public.ad_accounts(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  date date not null,
+  campaign_id text not null default '',
+  adset_id text not null default '',
+  ad_id text not null,
+  ad_name text not null default '',
+  spend numeric(14,2) not null default 0,
+  impressions bigint not null default 0,
+  reach bigint,
+  clicks bigint not null default 0,
+  conversions numeric(14,2) not null default 0,
+  conversion_value numeric(14,2) not null default 0,
+  video_3s bigint,
+  video_p25 bigint,
+  video_p50 bigint,
+  video_p75 bigint,
+  video_p100 bigint,
+  thruplay bigint,
+  primary key (ad_account_id, date, ad_id)
+);
+create index if not exists ad_metrics_ad_daily_ws on public.ad_metrics_ad_daily (workspace_id, date);
+create index if not exists ad_metrics_ad_daily_ad on public.ad_metrics_ad_daily (workspace_id, ad_id, date);
+
+alter table public.ad_ads enable row level security;
+alter table public.ad_metrics_ad_daily enable row level security;
+drop policy if exists "lecture membres" on public.ad_ads;
+drop policy if exists "lecture membres" on public.ad_metrics_ad_daily;
+create policy "lecture membres" on public.ad_ads for select using (public.is_member(workspace_id));
+create policy "lecture membres" on public.ad_metrics_ad_daily for select using (public.is_member(workspace_id));
+
+-- ---------------------------------------------------------------------
+-- Concepts créatifs
+-- ---------------------------------------------------------------------
+create table if not exists public.creative_concepts (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  company_id uuid references public.companies(id) on delete set null,
+  project_id uuid references public.projects(id) on delete set null,
+  task_id uuid references public.tasks(id) on delete set null,
+  title text not null,
+  angle text not null default '',
+  hook text not null default '',
+  persona text not null default '',
+  -- niveaux de conscience de Schwartz
+  awareness text check (awareness in ('unaware','problem','solution','product','most')),
+  format text not null default 'static' check (format in ('static','carousel','short_video','ugc','motion','dpa','other')),
+  platforms text[] not null default '{}',
+  status text not null default 'idea' check (status in ('idea','brief','production','ready','testing','winner','loser','fatigued')),
+  -- { context, script, shots, instructions, dos, donts, cta, duration, references }
+  brief jsonb not null default '{}'::jsonb,
+  tags text[] not null default '{}',
+  verdict text not null default '',
+  launched_at date,
+  owner_id uuid references auth.users(id) on delete set null,
+  cover_path text,
+  position double precision not null default 0,
+  is_demo boolean not null default false,
+  created_by uuid references auth.users(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists creative_concepts_ws on public.creative_concepts (workspace_id, status);
+create index if not exists creative_concepts_task on public.creative_concepts (task_id) where task_id is not null;
+
+-- Variantes : plusieurs hooks / visuels / textes d'un même concept
+create table if not exists public.creative_variants (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  concept_id uuid not null references public.creative_concepts(id) on delete cascade,
+  name text not null,
+  hook text not null default '',
+  notes text not null default '',
+  position double precision not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists creative_variants_concept on public.creative_variants (concept_id);
+
+-- Fichiers (bucket attachments, chemin <workspace>/creatives/<concept>/…)
+create table if not exists public.creative_assets (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  concept_id uuid not null references public.creative_concepts(id) on delete cascade,
+  variant_id uuid references public.creative_variants(id) on delete set null,
+  name text not null,
+  path text not null,
+  size bigint not null default 0,
+  mime text not null default '',
+  uploaded_by uuid references auth.users(id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+create index if not exists creative_assets_concept on public.creative_assets (concept_id);
+
+-- Annonces liées (identifiant d'annonce de la plateforme)
+create table if not exists public.creative_ads (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  concept_id uuid not null references public.creative_concepts(id) on delete cascade,
+  variant_id uuid references public.creative_variants(id) on delete set null,
+  platform text not null default 'meta',
+  ad_id text not null,
+  created_at timestamptz not null default now(),
+  unique (concept_id, platform, ad_id)
+);
+create index if not exists creative_ads_ws_ad on public.creative_ads (workspace_id, ad_id);
+
+do $$
+declare t text;
+begin
+  foreach t in array array['creative_concepts','creative_variants','creative_assets','creative_ads'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "lecture membres" on public.%I', t);
+    execute format('drop policy if exists "ajout membres" on public.%I', t);
+    execute format('drop policy if exists "modif membres" on public.%I', t);
+    execute format('drop policy if exists "suppression membres" on public.%I', t);
+    execute format('create policy "lecture membres" on public.%I for select using (public.is_member(workspace_id))', t);
+    execute format('create policy "ajout membres" on public.%I for insert with check (public.can_write(workspace_id))', t);
+    execute format('create policy "modif membres" on public.%I for update using (public.can_write(workspace_id))', t);
+    execute format('create policy "suppression membres" on public.%I for delete using (public.can_write(workspace_id))', t);
+  end loop;
+end $$;
+
+create or replace function public.touch_creative_concept()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists creative_concepts_touch on public.creative_concepts;
+create trigger creative_concepts_touch before update on public.creative_concepts
+  for each row execute function public.touch_creative_concept();
+
+-- ---------------------------------------------------------------------
+-- Lecture : métriques par annonce d'une période (RLS de l'appelant)
+-- ---------------------------------------------------------------------
+create or replace function public.creative_ad_daily(p_ws uuid, p_start date, p_end date, p_company uuid default null)
+returns table (
+  ad_account_id uuid, platform text, company_id uuid, date date, campaign_id text, adset_id text, ad_id text, ad_name text,
+  spend numeric, impressions bigint, clicks bigint, conversions numeric, conversion_value numeric,
+  video_3s bigint, video_p25 bigint, video_p50 bigint, video_p75 bigint, video_p100 bigint, thruplay bigint
+)
+language sql stable security invoker set search_path = public as $$
+  select m.ad_account_id, a.platform, a.company_id, m.date, m.campaign_id, m.adset_id, m.ad_id, m.ad_name,
+         m.spend, m.impressions, m.clicks, m.conversions, m.conversion_value,
+         m.video_3s, m.video_p25, m.video_p50, m.video_p75, m.video_p100, m.thruplay
+  from ad_metrics_ad_daily m
+  join ad_accounts a on a.id = m.ad_account_id
+  where m.workspace_id = p_ws and m.date between p_start and p_end
+    and (p_company is null or a.company_id = p_company)
+  order by m.date, m.ad_id;
+$$;
+grant execute on function public.creative_ad_daily(uuid, date, date, uuid) to authenticated;
+revoke execute on function public.creative_ad_daily(uuid, date, date, uuid) from anon, public;
+
+-- ---------------------------------------------------------------------
+-- Ventes réelles attribuées aux annonces (tracking first-party).
+-- Modèle : dernier point de contact portant un identifiant d'annonce
+-- (touchpoints.ad_key, paramètre aos_ad) dans la fenêtre du site,
+-- visiteurs fusionnés par email. Achats et deals gagnés.
+-- ---------------------------------------------------------------------
+create or replace function public.creative_ad_attribution(p_ws uuid, p_start date, p_end date, p_ad_keys text[] default null)
+returns table (ad_key text, sales int, revenue numeric)
+language sql stable security definer set search_path = public as $$
+  with conv as (
+    select e.id, e.ts, coalesce(e.value, 0) as value, e.site_id, e.visitor_id, v.email,
+           greatest(1, least(coalesce((s.settings->>'window_days')::int, 30), 365)) as win
+    from tracking_events e
+    join tracking_sites s on s.id = e.site_id
+    left join visitors v on v.id = e.visitor_id
+    where e.workspace_id = p_ws and public.is_member(p_ws)
+      and e.type in ('purchase', 'deal_won')
+      and e.ts >= p_start::timestamptz and e.ts < (p_end + 1)::timestamptz
+  ),
+  att as (
+    select c.value,
+      (select t.ad_key from touchpoints t
+        where t.site_id = c.site_id
+          and t.visitor_id = any(case when c.email is null then array[c.visitor_id]
+                                 else coalesce((select array_agg(vv.id) from visitors vv where vv.site_id = c.site_id and vv.email = c.email), array[c.visitor_id]) end)
+          and t.ad_key is not null
+          and t.ts <= c.ts and t.ts > c.ts - make_interval(days => c.win)
+        order by t.ts desc limit 1) as ad_key
+    from conv c
+  )
+  select a.ad_key, count(*)::int, sum(a.value)
+  from att a
+  where a.ad_key is not null and (p_ad_keys is null or a.ad_key = any(p_ad_keys))
+  group by a.ad_key;
+$$;
+grant execute on function public.creative_ad_attribution(uuid, date, date, text[]) to authenticated;
+revoke execute on function public.creative_ad_attribution(uuid, date, date, text[]) from anon, public;
+
+-- =====================================================================
+-- Données de démo : annonces Meta de Maison Lumen et Kalia (métriques par
+-- annonce obtenues en répartissant ad_metrics_daily, donc cohérentes avec
+-- le reporting), ~23 concepts reliés aux annonces et aux tâches créa.
+-- Les identifiants d'annonce suivent la formule du seed de tracking
+-- ('2386' || hashtext(campagne || annonce)) : l'attribution réelle s'affiche.
+-- =====================================================================
+create or replace function public._clear_demo_creatives(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from creative_concepts where workspace_id = ws and is_demo;
+  delete from ad_metrics_ad_daily m using ad_accounts a
+    where a.id = m.ad_account_id and a.workspace_id = ws and a.external_id like 'demo-%';
+  delete from ad_ads d using ad_accounts a
+    where a.id = d.ad_account_id and a.workspace_id = ws and a.external_id like 'demo-%';
+end $$;
+revoke execute on function public._clear_demo_creatives(uuid) from anon, authenticated, public;
+
+create or replace function public._demo_creatives(ws uuid)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  c_lumen uuid; c_kalia uuid; p_lum uuid; p_kal uuid; t_lum uuid; t_kal uuid; t_kal2 uuid;
+  me uuid;
+  r record; cid uuid; vid uuid; n int := 0; k text; v_ad text;
+  concept_ids jsonb := '{}'::jsonb;
+begin
+  perform _clear_demo_creatives(ws);
+  select id into c_lumen from companies where workspace_id = ws and name = 'Maison Lumen' limit 1;
+  select id into c_kalia from companies where workspace_id = ws and name = 'Kalia Cosmetics' limit 1;
+  if c_lumen is null and c_kalia is null then return 0; end if;
+  select id into p_lum from projects where workspace_id = ws and key = 'LUM' limit 1;
+  select id into p_kal from projects where workspace_id = ws and key = 'KAL' limit 1;
+  select id into t_lum from tasks where project_id = p_lum and title like 'Brief créa%' limit 1;
+  select id into t_kal from tasks where project_id = p_kal and title like '8 nouveaux concepts%' limit 1;
+  select id into t_kal2 from tasks where project_id = p_kal and title like 'Scripts UGC%' limit 1;
+  select user_id into me from workspace_members where workspace_id = ws order by (role = 'owner') desc, joined_at limit 1;
+
+  -- ---------- Annonces : répartition des métriques de campagne ----------
+  drop table if exists _ads;
+  drop table if exists _rows;
+  create temp table _ads on commit drop as
+  select * from (values
+    -- ext, campagne, annonce, ensemble, lancée (jours), arrêtée, poids, cpm, ctr, perf, panier, hook (null = statique), hold, fatigue dès (jours), format
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'UGC Suspension Opale', 'Broad FR 25-55', 999, 0, 1.4, 1.00, 1.15, 1.35, 1.05, 0.34, 0.30, null::int, 'video'),
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'Carrousel best-sellers', 'Broad FR 25-55', 999, 0, 1.0, 0.95, 0.90, 0.78, 0.95, null, null, null, 'carousel'),
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'Vidéo atelier', 'Intérêts déco maison', 999, 0, 1.1, 1.05, 1.10, 1.12, 1.10, 0.29, 0.24, 24, 'video'),
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'Motion lampadaire Arc', 'Broad FR 25-55', 35, 0, 0.8, 1.00, 1.00, 0.98, 1.20, 0.25, 0.20, null, 'video'),
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'Statique cadeau Noël', 'Broad FR 25-55', 12, 0, 0.9, 0.90, 1.20, 1.50, 1.00, null, null, null, 'image'),
+    ('demo-lumen-meta', 'Advantage+ Shopping', 'UGC cocooning soirée', 'Intérêts déco maison', 25, 0, 1.0, 1.00, 1.25, 1.28, 1.00, 0.38, 0.33, null, 'video'),
+    ('demo-lumen-meta', 'Retargeting 30 j', 'Lampadaire Arc statique', 'Visiteurs 30 j', 999, 0, 1.0, 1.00, 1.00, 1.05, 1.25, null, null, null, 'image'),
+    ('demo-lumen-meta', 'Retargeting 30 j', 'Offre retour panier', 'Paniers abandonnés', 999, 0, 1.0, 1.10, 1.30, 1.20, 0.90, null, null, null, 'image'),
+    ('demo-lumen-meta', 'Retargeting 30 j', 'Avis clientes 4,9', 'Visiteurs 30 j', 40, 0, 0.7, 1.00, 0.85, 0.92, 1.00, null, null, null, 'image'),
+    ('demo-kalia-meta', 'Prospection UGC', 'UGC routine du soir', 'Broad femmes 25-45', 999, 0, 1.3, 1.00, 1.10, 1.22, 1.00, 0.36, 0.31, null, 'video'),
+    ('demo-kalia-meta', 'Prospection UGC', 'Avant après sérum', 'Broad femmes 25-45', 999, 0, 1.2, 1.00, 1.20, 1.42, 1.05, 0.41, 0.28, null, 'video'),
+    ('demo-kalia-meta', 'Prospection UGC', 'Témoignage Inès', 'Lookalike acheteuses 3 %', 999, 0, 1.1, 1.00, 1.15, 1.18, 1.00, 0.33, 0.29, 26, 'video'),
+    ('demo-kalia-meta', 'Prospection UGC', 'Hook peau qui tiraille', 'Broad femmes 25-45', 18, 0, 1.0, 1.00, 1.30, 1.30, 0.95, 0.44, 0.27, null, 'video'),
+    ('demo-kalia-meta', 'Prospection UGC', 'Motion ingrédients', 'Lookalike acheteuses 3 %', 30, 0, 0.7, 0.95, 0.75, 0.62, 0.90, 0.19, 0.14, null, 'video'),
+    ('demo-kalia-meta', 'Prospection UGC', 'Statique avis 4,8', 'Broad femmes 25-45', 45, 0, 0.6, 0.90, 0.80, 0.84, 1.00, null, null, null, 'image'),
+    ('demo-kalia-meta', 'Prospection UGC', 'UGC 3 erreurs routine', 'Broad femmes 25-45', 8, 0, 0.9, 1.00, 1.20, 1.16, 1.00, 0.39, 0.26, null, 'video'),
+    ('demo-kalia-meta', 'Catalogue DPA', 'DPA carrousel', 'Vues produit 14 j', 999, 0, 1.0, 1.00, 1.00, 1.03, 1.00, null, null, null, 'dpa'),
+    ('demo-kalia-meta', 'Catalogue DPA', 'DPA collection', 'Acheteuses 180 j', 999, 0, 1.0, 1.00, 0.95, 0.96, 1.00, null, null, null, 'dpa')
+  ) as x(ext, campaign, ad, adset, launch, stop, wt, cpmf, ctrf, perf, aovf, hook, hold, fat, fmt);
+
+  create temp table _rows on commit drop as
+  with base as (
+    select m.ad_account_id, m.date, m.campaign_id, m.spend, m.impressions, m.clicks, m.conversions, m.conversion_value,
+           a.*, (current_date - m.date) as ago,
+           '2386' || lpad((abs(hashtext(a.campaign || a.ad)) % 100000000)::text, 8, '0') as ad_id,
+           '2385' || lpad((abs(hashtext(a.campaign || a.adset)) % 100000000)::text, 8, '0') as adset_id,
+           0.85 + 0.3 * ((hashtext(a.ad || m.date::text) & 255) / 255.0) as noise,
+           0.9 + 0.2 * ((hashtext(m.date::text || a.ad) & 255) / 255.0) as noise2
+    from ad_metrics_daily m
+    join ad_accounts acc on acc.id = m.ad_account_id and acc.workspace_id = ws
+    join _ads a on a.ext = acc.external_id and a.campaign = m.campaign_name
+    where (current_date - m.date) <= a.launch and (current_date - m.date) >= a.stop
+  ),
+  f as (
+    select b.*,
+      least(1.0, (b.launch - b.ago + 1) / 3.0) as ramp,
+      case when b.fat is not null and b.ago < b.fat then greatest(0.42, 1 - (b.fat - b.ago) * 0.028) else 1 end as fatf
+    from base b
+  ),
+  ww as (
+    select f.*,
+      f.wt * f.ramp * (0.6 + 0.4 * f.fatf) * f.noise as ws_spend,
+      f.wt * f.ramp * (0.6 + 0.4 * f.fatf) * f.noise * f.cpmf as ws_imp,
+      f.wt * f.ramp * (0.6 + 0.4 * f.fatf) * f.noise * f.cpmf * f.ctrf * f.fatf as ws_clk,
+      f.wt * f.ramp * (0.6 + 0.4 * f.fatf) * f.noise * f.perf * f.fatf * f.noise2 as ws_conv,
+      f.wt * f.ramp * (0.6 + 0.4 * f.fatf) * f.noise * f.perf * f.fatf * f.noise2 * f.aovf as ws_val
+    from f
+  )
+  select w.*,
+    round((w.spend * w.ws_spend / sum(w.ws_spend) over p)::numeric, 2) as a_spend,
+    round(w.impressions * w.ws_imp / sum(w.ws_imp) over p)::bigint as a_imp,
+    round(w.clicks * w.ws_clk / sum(w.ws_clk) over p)::bigint as a_clk,
+    round((w.conversions * w.ws_conv / sum(w.ws_conv) over p)::numeric, 2) as a_conv,
+    round((w.conversion_value * w.ws_val / sum(w.ws_val) over p)::numeric, 2) as a_val
+  from ww w
+  window p as (partition by w.ad_account_id, w.date, w.campaign_id);
+
+  insert into ad_metrics_ad_daily (ad_account_id, workspace_id, date, campaign_id, adset_id, ad_id, ad_name, spend, impressions, reach, clicks,
+                                   conversions, conversion_value, video_3s, video_p25, video_p50, video_p75, video_p100, thruplay)
+  select q.ad_account_id, ws, q.date, q.campaign_id, q.adset_id, q.ad_id, q.ad, q.a_spend, q.a_imp, round(q.a_imp / 1.18)::bigint, q.a_clk,
+         q.a_conv, q.a_val,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2)::bigint end,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2 * least(0.95, q.hold * 2.2))::bigint end,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2 * least(0.9, q.hold * 1.5))::bigint end,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2 * q.hold * 1.05)::bigint end,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2 * q.hold * 0.7)::bigint end,
+         case when q.hook is not null then round(q.a_imp * q.hook * (0.75 + 0.25 * q.fatf) * q.noise2 * q.hold)::bigint end
+  from _rows q;
+  get diagnostics n = row_count;
+
+  insert into ad_ads (ad_account_id, workspace_id, ad_id, name, campaign_id, campaign_name, adset_id, adset_name, status, format, frequency_7d, reach_7d)
+  select distinct on (q.ad_account_id, q.ad_id) q.ad_account_id, ws, q.ad_id, q.ad, q.campaign_id, q.campaign, q.adset_id, q.adset,
+         'ACTIVE', q.fmt,
+         case when q.fat is not null then 3.6 + ((hashtext(q.ad) & 7) / 10.0) when q.campaign like 'Retargeting%' or q.campaign like 'Catalogue%' then 2.6 + ((hashtext(q.ad) & 7) / 10.0) else 1.4 + ((hashtext(q.ad) & 7) / 10.0) end,
+         (select round(sum(x.a_imp) / 2.4)::bigint from _rows x where x.ad_id = q.ad_id and x.ago <= 7)
+  from _rows q
+  order by q.ad_account_id, q.ad_id;
+
+  -- ---------- Concepts ----------
+  for r in
+    select * from (values
+      -- clé, client, titre, angle, hook, persona, conscience, format, statut, annonces liées, variantes (nom|hook;…), tags, verdict, lancé il y a (jours), tâche
+      ('lum-opale', 'lumen', 'Suspension Opale en situation', 'Cocooning', 'Mon salon a changé d''ambiance avec une seule lampe', 'Claire, 38 ans, propriétaire qui décore', 'solution', 'ugc', 'winner',
+        array['UGC Suspension Opale'], 'V1 salon|Mon salon a changé d''ambiance avec une seule lampe;V2 chambre|Ma chambre ressemble enfin à un hôtel', array['Hiver','Best-seller'],
+        'Gagnant : ROAS 30 % au-dessus du compte sur 90 jours, hook rate stable autour de 34 %. À décliner en 3 nouveaux hooks.', 90, null),
+      ('lum-best', 'lumen', 'Les best-sellers de la saison', 'Preuve sociale', 'Les 5 luminaires que nos clientes rachètent', 'Acheteuse qui compare', 'product', 'carousel', 'loser',
+        array['Carrousel best-sellers'], null, array['Catalogue'], 'Perdant : CPA 25 % au-dessus de la moyenne, le carrousel dilue le message. On le coupe au prochain rafraîchissement.', 90, null),
+      ('lum-atelier', 'lumen', 'Dans l''atelier Lumen', 'Artisanat et design signé', 'Chaque abat-jour est soufflé à la main, à 40 km de Lyon', 'Amateur de design, sensible au fait main', 'product', 'short_video', 'fatigued',
+        array['Vidéo atelier'], 'V1 souffleur|Chaque abat-jour est soufflé à la main;V2 chiffres|3 heures de travail pour une seule suspension', array['Marque'],
+        'Épuisé : CTR en baisse de plus de 30 % depuis son pic, fréquence au-dessus de 3,5. Nouveau montage à prévoir.', 90, null),
+      ('lum-arc', 'lumen', 'Lampadaire Arc sans perçage', 'Artisanat et design signé', 'Un arc de 2 mètres, zéro perçage', 'Locataire en appartement', 'solution', 'motion', 'testing',
+        array['Motion lampadaire Arc', 'Lampadaire Arc statique'], 'Motion|Un arc de 2 mètres, zéro perçage;Statique retargeting|Toujours en train d''y penser ?', array['Hiver'], '', 35, null),
+      ('lum-cadeau', 'lumen', 'Idée cadeau lumineuse', 'Cadeau de Noël', 'Le cadeau qu''on garde 20 ans', 'Acheteur cadeau, 30-55 ans', 'unaware', 'static', 'testing',
+        array['Statique cadeau Noël'], 'Carte cadeau|Le cadeau qu''on garde 20 ans;Emballage|Déjà emballé, livré avant le 20 décembre', array['Noël','Black Friday'], '', 12, 'lum'),
+      ('lum-cocooning', 'lumen', 'Soirée cocooning', 'Cocooning', 'POV : 18 h, tu n''allumes plus que la lampe d''appoint', 'Claire, 38 ans, propriétaire qui décore', 'problem', 'ugc', 'testing',
+        array['UGC cocooning soirée'], 'POV|POV : 18 h, tu n''allumes plus que la lampe d''appoint;Question|Pourquoi ton salon fait « salle d''attente » le soir ?', array['Hiver'], '', 25, 'lum'),
+      ('lum-retour', 'lumen', 'Livraison offerte et retours 60 jours', 'Réassurance', 'Tu hésites ? Essaie-la 60 jours chez toi', 'Visiteuse qui a abandonné son panier', 'most', 'static', 'winner',
+        array['Offre retour panier'], null, array['Retargeting'], 'Gagnant en retargeting : meilleur CTR du compte, ROAS 5+.', 90, null),
+      ('lum-avis', 'lumen', 'Avis clientes 4,9 / 5', 'Preuve sociale', '4,9 / 5 sur 2 300 avis vérifiés', 'Visiteuse qui a abandonné son panier', 'product', 'static', 'testing',
+        array['Avis clientes 4,9'], null, array['Retargeting'], '', 40, null),
+      ('lum-avantapres', 'lumen', 'Avant / après : le salon sombre', 'Cocooning', 'Même pièce, même heure, une seule lampe en plus', 'Claire, 38 ans, propriétaire qui décore', 'problem', 'ugc', 'production',
+        null, 'Avant après|Même pièce, même heure, une seule lampe en plus;Timelapse|De 17 h à 22 h dans mon salon', array['Hiver'], '', null, 'lum'),
+      ('lum-bf', 'lumen', 'Black Friday : -20 % sur les suspensions', 'Offre', 'Les suspensions à -20 %, 4 jours seulement', 'Acheteuse qui attend les promos', 'most', 'static', 'brief',
+        null, null, array['Black Friday'], '', null, 'lum'),
+      ('lum-designer', 'lumen', 'Le designer raconte la collection hiver', 'Artisanat et design signé', 'J''ai dessiné cette lampe en pensant à ma grand-mère', 'Amateur de design, sensible au fait main', 'unaware', 'short_video', 'idea',
+        null, null, array['Marque'], '', null, null),
+      ('kal-routine', 'kalia', 'Routine du soir en 3 gestes', 'Routine simplifiée', 'Ma routine du soir tient en 90 secondes', 'Active 30-45 ans, peu de temps', 'solution', 'ugc', 'winner',
+        array['UGC routine du soir'], 'V1 90 secondes|Ma routine du soir tient en 90 secondes;V2 3 produits|3 produits, pas un de plus;V3 démaquillage|Je me démaquille en 20 secondes', array['Evergreen'],
+        'Gagnant : ROAS stable 20 % au-dessus du compte, hook rate 36 %. Tester les V2 et V3 en hooks.', 90, null),
+      ('kal-avantapres', 'kalia', 'Avant / après Sérum Éclat', 'Résultats visibles', 'J28 : même lumière, même téléphone, zéro filtre', 'Peau terne, 30-45 ans', 'product', 'ugc', 'winner',
+        array['Avant après sérum'], 'J28|J28 : même lumière, même téléphone, zéro filtre;Zoom|Zoom sur mes pores, sans maquillage', array['Sérum','Evergreen'],
+        'Meilleure créa du compte : ROAS +40 %, hook rate au-dessus de 40 %. Priorité : 3 nouvelles créatrices sur le même format.', 90, null),
+      ('kal-ines', 'kalia', 'Témoignage Inès', 'Preuve sociale', 'J''ai arrêté 6 produits pour un seul', 'Débutante skincare', 'solution', 'ugc', 'fatigued',
+        array['Témoignage Inès'], null, array['Témoignage'], 'Épuisé : CTR -35 % depuis son pic, fréquence 3,7. Refaire le hook avec une autre créatrice.', 90, null),
+      ('kal-tiraille', 'kalia', 'Peau qui tiraille après la douche', 'Problème peau sèche', 'Si ta peau tiraille après la douche, écoute ça', 'Peau sèche, 30-45 ans', 'problem', 'ugc', 'testing',
+        array['Hook peau qui tiraille'], 'Question|Si ta peau tiraille après la douche, écoute ça;Erreur|L''erreur que tu fais juste après la douche', array['Crème nuit'], '', 18, null),
+      ('kal-ingredients', 'kalia', '5 ingrédients, rien d''autre', 'Ingrédients naturels', 'Lis la liste d''ingrédients de ta crème', 'Consommatrice clean beauty', 'problem', 'motion', 'loser',
+        array['Motion ingrédients'], null, array['Crème nuit'], 'Perdant : hook rate 19 %, les 3 premières secondes n''arrêtent pas le scroll. Angle à retravailler en UGC.', 30, null),
+      ('kal-avis', 'kalia', 'Note 4,8 / 5 sur 12 000 avis', 'Preuve sociale', '12 000 femmes ont changé de crème de nuit', 'Débutante skincare', 'product', 'static', 'testing',
+        array['Statique avis 4,8'], null, array['Crème nuit'], '', 45, null),
+      ('kal-erreurs', 'kalia', '3 erreurs qui ruinent ta routine', 'Routine simplifiée', 'Erreur n°1 : tu mets ton sérum sur une peau sèche', 'Débutante skincare', 'problem', 'ugc', 'testing',
+        array['UGC 3 erreurs routine'], null, array['Sérum'], '', 8, 'kal'),
+      ('kal-dpa', 'kalia', 'Catalogue dynamique', 'Produit', 'Tes produits vus, avec la livraison offerte', 'Visiteuse qui a vu un produit', 'most', 'dpa', 'testing',
+        array['DPA carrousel', 'DPA collection'], null, array['Retargeting'], '', 90, null),
+      ('kal-dermato', 'kalia', 'Une dermato répond aux commentaires', 'Expertise', 'Une dermato lit vos commentaires (et elle n''est pas d''accord)', 'Consommatrice clean beauty', 'solution', 'short_video', 'production',
+        null, null, array['Expertise'], '', null, 'kal2'),
+      ('kal-coffret', 'kalia', 'Unboxing coffret de Noël', 'Cadeau de Noël', 'Le coffret que je m''offre avant de l''offrir', 'Acheteuse cadeau', 'unaware', 'ugc', 'brief',
+        null, null, array['Noël'], '', null, 'kal2'),
+      ('kal-matin', 'kalia', 'Routine express du matin', 'Routine simplifiée', '2 minutes chrono, café compris', 'Active 30-45 ans, peu de temps', 'solution', 'ugc', 'idea',
+        null, null, array['Evergreen'], '', null, 'kal'),
+      ('kal-comparatif', 'kalia', 'Crème de pharmacie ou Kalia ?', 'Comparaison', 'J''ai comparé ma crème de pharmacie à 34 € avec celle-ci', 'Peau sèche, 30-45 ans', 'solution', 'static', 'ready',
+        null, null, array['Crème nuit'], '', null, 'kal')
+    ) as x(key, client, title, angle, hook, persona, awareness, format, status, ads, variants, tags, verdict, launched, task)
+  loop
+    if (r.client = 'lumen' and c_lumen is null) or (r.client = 'kalia' and c_kalia is null) then continue; end if;
+    insert into creative_concepts (workspace_id, company_id, project_id, task_id, title, angle, hook, persona, awareness, format, platforms, status,
+                                   brief, tags, verdict, launched_at, owner_id, position, is_demo, created_by, created_at)
+    values (ws,
+      case r.client when 'lumen' then c_lumen else c_kalia end,
+      case r.client when 'lumen' then p_lum else p_kal end,
+      case r.task when 'lum' then t_lum when 'kal' then t_kal when 'kal2' then t_kal2 end,
+      r.title, r.angle, r.hook, r.persona, r.awareness, r.format, array['meta'], r.status,
+      jsonb_build_object(
+        'context', case r.client
+          when 'lumen' then 'Maison Lumen crée des luminaires design fabriqués en France (panier moyen 180 €). Ton chaleureux, jamais luxe froid. Objectif : ventes en ligne, ROAS cible 3,5.'
+          else 'Kalia Cosmetics : cosmétique naturelle en vente directe, formules courtes (5 à 8 ingrédients). Ton complice, preuve avant promesse. Objectif : achats, CPA cible 25 €.' end,
+        'script', case when r.format in ('ugc', 'short_video') then
+          '0-3 s : ' || r.hook || E'\n3-10 s : le problème vécu, en une phrase, face caméra.\n10-25 s : démonstration du produit en situation réelle (gros plans).\n25-35 s : le résultat, sans exagération.\n35-40 s : appel à l''action.'
+          when r.format = 'motion' then E'Plan 1 : accroche en texte animé (' || r.hook || E')\nPlan 2 : produit en rotation lente\nPlan 3 : 3 bénéfices en surimpression\nPlan 4 : logo + offre'
+          else 'Accroche : ' || r.hook || E'\nVisuel : produit en situation, lumière naturelle.\nTexte court : un bénéfice, une preuve.' end,
+        'shots', case when r.format in ('ugc', 'short_video') then E'Plan face caméra (lumière de fenêtre)\nGros plan produit en main\nPlan d''ambiance (pièce ou salle de bain)\nPlan résultat' else E'Format 4:5 et 9:16\nProduit centré, marge de sécurité de 14 % en haut et en bas' end,
+        'instructions', 'Filmer au téléphone, en vertical 9:16, sans filtre. Parler comme à une amie, pas de texte appris par cœur. Livrer 3 prises du hook.',
+        'dos', E'Montrer le produit dans les 3 premières secondes\nSous-titres lisibles\nUne seule idée par vidéo',
+        'donts', E'Pas de musique sous droits\nPas de promesse médicale ou de « miracle »\nPas de logo concurrent visible',
+        'cta', case r.client when 'lumen' then 'Découvre la collection sur maisonlumen.fr' else 'Teste la routine avec -15 % sur ta première commande' end,
+        'duration', case when r.format in ('ugc', 'short_video') then '30 à 45 s' when r.format = 'motion' then '10 à 15 s' else '' end),
+      r.tags, r.verdict, case when r.launched is not null then current_date - r.launched end, me, (n + 1) * 1000, true, me,
+      now() - make_interval(days => coalesce(r.launched, 3) + 4))
+    returning id into cid;
+    n := n + 1;
+
+    -- variantes
+    if r.variants is not null then
+      declare vparts text[] := string_to_array(r.variants, ';'); i int := 0;
+      begin
+        foreach k in array vparts loop
+          i := i + 1;
+          insert into creative_variants (workspace_id, concept_id, name, hook, position)
+          values (ws, cid, split_part(k, '|', 1), split_part(k, '|', 2), i * 1000)
+          returning id into vid;
+          -- chaque annonce liée est rattachée à la variante de même rang (si elle existe)
+          if r.ads is not null and array_length(r.ads, 1) >= i then
+            insert into creative_ads (workspace_id, concept_id, variant_id, platform, ad_id)
+            select ws, cid, vid, 'meta', a.ad_id from (select distinct x.ad_id from _rows x where x.ad = r.ads[i]) a
+            on conflict do nothing;
+          end if;
+        end loop;
+      end;
+    end if;
+    if r.ads is not null then
+      foreach v_ad in array r.ads loop
+        insert into creative_ads (workspace_id, concept_id, platform, ad_id)
+        select ws, cid, 'meta', x.ad_id from (select distinct y.ad_id from _rows y where y.ad = v_ad) x
+        on conflict do nothing;
+      end loop;
+    end if;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public._demo_creatives(uuid) from anon, authenticated, public;
+grant execute on function public._demo_creatives(uuid) to service_role;
+grant execute on function public._clear_demo_creatives(uuid) to service_role;
+
+-- Points d'entrée pour l'interface (réservés aux admins de l'espace)
+create or replace function public.load_demo_creatives(ws uuid)
+returns int language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  return _demo_creatives(ws);
+end $$;
+revoke execute on function public.load_demo_creatives(uuid) from anon, public;
+grant execute on function public.load_demo_creatives(uuid) to authenticated;
+
+create or replace function public.clear_demo_creatives(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  perform _clear_demo_creatives(ws);
+end $$;
+revoke execute on function public.clear_demo_creatives(uuid) from anon, public;
+grant execute on function public.clear_demo_creatives(uuid) to authenticated;
+
+-- =====================================================================
+-- 0073_booking.sql
+-- =====================================================================
+-- =====================================================================
+-- Prise de rendez-vous intégrée (alternative native à Cal.com)
+-- + connecteur webhook Cal.com.
+--
+-- - booking_profiles : page publique d'un membre (/b/<slug>), fuseau,
+--   plages hebdomadaires et agendas Google utilisés.
+-- - booking_overrides : exceptions (congés, jours fériés, horaires spéciaux).
+-- - booking_types : types de rendez-vous (durée, lieu, questions, règles).
+-- - bookings : les rendez-vous (natifs ou reçus de Cal.com). Une contrainte
+--   d'exclusion interdit deux rendez-vous confirmés qui se chevauchent.
+-- - booking_google : jetons OAuth Google Agenda, sans aucune policy
+--   (service role uniquement), vue booking_google_public sans secret.
+-- - booking_settings : secret du webhook Cal.com (admins).
+--
+-- Migration additive. La contrainte de notifications.kind est élargie à
+-- « booking » sans perdre les valeurs ajoutées par d'autres migrations.
+-- =====================================================================
+
+create extension if not exists btree_gist with schema extensions;
+
+-- ---------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------
+create table public.booking_profiles (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- /b/<slug> : unique sur toute l'instance (l'URL publique ne contient pas l'espace)
+  slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{1,39}$'),
+  display_name text not null default '',
+  headline text not null default '',
+  welcome text not null default '',
+  timezone text not null default 'Europe/Paris',
+  -- Plages hebdomadaires, jours ISO (1 = lundi … 7 = dimanche) : {"1": [["09:00","12:00"],["14:00","18:00"]], …}
+  weekly jsonb not null default '{"1":[["09:00","12:00"],["14:00","18:00"]],"2":[["09:00","12:00"],["14:00","18:00"]],"3":[["09:00","12:00"],["14:00","18:00"]],"4":[["09:00","12:00"],["14:00","18:00"]],"5":[["09:00","12:00"],["14:00","17:00"]],"6":[],"7":[]}'::jsonb,
+  -- Google Agenda : agendas qui bloquent les créneaux, agenda où créer les évènements
+  busy_calendars text[] not null default '{primary}',
+  event_calendar text not null default 'primary',
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (workspace_id, user_id)
+);
+
+create table public.booking_overrides (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  profile_id uuid not null references public.booking_profiles(id) on delete cascade,
+  day_start date not null,
+  day_end date not null,
+  label text not null default '',
+  -- Horaires de remplacement ; vide = indisponible toute la journée
+  ranges jsonb not null default '[]'::jsonb,
+  demo boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (day_end >= day_start)
+);
+create index on public.booking_overrides (profile_id, day_start);
+
+create table public.booking_types (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  profile_id uuid not null references public.booking_profiles(id) on delete cascade,
+  slug text not null check (slug ~ '^[a-z0-9][a-z0-9-]{0,59}$'),
+  name text not null,
+  description text not null default '',
+  duration_min int not null default 30 check (duration_min between 5 and 480),
+  -- google_meet : lien Meet créé avec l'évènement ; phone : on appelle le prospect ;
+  -- video : lien de visio fixe (location_value) ; address : adresse (location_value)
+  location_kind text not null default 'google_meet' check (location_kind in ('google_meet', 'phone', 'video', 'address')),
+  location_value text not null default '',
+  -- Questions en plus du nom et de l'email : [{ key, label, type, required, options? }]
+  questions jsonb not null default '[{"key":"phone","label":"Téléphone","type":"phone","required":false},{"key":"company","label":"Entreprise","type":"text","required":false},{"key":"website","label":"Site web","type":"url","required":false},{"key":"budget","label":"Budget publicitaire mensuel","type":"select","required":false,"options":["Moins de 1 000 €","1 000 à 3 000 €","3 000 à 10 000 €","Plus de 10 000 €"]},{"key":"message","label":"Qu''aimeriez-vous aborder ?","type":"textarea","required":false}]'::jsonb,
+  min_notice_min int not null default 240 check (min_notice_min between 0 and 43200),
+  horizon_days int not null default 30 check (horizon_days between 1 and 180),
+  buffer_before_min int not null default 0 check (buffer_before_min between 0 and 240),
+  buffer_after_min int not null default 0 check (buffer_after_min between 0 and 240),
+  -- Pas entre deux créneaux proposés ; null = la durée du rendez-vous
+  slot_interval_min int check (slot_interval_min is null or slot_interval_min between 5 and 240),
+  daily_limit int check (daily_limit is null or daily_limit between 1 and 50),
+  color text not null default 'indigo',
+  -- Crée (ou retrouve) un deal au CRM à chaque réservation
+  create_deal boolean not null default true,
+  active boolean not null default true,
+  position int not null default 0,
+  demo boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (profile_id, slug)
+);
+create index on public.booking_types (workspace_id);
+
+create table public.bookings (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  profile_id uuid references public.booking_profiles(id) on delete set null,
+  type_id uuid references public.booking_types(id) on delete set null,
+  owner_id uuid references auth.users(id) on delete set null,
+  source text not null default 'native' check (source in ('native', 'calcom')),
+  -- uid Cal.com (ou identifiant de démo)
+  external_id text,
+  title text not null default '',
+  start_at timestamptz not null,
+  end_at timestamptz not null,
+  -- Tampons figés à la réservation (le type peut changer ensuite)
+  buffer_before_min int not null default 0,
+  buffer_after_min int not null default 0,
+  -- Fuseau du prospect (affichage dans ses emails)
+  timezone text not null default 'Europe/Paris',
+  status text not null default 'confirmed' check (status in ('confirmed', 'cancelled', 'completed', 'no_show')),
+  name text not null default '',
+  email text not null default '',
+  phone text not null default '',
+  company_name text not null default '',
+  answers jsonb not null default '{}'::jsonb,
+  location_kind text not null default 'google_meet',
+  location text not null default '',
+  meet_url text not null default '',
+  contact_id uuid references public.contacts(id) on delete set null,
+  company_id uuid references public.companies(id) on delete set null,
+  deal_id uuid references public.deals(id) on delete set null,
+  activity_id uuid references public.crm_activities(id) on delete set null,
+  google_event_id text,
+  google_calendar_id text,
+  -- Jeton des liens d'annulation et de report envoyés au prospect
+  token text not null unique default encode(gen_random_bytes(18), 'hex'),
+  utm jsonb not null default '{}'::jsonb,
+  page_url text not null default '',
+  cancel_reason text not null default '',
+  cancelled_at timestamptz,
+  cancelled_by text check (cancelled_by is null or cancelled_by in ('guest', 'host', 'calcom')),
+  reschedule_count int not null default 0,
+  reminded_24h_at timestamptz,
+  reminded_1h_at timestamptz,
+  demo boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (end_at > start_at),
+  -- Anti double réservation : deux rendez-vous natifs confirmés d'un même membre ne se chevauchent jamais
+  constraint bookings_no_overlap exclude using gist (profile_id with =, tstzrange(start_at, end_at, '[)') with &&)
+    where (status = 'confirmed' and profile_id is not null and source = 'native')
+);
+create unique index bookings_external_uniq on public.bookings (workspace_id, source, external_id) where external_id is not null;
+create index on public.bookings (workspace_id, start_at desc);
+create index on public.bookings (profile_id, start_at);
+create index bookings_reminders on public.bookings (start_at) where status = 'confirmed';
+
+-- Jetons Google Agenda : aucune policy, service role uniquement
+create table public.booking_google (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text not null default '',
+  refresh_token text not null,
+  access_token text,
+  expires_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  unique (workspace_id, user_id)
+);
+
+create view public.booking_google_public with (security_invoker = false) as
+  select workspace_id, user_id, email, last_error, created_at
+  from public.booking_google
+  where public.is_member(workspace_id);
+
+-- Réglages de l'espace : secret du webhook Cal.com et membre qui reçoit ces rendez-vous
+create table public.booking_settings (
+  workspace_id uuid primary key references public.workspaces(id) on delete cascade,
+  calcom_secret text not null default encode(gen_random_bytes(24), 'hex'),
+  calcom_user_id uuid references auth.users(id) on delete set null,
+  calcom_last_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------
+-- RLS
+-- ---------------------------------------------------------------------
+alter table public.booking_profiles enable row level security;
+alter table public.booking_overrides enable row level security;
+alter table public.booking_types enable row level security;
+alter table public.bookings enable row level security;
+alter table public.booking_google enable row level security;
+alter table public.booking_settings enable row level security;
+
+-- Le membre modifie sa page ; un admin modifie toutes celles de l'espace
+create or replace function public.booking_profile_editable(p uuid, ws uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from booking_profiles bp
+    where bp.id = p and bp.workspace_id = ws
+      and ((bp.user_id = auth.uid() and public.can_write(bp.workspace_id)) or public.is_admin(bp.workspace_id))
+  );
+$$;
+revoke execute on function public.booking_profile_editable(uuid, uuid) from anon, public;
+
+create policy "lecture membres" on public.booking_profiles for select using (public.is_member(workspace_id));
+create policy "modif propre" on public.booking_profiles for update
+  using ((user_id = auth.uid() and public.can_write(workspace_id)) or public.is_admin(workspace_id))
+  with check ((user_id = auth.uid() and public.can_write(workspace_id)) or public.is_admin(workspace_id));
+
+do $$
+declare t text;
+begin
+  foreach t in array array['booking_types', 'booking_overrides'] loop
+    execute format('create policy "lecture membres" on public.%I for select using (public.is_member(workspace_id))', t);
+    execute format('create policy "ajout propre" on public.%I for insert with check (public.booking_profile_editable(profile_id, workspace_id))', t);
+    execute format('create policy "modif propre" on public.%I for update using (public.booking_profile_editable(profile_id, workspace_id)) with check (public.booking_profile_editable(profile_id, workspace_id))', t);
+    execute format('create policy "suppression propre" on public.%I for delete using (public.booking_profile_editable(profile_id, workspace_id))', t);
+  end loop;
+end $$;
+
+-- Rendez-vous : données personnelles des prospects, invisibles des invités (clients)
+create policy "lecture équipe" on public.bookings for select using (public.can_write(workspace_id));
+create policy "modif équipe" on public.bookings for update using (public.can_write(workspace_id));
+create policy "suppression équipe" on public.bookings for delete using (public.can_write(workspace_id));
+
+create policy "réglages admin" on public.booking_settings for select using (public.is_admin(workspace_id));
+create policy "réglages admin ajout" on public.booking_settings for insert with check (public.is_admin(workspace_id));
+create policy "réglages admin modif" on public.booking_settings for update using (public.is_admin(workspace_id));
+
+-- ---------------------------------------------------------------------
+-- Notifications : nouveau type « booking » (sans écraser les autres ajouts)
+-- ---------------------------------------------------------------------
+do $$
+declare def text;
+begin
+  select pg_get_constraintdef(oid) into def from pg_constraint
+  where conrelid = 'public.notifications'::regclass and conname = 'notifications_kind_check';
+  if def is not null and position('''booking''' in def) = 0 then
+    execute 'alter table public.notifications drop constraint notifications_kind_check';
+    execute 'alter table public.notifications add constraint notifications_kind_check '
+      || replace(def, 'ARRAY[', 'ARRAY[''booking''::text, ');
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Page de réservation de chaque membre (créée à l'arrivée dans l'espace)
+-- ---------------------------------------------------------------------
+create or replace function public.booking_slugify(t text)
+returns text language sql immutable set search_path = public as $$
+  select trim(both '-' from regexp_replace(
+    lower(translate(coalesce(t, ''), 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿÀÂÄÁÃÅÇÉÈÊËÍÌÎÏÑÓÒÔÖÕÚÙÛÜÝ', 'aaaaaaceeeeiiiinooooouuuuyyaaaaaaceeeeiiiinooooouuuuy')),
+    '[^a-z0-9]+', '-', 'g'));
+$$;
+
+create or replace function public.booking_ensure_profile(ws uuid, uid uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  pid uuid; base text; s text; n int := 1; nm text; em text;
+begin
+  select id into pid from booking_profiles where workspace_id = ws and user_id = uid;
+  if pid is not null then return pid; end if;
+  select full_name, email into nm, em from profiles where id = uid;
+  base := left(booking_slugify(coalesce(nullif(nm, ''), split_part(coalesce(em, ''), '@', 1))), 32);
+  base := trim(both '-' from base);
+  if length(base) < 2 then base := 'rdv-' || substr(replace(uid::text, '-', ''), 1, 6); end if;
+  s := base;
+  while exists (select 1 from booking_profiles where slug = s) loop
+    n := n + 1;
+    s := base || '-' || n;
+  end loop;
+  insert into booking_profiles (workspace_id, user_id, slug, display_name)
+  values (ws, uid, s, coalesce(nm, '')) returning id into pid;
+  insert into booking_types (workspace_id, profile_id, slug, name, description, duration_min, position)
+  values (ws, pid, 'appel-decouverte', 'Appel découverte',
+    '30 minutes pour faire connaissance, comprendre vos objectifs publicitaires et voir si nous pouvons vous aider.', 30, 0);
+  return pid;
+end $$;
+revoke execute on function public.booking_ensure_profile(uuid, uuid) from anon, authenticated, public;
+
+-- Page de l'utilisateur courant (créée au besoin, sauf pour un invité)
+create or replace function public.booking_my_profile(ws uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+begin
+  if not public.can_write(ws) then return null; end if;
+  return booking_ensure_profile(ws, auth.uid());
+end $$;
+grant execute on function public.booking_my_profile(uuid) to authenticated;
+revoke execute on function public.booking_my_profile(uuid) from anon, public;
+
+create or replace function public.booking_member_joined()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.role <> 'guest' then perform booking_ensure_profile(new.workspace_id, new.user_id); end if;
+  return new;
+end $$;
+drop trigger if exists members_booking_profile on public.workspace_members;
+create trigger members_booking_profile after insert on public.workspace_members
+  for each row execute function public.booking_member_joined();
+
+select public.booking_ensure_profile(workspace_id, user_id) from public.workspace_members where role <> 'guest';
+
+-- =====================================================================
+-- Données de démo : 2 types, disponibilités, une exception et 7 rendez-vous
+-- (passés et à venir) reliés aux contacts de démo de 0003_demo_data.sql.
+-- =====================================================================
+
+-- n-ième jour ouvré (lundi-vendredi) à partir d'aujourd'hui (n < 0 : dans le passé)
+create or replace function public._demo_bk_day(n int)
+returns date language plpgsql stable set search_path = public as $$
+declare d date := current_date; k int := 0; step int := case when n < 0 then -1 else 1 end;
+begin
+  while k < abs(n) loop
+    d := d + step;
+    if extract(isodow from d) < 6 then k := k + 1; end if;
+  end loop;
+  return d;
+end $$;
+revoke execute on function public._demo_bk_day(int) from anon, authenticated, public;
+
+-- Générateur interne (service role ou autres fonctions) : ws + membre propriétaire des rendez-vous
+create or replace function public._demo_booking(ws uuid, uid uuid)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  pid uuid; t1 uuid; t2 uuid; tz text := 'Europe/Paris'; n int := 0;
+  r record; ct record; aid uuid; st timestamptz; dur int; ty uuid; dl uuid; off date;
+begin
+  if uid is null then raise exception 'membre requis'; end if;
+  pid := booking_ensure_profile(ws, uid);
+  select timezone into tz from booking_profiles where id = pid;
+  update booking_profiles set
+    headline = case when headline = '' then 'Media buyer freelance · Meta Ads et Google Ads' else headline end,
+    welcome = case when welcome = '' then 'Choisissez le créneau qui vous arrange. Vous recevez aussitôt la confirmation et le lien de la visio.' else welcome end
+  where id = pid;
+
+  select id into t1 from booking_types where profile_id = pid and slug = 'appel-decouverte';
+  if t1 is null then
+    insert into booking_types (workspace_id, profile_id, slug, name, duration_min, position)
+    values (ws, pid, 'appel-decouverte', 'Appel découverte', 30, 0) returning id into t1;
+  end if;
+  update booking_types set buffer_after_min = 10, daily_limit = 4, min_notice_min = 720, horizon_days = 30 where id = t1;
+
+  select id into t2 from booking_types where profile_id = pid and slug = 'point-client';
+  if t2 is null then
+    insert into booking_types (workspace_id, profile_id, slug, name, description, duration_min, location_kind, color,
+      create_deal, questions, buffer_before_min, buffer_after_min, min_notice_min, horizon_days, position, demo)
+    values (ws, pid, 'point-client', 'Point client mensuel',
+      'Revue des résultats du mois, des tests créa en cours et du plan pour le mois suivant.', 45, 'google_meet', 'teal',
+      false, '[{"key":"message","label":"Points à ajouter à l''ordre du jour","type":"textarea","required":false}]'::jsonb,
+      5, 10, 1440, 45, 1, true)
+    returning id into t2;
+  end if;
+
+  -- Exception : un vendredi de congé dans trois semaines
+  if not exists (select 1 from booking_overrides where profile_id = pid and demo) then
+    off := current_date + 14;
+    off := off + ((5 - extract(isodow from off)::int + 7) % 7);
+    insert into booking_overrides (workspace_id, profile_id, day_start, day_end, label, demo)
+    values (ws, pid, off, off, 'Congés', true);
+  end if;
+
+  if exists (select 1 from bookings where workspace_id = ws and demo) then return 0; end if;
+
+  for r in
+    select * from (values
+      ('sarah@novasaas.io', 'appel', -8, '14:30', 'completed', 'Acquisition SaaS B2B', '{"utm_source":"linkedin","utm_medium":"paid_social","utm_campaign":"audit-offert"}', '3 000 à 10 000 €', 'On lance une offre B2B et on veut un canal payant prévisible.'),
+      ('lucas@kalia-cosmetics.com', 'point', -4, '11:00', 'no_show', null, '{}', null, null),
+      ('marc.petit@formapro.fr', 'point', -2, '10:00', 'completed', null, '{}', null, 'Point sur le coût par lead CPF.'),
+      ('claire@maisonlumen.fr', 'point', 1, '10:00', 'confirmed', null, '{}', null, 'Préparer le Black Friday.'),
+      ('julien@atelier-brun.fr', 'appel', 2, '09:30', 'confirmed', 'Google Ads local', '{"utm_source":"google","utm_medium":"cpc","utm_campaign":"search-media-buyer"}', '1 000 à 3 000 €', 'Je veux tester Google Ads sur Lille, on a 2 poseurs.'),
+      ('thomas@velonord.com', 'point', 3, '15:00', 'confirmed', null, '{}', null, null),
+      ('nadia@oasis-immo.fr', 'appel', 4, '16:00', 'cancelled', null, '{}', 'Moins de 1 000 €', null)
+    ) as x(email, kind, day_off, hhmm, status, deal_title, utm, budget, message)
+  loop
+    select c.id, c.first_name, c.last_name, c.phone, c.company_id, co.name as company
+      into ct from contacts c left join companies co on co.id = c.company_id
+      where c.workspace_id = ws and lower(c.email) = r.email limit 1;
+    ty := case when r.kind = 'appel' then t1 else t2 end;
+    dur := case when r.kind = 'appel' then 30 else 45 end;
+    st := ((_demo_bk_day(r.day_off)::timestamp + r.hhmm::time) at time zone tz);
+    dl := null;
+    if r.deal_title is not null then
+      select id into dl from deals where workspace_id = ws and title = r.deal_title limit 1;
+    end if;
+    aid := null;
+    if ct.id is not null then
+      insert into crm_activities (workspace_id, deal_id, company_id, contact_id, kind, body, due_at, done, author_id, created_at)
+      values (ws, dl, ct.company_id, ct.id, 'meeting',
+        case when r.kind = 'appel' then 'Appel découverte' else 'Point client mensuel' end
+          || case r.status when 'cancelled' then ' (annulé)' when 'no_show' then ' : absent' else '' end,
+        st, r.status in ('completed', 'no_show'), uid, least(now(), st - interval '6 days'))
+      returning id into aid;
+    end if;
+    insert into bookings (workspace_id, profile_id, type_id, owner_id, source, external_id, title, start_at, end_at,
+      buffer_before_min, buffer_after_min, timezone, status, name, email, phone, company_name, answers,
+      location_kind, meet_url, contact_id, company_id, deal_id, activity_id, utm, cancel_reason, cancelled_at, cancelled_by,
+      demo, created_at)
+    values (ws, pid, ty, uid, 'native', 'demo-' || n, case when r.kind = 'appel' then 'Appel découverte' else 'Point client mensuel' end,
+      st, st + make_interval(mins => dur), case when r.kind = 'appel' then 0 else 5 end, 10, 'Europe/Paris', r.status,
+      coalesce(trim(ct.first_name || ' ' || ct.last_name), split_part(r.email, '@', 1)), r.email, coalesce(ct.phone, ''), coalesce(ct.company, ''),
+      jsonb_strip_nulls(jsonb_build_object('budget', r.budget, 'message', r.message, 'company', ct.company)),
+      'google_meet', 'https://meet.google.com/demo-' || substr(md5(r.email), 1, 3) || '-' || substr(md5(r.email), 4, 4),
+      ct.id, ct.company_id, dl, aid, r.utm::jsonb,
+      case when r.status = 'cancelled' then 'Budget gelé jusqu''au printemps, je reviens vers vous.' else '' end,
+      case when r.status = 'cancelled' then now() - interval '1 day' end,
+      case when r.status = 'cancelled' then 'guest' end,
+      true, least(now() - interval '1 hour', st - interval '6 days'));
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public._demo_booking(uuid, uuid) from anon, authenticated, public;
+
+create or replace function public._clear_demo_booking(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from crm_activities where id in (select activity_id from bookings where workspace_id = ws and demo and activity_id is not null);
+  delete from bookings where workspace_id = ws and demo;
+  delete from booking_types where workspace_id = ws and demo;
+  delete from booking_overrides where workspace_id = ws and demo;
+end $$;
+revoke execute on function public._clear_demo_booking(uuid) from anon, authenticated, public;
+
+create or replace function public.load_demo_booking(ws uuid)
+returns int language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  return _demo_booking(ws, auth.uid());
+end $$;
+grant execute on function public.load_demo_booking(uuid) to authenticated;
+revoke execute on function public.load_demo_booking(uuid) from anon, public;
+
+create or replace function public.clear_demo_booking(ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin(ws) then raise exception 'réservé aux admins de l''espace'; end if;
+  perform _clear_demo_booking(ws);
+end $$;
+grant execute on function public.clear_demo_booking(uuid) to authenticated;
+revoke execute on function public.clear_demo_booking(uuid) from anon, public;
+
+-- =====================================================================
+-- 0074_api_tokens.sql
+-- =====================================================================
+-- =====================================================================
+-- API et serveur MCP : jetons personnels d'accès.
+-- Un jeton = un utilisateur dans un espace. Seul le hash SHA-256 est
+-- stocké : le jeton complet n'est montré qu'une fois, à la création.
+-- La route /api/mcp retrouve le jeton par son hash (service role), puis
+-- revérifie à chaque appel l'appartenance et le rôle dans l'espace.
+-- Additive : aucune table existante modifiée.
+-- =====================================================================
+
+create table if not exists public.api_tokens (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (length(trim(name)) between 1 and 80),
+  -- début visible du jeton (aos_xxxxxxxx), pour le reconnaître dans la liste
+  prefix text not null,
+  token_hash text not null unique,
+  -- read : outils de lecture seulement ; write : lecture et écriture (selon le rôle)
+  scope text not null default 'read' check (scope in ('read', 'write')),
+  last_used_at timestamptz,
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists api_tokens_ws_user on public.api_tokens (workspace_id, user_id);
+
+alter table public.api_tokens enable row level security;
+
+-- Chacun voit ses jetons ; les admins voient ceux de l'espace (pour pouvoir les révoquer)
+drop policy if exists "jetons lisibles" on public.api_tokens;
+create policy "jetons lisibles" on public.api_tokens for select
+  using (public.is_member(workspace_id) and (user_id = auth.uid() or public.is_admin(workspace_id)));
+drop policy if exists "jetons supprimables" on public.api_tokens;
+create policy "jetons supprimables" on public.api_tokens for delete
+  using (public.is_member(workspace_id) and (user_id = auth.uid() or public.is_admin(workspace_id)));
+
+-- Le hash n'est jamais lisible côté client ; création et révocation passent par les RPC
+revoke all on public.api_tokens from anon, authenticated;
+grant select (id, workspace_id, user_id, name, prefix, scope, last_used_at, expires_at, revoked_at, created_at)
+  on public.api_tokens to authenticated;
+grant delete on public.api_tokens to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Création : renvoie le jeton complet (une seule fois)
+-- ---------------------------------------------------------------------
+create or replace function public.create_api_token(p_ws uuid, p_name text, p_scope text default 'read', p_expires_at timestamptz default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_token text;
+  v_scope text := coalesce(p_scope, 'read');
+  v_id uuid;
+begin
+  if auth.uid() is null then raise exception 'Non authentifié'; end if;
+  if not public.is_member(p_ws) then raise exception 'Tu n''es pas membre de cet espace'; end if;
+  if length(trim(coalesce(p_name, ''))) < 1 then raise exception 'Donne un nom au jeton'; end if;
+  if v_scope not in ('read', 'write') then raise exception 'Portée inconnue'; end if;
+  -- Un invité ne peut pas écrire : son jeton est forcément en lecture seule
+  if v_scope = 'write' and not public.can_write(p_ws) then v_scope := 'read'; end if;
+  if p_expires_at is not null and p_expires_at <= now() then raise exception 'La date d''expiration est déjà passée'; end if;
+  if (select count(*) from api_tokens where workspace_id = p_ws and user_id = auth.uid() and revoked_at is null) >= 20 then
+    raise exception 'Limite de 20 jetons actifs atteinte : révoque ceux qui ne servent plus';
+  end if;
+
+  v_token := 'aos_' || translate(encode(extensions.gen_random_bytes(30), 'base64'), '+/', '-_');
+  insert into api_tokens (workspace_id, user_id, name, prefix, token_hash, scope, expires_at)
+  values (p_ws, auth.uid(), left(trim(p_name), 80), left(v_token, 12),
+          encode(extensions.digest(v_token, 'sha256'), 'hex'), v_scope, p_expires_at)
+  returning id into v_id;
+
+  return jsonb_build_object('id', v_id, 'token', v_token, 'prefix', left(v_token, 12), 'scope', v_scope);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Révocation (l'auteur ou un admin de l'espace)
+-- ---------------------------------------------------------------------
+create or replace function public.revoke_api_token(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare t api_tokens;
+begin
+  select * into t from api_tokens where id = p_id;
+  if t.id is null or not public.is_member(t.workspace_id)
+     or (t.user_id is distinct from auth.uid() and not public.is_admin(t.workspace_id)) then
+    raise exception 'Jeton introuvable';
+  end if;
+  update api_tokens set revoked_at = coalesce(revoked_at, now()) where id = p_id;
+end $$;
+
+revoke execute on function public.create_api_token(uuid, text, text, timestamptz) from anon, public;
+revoke execute on function public.revoke_api_token(uuid) from anon, public;
+grant execute on function public.create_api_token(uuid, text, text, timestamptz) to authenticated;
+grant execute on function public.revoke_api_token(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Lecture du tracking pour le serveur MCP (service role uniquement).
+-- Les RPC du tracking vérifient is_member(auth.uid()) : on exécute la
+-- requête au nom de l'utilisateur du jeton, dans la transaction seulement,
+-- après avoir vérifié son appartenance à l'espace du site.
+-- ---------------------------------------------------------------------
+create or replace function public.mcp_act_as(p_user uuid, p_ws uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from workspace_members where workspace_id = p_ws and user_id = p_user) then
+    raise exception 'Accès refusé';
+  end if;
+  perform set_config('request.jwt.claim.sub', p_user::text, true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', p_user, 'role', 'authenticated')::text, true);
+end $$;
+
+create or replace function public.mcp_tracking_conversions(p_user uuid, p_ws uuid, p_site uuid, p_start date, p_end date, p_window int, p_types text[])
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+declare res jsonb;
+begin
+  if not exists (select 1 from tracking_sites where id = p_site and workspace_id = p_ws) then
+    raise exception 'Site introuvable';
+  end if;
+  perform public.mcp_act_as(p_user, p_ws);
+  select coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb) into res
+  from public.tracking_conversions(p_site, p_start, p_end, p_window, p_types) c;
+  return res;
+end $$;
+
+create or replace function public.mcp_tracking_stats(p_user uuid, p_ws uuid, p_site uuid, p_start date, p_end date)
+returns jsonb language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not exists (select 1 from tracking_sites where id = p_site and workspace_id = p_ws) then
+    raise exception 'Site introuvable';
+  end if;
+  perform public.mcp_act_as(p_user, p_ws);
+  return public.tracking_stats(p_site, p_start, p_end);
+end $$;
+
+revoke execute on function public.mcp_act_as(uuid, uuid) from anon, authenticated, public;
+revoke execute on function public.mcp_tracking_conversions(uuid, uuid, uuid, date, date, int, text[]) from anon, authenticated, public;
+revoke execute on function public.mcp_tracking_stats(uuid, uuid, uuid, date, date) from anon, authenticated, public;
+grant execute on function public.mcp_act_as(uuid, uuid) to service_role;
+grant execute on function public.mcp_tracking_conversions(uuid, uuid, uuid, date, date, int, text[]) to service_role;
+grant execute on function public.mcp_tracking_stats(uuid, uuid, uuid, date, date) to service_role;

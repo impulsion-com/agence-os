@@ -57,4 +57,43 @@ export interface SyncResult {
   ok: boolean;
   rows?: number;
   error?: string;
+  /** Synchro par annonce (bibliothèque créa) : lignes écrites ou erreur, sans bloquer la synchro campagne. */
+  ad_rows?: number;
+  ad_error?: string;
+}
+
+/** Ligne quotidienne par annonce (métriques de base + vidéo). */
+export interface FetchedAdRow {
+  date: string;
+  campaign_id: string;
+  adset_id: string;
+  ad_id: string;
+  ad_name: string;
+  spend: number;
+  impressions: number;
+  reach: number | null;
+  clicks: number;
+  conversions: number;
+  conversion_value: number;
+  video_3s: number | null;
+  video_p25: number | null;
+  video_p50: number | null;
+  video_p75: number | null;
+  video_p100: number | null;
+  thruplay: number | null;
+}
+
+/** Annonce du catalogue (nom, vignette, fréquence 7 j). */
+export interface FetchedAd {
+  ad_id: string;
+  name: string;
+  campaign_id: string | null;
+  campaign_name: string;
+  adset_id: string | null;
+  adset_name: string;
+  status: string | null;
+  format: string | null;
+  thumbnail_url: string | null;
+  frequency_7d: number | null;
+  reach_7d: number | null;
 }

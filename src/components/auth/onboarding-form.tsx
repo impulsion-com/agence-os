@@ -58,7 +58,7 @@ export function OnboardingForm() {
         </span>
       </label>
       {err && <p style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }} role="alert">{err}</p>}
-      <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? "Création de l'espace…" : "Créer l'espace"}</button>
+      <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? (demo ? "Création de l'espace et des exemples (environ 30 s)…" : "Création de l'espace…") : "Créer l'espace"}</button>
     </form>
   );
 }

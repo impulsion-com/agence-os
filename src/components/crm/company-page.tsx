@@ -14,6 +14,7 @@ import { fmtDate, money } from "@/lib/format";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import type { Company, Contact, CrmActivity, Deal, PipelineStage } from "@/lib/types";
 import { ActivityFeed } from "./activity-feed";
+import { SendOnboardingButton } from "@/components/onboarding/send-modal";
 import { CompanyFormModal } from "./company-form-modal";
 import { ContactFormModal } from "./contact-form-modal";
 import { ProposalList, type ProposalRow } from "./deal-page";
@@ -183,6 +184,7 @@ export function CompanyPage({
           </Link>
           {!ro && (
             <>
+              <SendOnboardingButton companyId={c.id} />
               <button className="btn btn-primary" onClick={newDeal}>
                 <Plus size={14} /> Nouveau deal
               </button>

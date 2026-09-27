@@ -44,6 +44,22 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 - Générateur d'UTM avec conventions de nommage et variables dynamiques Meta, Google, TikTok.
 - Raccourcisseur (domaine personnalisé possible), QR codes, création en masse, statistiques de clics.
 
+**Signature, onboarding, rendez-vous**
+- Signature électronique des propositions (eIDAS simple) : code par email, signature manuscrite,
+  document figé et empreinte SHA-256, dossier de preuve, PDF signé, contre-signature.
+- Formulaire d'onboarding client par lien : questionnaire, dépôt de fichiers, checklist des accès
+  (Business Manager, Google Ads, GA4, GTM…) avec tutoriels, projet créé automatiquement.
+- Prise de rendez-vous intégrée : pages de réservation, disponibilités, Google Agenda et Meet,
+  deal créé au CRM, rappels ; connecteur webhook pour Cal.com.
+
+**Creative strategy**
+- Bibliothèque de concepts (angle, hook, niveau de conscience, format), kanban de production,
+  briefs créateurs, performance par annonce (hook rate, hold rate, ROAS réel), détection de fatigue.
+
+**Claude et IA**
+- Serveur MCP : Claude Code, Claude Desktop ou Cowork lisent et pilotent tâches, CRM, propositions,
+  reporting et attribution avec un jeton personnel.
+
 **Équipe**
 - Espaces multi-agences, invitations, rôles (propriétaire, admin, membre, invité en lecture
   seule), équipes (Media buying, Creative strategy, Account management, Tracking & data).
@@ -52,7 +68,7 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 ## Démarrer
 
 Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase + Vercel, gratuit,
-environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Tracking : [docs/tracking.md](docs/tracking.md), liens : [docs/liens.md](docs/liens.md).
+environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md).
 
 ## Stack technique
 

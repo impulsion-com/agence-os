@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ProposalEditor, type EditorData } from "@/components/proposals/proposal-editor";
-import { supabaseServer } from "@/lib/supabase/server";
+import { signatureFont } from "@/components/proposals/signature-font";
+import type { ProofData } from "@/components/proposals/signature-proof";
+import { emailEnabled } from "@/lib/email";
+import { download, integrityOk } from "@/lib/signature/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { loadWorkspace } from "@/lib/workspace/load";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,13 +31,36 @@ export default async function ProposalPage({ params }: PageProps<"/w/[slug]/prop
   const { ws, sb, proposal } = await load(slug, id);
   if (!proposal) notFound();
 
-  const [items, services, contacts, deals, stages] = await Promise.all([
+  const [items, services, contacts, deals, stages, signature, events] = await Promise.all([
     sb.from("proposal_items").select("*").eq("proposal_id", proposal.id).order("position"),
     sb.from("services").select("*").eq("workspace_id", ws.workspace.id).order("position"),
     sb.from("contacts").select("id, first_name, last_name, email, company_id").eq("workspace_id", ws.workspace.id).order("first_name"),
     sb.from("deals").select("id, title, company_id, contact_id, stage_id, closed_at").eq("workspace_id", ws.workspace.id).order("created_at", { ascending: false }),
     sb.from("pipeline_stages").select("id, name, position, kind").eq("workspace_id", ws.workspace.id).order("position"),
+    sb.from("proposal_signatures").select("*").eq("proposal_id", proposal.id).maybeSingle(),
+    sb.from("proposal_signature_events").select("id, kind, at, ip_trunc, user_agent, meta").eq("proposal_id", proposal.id).order("at"),
   ]);
+
+  // Signature électronique : preuve (images du bucket privé, intégrité recalculée)
+  let proof: ProofData | null = null;
+  const sig = signature.data;
+  if (sig) {
+    // Images de signature embarquées (quelques Ko) : pas d'URL externe qui expire
+    const admin = supabaseAdmin();
+    const url = async (path: string | null) => {
+      const bytes = await download(admin, path);
+      return bytes ? `data:image/png;base64,${Buffer.from(bytes).toString("base64")}` : null;
+    };
+    const [client, agency] = await Promise.all([url(sig.signature_path), url(sig.countersign_path)]);
+    const { snapshot: _s, ...info } = sig;
+    void _s;
+    proof = {
+      signature: info,
+      events: (events.data ?? []) as ProofData["events"],
+      images: { client, agency },
+      integrity: integrityOk(sig),
+    };
+  }
 
   const data = {
     proposal,
@@ -42,7 +69,11 @@ export default async function ProposalPage({ params }: PageProps<"/w/[slug]/prop
     contacts: contacts.data ?? [],
     deals: deals.data ?? [],
     stages: stages.data ?? [],
+    snapshot: sig?.snapshot ?? null,
+    proof,
+    emailEnabled: emailEnabled(),
+    events: events.data ?? [],
   } as unknown as EditorData;
 
-  return <ProposalEditor key={proposal.id} data={data} />;
+  return <ProposalEditor key={proposal.id} data={data} signatureFont={signatureFont.style.fontFamily} />;
 }

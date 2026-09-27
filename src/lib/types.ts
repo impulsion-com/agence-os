@@ -222,7 +222,7 @@ export interface Notification {
   id: string;
   user_id: string;
   actor_id: string | null;
-  kind: "assigned" | "mentioned" | "commented" | "status" | "due" | "invited" | "deal" | "proposal";
+  kind: "assigned" | "mentioned" | "commented" | "status" | "due" | "invited" | "deal" | "proposal" | "onboarding" | "booking";
   task_id: string | null;
   project_id: string | null;
   deal_id: string | null;

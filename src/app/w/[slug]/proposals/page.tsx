@@ -13,7 +13,7 @@ export default async function ProposalsPage({ params }: PageProps<"/w/[slug]/pro
   const { data } = await sb
     .from("proposals")
     .select(
-      "id, number, title, status, company_id, contact_id, deal_id, owner_id, currency, discount_pct, tax_pct, valid_until, sent_at, viewed_at, accepted_at, created_at, updated_at, items:proposal_items(id, quantity, unit_price, billing, optional, selected)",
+      "id, number, title, status, company_id, contact_id, deal_id, owner_id, currency, discount_pct, tax_pct, valid_until, sent_at, viewed_at, accepted_at, created_at, updated_at, items:proposal_items(id, quantity, unit_price, billing, optional, selected), signature:proposal_signatures(countersign_required, countersigned_at)",
     )
     .eq("workspace_id", ws.workspace.id)
     .order("number", { ascending: false });

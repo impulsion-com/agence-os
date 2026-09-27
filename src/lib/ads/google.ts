@@ -1,7 +1,7 @@
 import "server-only";
 
 import { AdsError, GOOGLE_ADS_API_VERSION, GOOGLE_SCOPES, sleep } from "./config";
-import type { AvailableAccount, FetchedRow } from "./types";
+import type { AvailableAccount, FetchedAd, FetchedAdRow, FetchedRow } from "./types";
 
 // Connecteur Google Ads API (REST + GAQL). Tout se passe côté serveur.
 
@@ -240,4 +240,135 @@ export async function googleMetrics(token: string, customerId: string, since: st
     conversions: Math.round(Number(r.metrics.conversions ?? 0) * 100) / 100,
     conversion_value: Math.round(Number(r.metrics.conversionsValue ?? 0) * 100) / 100,
   }));
+}
+
+// ---------------------------------------------------------------------
+// Niveau annonce (bibliothèque créa). Champs vérifiés sur l'API v25 :
+//  metrics.video_trueview_views (vues TrueView) et metrics.video_quartile_p25…p100_rate
+//  (part des impressions lues jusqu'au quartile) : on stocke rate × impressions.
+//  Google ne publie pas de vues de 3 secondes : hook rate indisponible pour Google.
+// ---------------------------------------------------------------------
+interface AdMetricsRow {
+  campaign: { id: string };
+  adGroup: { id: string };
+  adGroupAd: { ad: { id: string; name?: string } };
+  segments: { date: string };
+  metrics: {
+    costMicros?: string;
+    impressions?: string;
+    clicks?: string;
+    conversions?: number;
+    conversionsValue?: number;
+    videoTrueviewViews?: string;
+    videoQuartileP25Rate?: number;
+    videoQuartileP50Rate?: number;
+    videoQuartileP75Rate?: number;
+    videoQuartileP100Rate?: number;
+  };
+}
+
+export async function googleAdMetrics(token: string, customerId: string, since: string, until: string, login?: string | null): Promise<FetchedAdRow[]> {
+  const rows = await searchStream<AdMetricsRow>(
+    token,
+    customerId,
+    `SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, ad_group_ad.ad.name, segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value, metrics.video_trueview_views, metrics.video_quartile_p25_rate, metrics.video_quartile_p50_rate, metrics.video_quartile_p75_rate, metrics.video_quartile_p100_rate FROM ad_group_ad WHERE segments.date BETWEEN '${since}' AND '${until}' AND metrics.impressions > 0`,
+    login,
+  );
+  return rows.map((r) => {
+    const imp = Number(r.metrics.impressions ?? 0);
+    const views = Number(r.metrics.videoTrueviewViews ?? 0);
+    const video = views > 0 || (r.metrics.videoQuartileP25Rate ?? 0) > 0;
+    const q = (rate?: number) => (video ? Math.round(imp * Number(rate ?? 0)) : null);
+    return {
+      date: r.segments.date,
+      campaign_id: String(r.campaign.id),
+      adset_id: String(r.adGroup.id),
+      ad_id: String(r.adGroupAd.ad.id),
+      ad_name: r.adGroupAd.ad.name ?? "",
+      spend: Math.round(Number(r.metrics.costMicros ?? 0) / 1e4) / 100,
+      impressions: imp,
+      reach: null,
+      clicks: Number(r.metrics.clicks ?? 0),
+      conversions: Math.round(Number(r.metrics.conversions ?? 0) * 100) / 100,
+      conversion_value: Math.round(Number(r.metrics.conversionsValue ?? 0) * 100) / 100,
+      video_3s: null,
+      video_p25: q(r.metrics.videoQuartileP25Rate),
+      video_p50: q(r.metrics.videoQuartileP50Rate),
+      video_p75: q(r.metrics.videoQuartileP75Rate),
+      video_p100: q(r.metrics.videoQuartileP100Rate),
+      thruplay: video ? views : null,
+    };
+  });
+}
+
+interface AdMetaRow {
+  campaign: { id: string; name?: string };
+  adGroup: { id: string; name?: string };
+  adGroupAd: {
+    status?: string;
+    ad: {
+      id: string;
+      name?: string;
+      type?: string;
+      responsiveSearchAd?: { headlines?: { text?: string }[] };
+      videoResponsiveAd?: { videos?: { asset?: string }[] };
+      demandGenVideoResponsiveAd?: { videos?: { asset?: string }[] };
+    };
+  };
+}
+
+const AD_FORMAT = (type = "") =>
+  /VIDEO/.test(type) ? "video" : /SEARCH|TEXT/.test(type) ? "search" : /IMAGE|DISPLAY|DEMAND_GEN_MULTI|DISCOVERY/.test(type) ? "image" : /SHOPPING/.test(type) ? "dpa" : type ? "other" : null;
+
+/** Catalogue des annonces : nom (ou premier titre RSA), statut, format, vignette YouTube. */
+export async function googleAdCatalog(token: string, customerId: string, adIds: string[], login?: string | null): Promise<FetchedAd[]> {
+  const out: FetchedAd[] = [];
+  const videoOf = new Map<string, string>(); // ad → ressource asset
+  for (let i = 0; i < adIds.length; i += 200) {
+    const ids = adIds.slice(i, i + 200).map((x) => clean(x)).filter(Boolean);
+    if (!ids.length) continue;
+    const rows = await searchStream<AdMetaRow>(
+      token,
+      customerId,
+      `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.status, ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.video_responsive_ad.videos, ad_group_ad.ad.demand_gen_video_responsive_ad.videos FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids.join(",")})`,
+      login,
+    );
+    for (const r of rows) {
+      const ad = r.adGroupAd.ad;
+      const asset = ad.videoResponsiveAd?.videos?.[0]?.asset ?? ad.demandGenVideoResponsiveAd?.videos?.[0]?.asset;
+      if (asset) videoOf.set(String(ad.id), asset);
+      out.push({
+        ad_id: String(ad.id),
+        name: ad.name || ad.responsiveSearchAd?.headlines?.[0]?.text || `Annonce ${ad.id}`,
+        campaign_id: String(r.campaign.id),
+        campaign_name: r.campaign.name ?? "",
+        adset_id: String(r.adGroup.id),
+        adset_name: r.adGroup.name ?? "",
+        status: r.adGroupAd.status ?? null,
+        format: AD_FORMAT(ad.type),
+        thumbnail_url: null,
+        frequency_7d: null,
+        reach_7d: null,
+      });
+    }
+  }
+  if (videoOf.size) {
+    try {
+      const names = [...new Set(videoOf.values())];
+      const assets = await searchStream<{ asset: { resourceName: string; youtubeVideoAsset?: { youtubeVideoId?: string } } }>(
+        token,
+        customerId,
+        `SELECT asset.resource_name, asset.youtube_video_asset.youtube_video_id FROM asset WHERE asset.resource_name IN (${names.map((n) => `'${n.replace(/'/g, "")}'`).join(",")})`,
+        login,
+      );
+      const yt = new Map(assets.map((a) => [a.asset.resourceName, a.asset.youtubeVideoAsset?.youtubeVideoId]));
+      for (const a of out) {
+        const id = yt.get(videoOf.get(a.ad_id) ?? "");
+        if (id) a.thumbnail_url = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+      }
+    } catch {
+      /* vignette facultative */
+    }
+  }
+  return out;
 }

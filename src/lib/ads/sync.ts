@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { syncAccountAds } from "./ad-sync";
 import { AdsError, FIRST_SYNC_DAYS, ROLLING_SYNC_DAYS } from "./config";
 import { googleAccessToken, googleListAccounts, googleMetrics } from "./google";
 import { metaInsights, metaListAccounts } from "./meta";
@@ -112,7 +113,16 @@ async function syncOne(admin: Admin, acc: AccRow, token: string, full: boolean):
       .from("ad_accounts")
       .update({ last_synced_at: now, first_synced_at: acc.first_synced_at ?? now, sync_error: null })
       .eq("id", acc.id);
-    return { account_id: acc.id, name: acc.name, ok: true, rows: n };
+    // Niveau annonce (bibliothèque créa) : même fenêtre, sans bloquer la synchro campagne
+    let ad_rows: number | undefined;
+    let ad_error: string | undefined;
+    try {
+      ad_rows = await syncAccountAds(admin, acc, token, since, until);
+    } catch (e) {
+      ad_error = errMsg(e);
+      console.warn(`[sync] annonces ${acc.name} : ${ad_error}`);
+    }
+    return { account_id: acc.id, name: acc.name, ok: true, rows: n, ad_rows, ad_error };
   } catch (e) {
     const error = errMsg(e);
     await admin.from("ad_accounts").update({ sync_error: error }).eq("id", acc.id);

@@ -11,7 +11,7 @@ export const PROPOSAL_STATUS: Record<ProposalStatus, { name: string; color: stri
   draft: { name: "Brouillon", color: "var(--gray)" },
   sent: { name: "Envoyée", color: "var(--blue)" },
   viewed: { name: "Vue", color: "var(--violet)" },
-  accepted: { name: "Acceptée", color: "var(--green)" },
+  accepted: { name: "Signée", color: "var(--green)" },
   declined: { name: "Refusée", color: "var(--red)" },
   expired: { name: "Expirée", color: "var(--amber)" },
 };

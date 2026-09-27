@@ -56,8 +56,13 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   service role. La vue `ad_connections_public` expose les colonnes sans secret.
 - Pages publiques via RPC `security definer` : `public_proposal`, `respond_proposal`, `public_report`.
 - Données de démo : chargées et supprimées par `POST /api/demo` (`src/lib/demo.ts`), qui enchaîne
-  `load_demo_data` (droits de l'utilisateur), puis `_demo_links` et `demo_tracking_seed` en service role
-  (le seed du tracking dépasse le délai de 8 s des requêtes `authenticated`).
+  `load_demo_data` (droits de l'utilisateur), puis en service role `_demo_links`,
+  `demo_tracking_seed_part` (par client et par tranche de 20 jours, sous le délai de 8 s de l'API),
+  `_demo_creatives`, `_demo_onboarding` et `_demo_booking`. Chaque module a son `clear_demo_*`.
+- Emails : `src/lib/email.ts` (Resend, facultatif). Toute fonctionnalité doit marcher sans email.
+- Pages publiques (proposition `/p/`, onboarding `/f/`, rendez-vous `/b/`, rapport `/r/`, liens `/l/`) :
+  lecture et écriture uniquement via routes serveur en service role ou RPC `security definer`.
+- MCP : `/api/mcp`, outils dans `src/lib/mcp/tools/` (un fichier par domaine, voir `docs/mcp.md`).
 - Tracking : `tracking_sites.secret_key` n'est pas lisible directement (privilège par colonne) ;
   passer par la RPC `tracking_site_secret`. Tests du moteur :
   `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs`.

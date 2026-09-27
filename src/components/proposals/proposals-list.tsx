@@ -20,21 +20,25 @@ export type ProposalRow = Pick<
   Proposal,
   | "id" | "number" | "title" | "status" | "company_id" | "contact_id" | "deal_id" | "owner_id" | "currency"
   | "discount_pct" | "tax_pct" | "valid_until" | "sent_at" | "viewed_at" | "accepted_at" | "created_at" | "updated_at"
-> & { items: PriceLine[] };
+> & {
+  items: PriceLine[];
+  signature?: { countersign_required: boolean; countersigned_at: string | null } | null;
+};
 
 type Filter = "all" | "open" | ProposalStatus;
 const FILTERS: { id: Filter; name: string }[] = [
   { id: "all", name: "Toutes" },
   { id: "draft", name: "Brouillons" },
   { id: "open", name: "En attente" },
-  { id: "accepted", name: "Acceptées" },
+  { id: "accepted", name: "Signées" },
   { id: "declined", name: "Refusées" },
   { id: "expired", name: "Expirées" },
 ];
 
 /** Date la plus parlante selon le statut */
 function lastEvent(p: ProposalRow, st: ProposalStatus): { label: string; at: string } {
-  if (st === "accepted" && p.accepted_at) return { label: "Acceptée", at: p.accepted_at };
+  if (st === "accepted" && p.signature?.countersigned_at) return { label: "Contre-signée", at: p.signature.countersigned_at };
+  if (st === "accepted" && p.accepted_at) return { label: "Signée", at: p.accepted_at };
   if (st === "viewed" && p.viewed_at) return { label: "Vue", at: p.viewed_at };
   if ((st === "sent" || st === "expired" || st === "declined") && p.sent_at) return { label: "Envoyée", at: p.sent_at };
   return { label: "Modifiée", at: p.updated_at };
@@ -135,12 +139,12 @@ export function ProposalsList({ rows }: { rows: ProposalRow[] }) {
               <div className="d">{stats.sentEver} envoyée{stats.sentEver > 1 ? "s" : ""} au total</div>
             </div>
             <div className="stat">
-              <div className="k">Taux d&apos;acceptation</div>
+              <div className="k">Taux de signature</div>
               <div className="v">{stats.rate === null ? "–" : `${stats.rate} %`}</div>
               <div className="d">{stats.decided ? `${stats.accepted} sur ${stats.decided} décidée${stats.decided > 1 ? "s" : ""}` : "Aucune réponse encore"}</div>
             </div>
             <div className="stat">
-              <div className="k">Mensuel accepté</div>
+              <div className="k">Mensuel signé</div>
               <div className="v">{money(stats.mrr, stats.cur)}</div>
               <div className="d">HT par mois, après remise</div>
             </div>
@@ -210,6 +214,11 @@ export function ProposalsList({ rows }: { rows: ProposalRow[] }) {
                           </td>
                           <td>
                             <Badge color={PROPOSAL_STATUS[st].color}>{PROPOSAL_STATUS[st].name}</Badge>
+                            {p.signature?.countersigned_at ? (
+                              <span className="pl-sig faint">2 parties</span>
+                            ) : p.signature?.countersign_required ? (
+                              <span className="pl-sig pending">À contre-signer</span>
+                            ) : null}
                           </td>
                           <td className="r num">{monthly ? money(monthly, p.currency) : <span className="fainter">–</span>}</td>
                           <td className="r num">{oneOff ? money(oneOff, p.currency) : <span className="fainter">–</span>}</td>

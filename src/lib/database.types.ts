@@ -156,6 +156,72 @@ export type Database = {
           },
         ]
       }
+      ad_ads: {
+        Row: {
+          ad_account_id: string
+          ad_id: string
+          adset_id: string | null
+          adset_name: string
+          campaign_id: string | null
+          campaign_name: string
+          format: string | null
+          frequency_7d: number | null
+          name: string
+          reach_7d: number | null
+          status: string | null
+          synced_at: string
+          thumbnail_url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ad_account_id: string
+          ad_id: string
+          adset_id?: string | null
+          adset_name?: string
+          campaign_id?: string | null
+          campaign_name?: string
+          format?: string | null
+          frequency_7d?: number | null
+          name?: string
+          reach_7d?: number | null
+          status?: string | null
+          synced_at?: string
+          thumbnail_url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ad_account_id?: string
+          ad_id?: string
+          adset_id?: string | null
+          adset_name?: string
+          campaign_id?: string | null
+          campaign_name?: string
+          format?: string | null
+          frequency_7d?: number | null
+          name?: string
+          reach_7d?: number | null
+          status?: string | null
+          synced_at?: string
+          thumbnail_url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_ads_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_ads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_connections: {
         Row: {
           access_token: string
@@ -205,6 +271,87 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "ad_connections_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_metrics_ad_daily: {
+        Row: {
+          ad_account_id: string
+          ad_id: string
+          ad_name: string
+          adset_id: string
+          campaign_id: string
+          clicks: number
+          conversion_value: number
+          conversions: number
+          date: string
+          impressions: number
+          reach: number | null
+          spend: number
+          thruplay: number | null
+          video_3s: number | null
+          video_p100: number | null
+          video_p25: number | null
+          video_p50: number | null
+          video_p75: number | null
+          workspace_id: string
+        }
+        Insert: {
+          ad_account_id: string
+          ad_id: string
+          ad_name?: string
+          adset_id?: string
+          campaign_id?: string
+          clicks?: number
+          conversion_value?: number
+          conversions?: number
+          date: string
+          impressions?: number
+          reach?: number | null
+          spend?: number
+          thruplay?: number | null
+          video_3s?: number | null
+          video_p100?: number | null
+          video_p25?: number | null
+          video_p50?: number | null
+          video_p75?: number | null
+          workspace_id: string
+        }
+        Update: {
+          ad_account_id?: string
+          ad_id?: string
+          ad_name?: string
+          adset_id?: string
+          campaign_id?: string
+          clicks?: number
+          conversion_value?: number
+          conversions?: number
+          date?: string
+          impressions?: number
+          reach?: number | null
+          spend?: number
+          thruplay?: number | null
+          video_3s?: number | null
+          video_p100?: number | null
+          video_p25?: number | null
+          video_p50?: number | null
+          video_p75?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_metrics_ad_daily_ad_account_id_fkey"
+            columns: ["ad_account_id"]
+            isOneToOne: false
+            referencedRelation: "ad_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_metrics_ad_daily_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -266,6 +413,56 @@ export type Database = {
           },
         ]
       }
+      api_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          last_used_at: string | null
+          name: string
+          prefix: string
+          revoked_at: string | null
+          scope: string
+          token_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name: string
+          prefix: string
+          revoked_at?: string | null
+          scope?: string
+          token_hash: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          prefix?: string
+          revoked_at?: string | null
+          scope?: string
+          token_hash?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_tokens_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attachments: {
         Row: {
           created_at: string
@@ -320,6 +517,458 @@ export type Database = {
           },
           {
             foreignKeyName: "attachments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_google: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          email: string
+          expires_at: string | null
+          id: string
+          last_error: string | null
+          refresh_token: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string | null
+          id?: string
+          last_error?: string | null
+          refresh_token: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string | null
+          id?: string
+          last_error?: string | null
+          refresh_token?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_google_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_overrides: {
+        Row: {
+          created_at: string
+          day_end: string
+          day_start: string
+          demo: boolean
+          id: string
+          label: string
+          profile_id: string
+          ranges: Json
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_end: string
+          day_start: string
+          demo?: boolean
+          id?: string
+          label?: string
+          profile_id: string
+          ranges?: Json
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          day_end?: string
+          day_start?: string
+          demo?: boolean
+          id?: string
+          label?: string
+          profile_id?: string
+          ranges?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_overrides_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "booking_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_overrides_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_profiles: {
+        Row: {
+          active: boolean
+          busy_calendars: string[]
+          created_at: string
+          display_name: string
+          event_calendar: string
+          headline: string
+          id: string
+          slug: string
+          timezone: string
+          user_id: string
+          weekly: Json
+          welcome: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          busy_calendars?: string[]
+          created_at?: string
+          display_name?: string
+          event_calendar?: string
+          headline?: string
+          id?: string
+          slug: string
+          timezone?: string
+          user_id: string
+          weekly?: Json
+          welcome?: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          busy_calendars?: string[]
+          created_at?: string
+          display_name?: string
+          event_calendar?: string
+          headline?: string
+          id?: string
+          slug?: string
+          timezone?: string
+          user_id?: string
+          weekly?: Json
+          welcome?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_settings: {
+        Row: {
+          calcom_last_at: string | null
+          calcom_secret: string
+          calcom_user_id: string | null
+          created_at: string
+          workspace_id: string
+        }
+        Insert: {
+          calcom_last_at?: string | null
+          calcom_secret?: string
+          calcom_user_id?: string | null
+          created_at?: string
+          workspace_id: string
+        }
+        Update: {
+          calcom_last_at?: string | null
+          calcom_secret?: string
+          calcom_user_id?: string | null
+          created_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      booking_types: {
+        Row: {
+          active: boolean
+          buffer_after_min: number
+          buffer_before_min: number
+          color: string
+          create_deal: boolean
+          created_at: string
+          daily_limit: number | null
+          demo: boolean
+          description: string
+          duration_min: number
+          horizon_days: number
+          id: string
+          location_kind: string
+          location_value: string
+          min_notice_min: number
+          name: string
+          position: number
+          profile_id: string
+          questions: Json
+          slot_interval_min: number | null
+          slug: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          buffer_after_min?: number
+          buffer_before_min?: number
+          color?: string
+          create_deal?: boolean
+          created_at?: string
+          daily_limit?: number | null
+          demo?: boolean
+          description?: string
+          duration_min?: number
+          horizon_days?: number
+          id?: string
+          location_kind?: string
+          location_value?: string
+          min_notice_min?: number
+          name: string
+          position?: number
+          profile_id: string
+          questions?: Json
+          slot_interval_min?: number | null
+          slug: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          buffer_after_min?: number
+          buffer_before_min?: number
+          color?: string
+          create_deal?: boolean
+          created_at?: string
+          daily_limit?: number | null
+          demo?: boolean
+          description?: string
+          duration_min?: number
+          horizon_days?: number
+          id?: string
+          location_kind?: string
+          location_value?: string
+          min_notice_min?: number
+          name?: string
+          position?: number
+          profile_id?: string
+          questions?: Json
+          slot_interval_min?: number | null
+          slug?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_types_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "booking_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_types_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          activity_id: string | null
+          answers: Json
+          buffer_after_min: number
+          buffer_before_min: number
+          cancel_reason: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          company_id: string | null
+          company_name: string
+          contact_id: string | null
+          created_at: string
+          deal_id: string | null
+          demo: boolean
+          email: string
+          end_at: string
+          external_id: string | null
+          google_calendar_id: string | null
+          google_event_id: string | null
+          id: string
+          location: string
+          location_kind: string
+          meet_url: string
+          name: string
+          owner_id: string | null
+          page_url: string
+          phone: string
+          profile_id: string | null
+          reminded_1h_at: string | null
+          reminded_24h_at: string | null
+          reschedule_count: number
+          source: string
+          start_at: string
+          status: string
+          timezone: string
+          title: string
+          token: string
+          type_id: string | null
+          updated_at: string
+          utm: Json
+          workspace_id: string
+        }
+        Insert: {
+          activity_id?: string | null
+          answers?: Json
+          buffer_after_min?: number
+          buffer_before_min?: number
+          cancel_reason?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          company_id?: string | null
+          company_name?: string
+          contact_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          demo?: boolean
+          email?: string
+          end_at: string
+          external_id?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          location?: string
+          location_kind?: string
+          meet_url?: string
+          name?: string
+          owner_id?: string | null
+          page_url?: string
+          phone?: string
+          profile_id?: string | null
+          reminded_1h_at?: string | null
+          reminded_24h_at?: string | null
+          reschedule_count?: number
+          source?: string
+          start_at: string
+          status?: string
+          timezone?: string
+          title?: string
+          token?: string
+          type_id?: string | null
+          updated_at?: string
+          utm?: Json
+          workspace_id: string
+        }
+        Update: {
+          activity_id?: string | null
+          answers?: Json
+          buffer_after_min?: number
+          buffer_before_min?: number
+          cancel_reason?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          company_id?: string | null
+          company_name?: string
+          contact_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          demo?: boolean
+          email?: string
+          end_at?: string
+          external_id?: string | null
+          google_calendar_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          location?: string
+          location_kind?: string
+          meet_url?: string
+          name?: string
+          owner_id?: string | null
+          page_url?: string
+          phone?: string
+          profile_id?: string | null
+          reminded_1h_at?: string | null
+          reminded_24h_at?: string | null
+          reschedule_count?: number
+          source?: string
+          start_at?: string
+          status?: string
+          timezone?: string
+          title?: string
+          token?: string
+          type_id?: string | null
+          updated_at?: string
+          utm?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "crm_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "booking_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "booking_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -469,6 +1118,277 @@ export type Database = {
           },
           {
             foreignKeyName: "contacts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_ads: {
+        Row: {
+          ad_id: string
+          concept_id: string
+          created_at: string
+          id: string
+          platform: string
+          variant_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ad_id: string
+          concept_id: string
+          created_at?: string
+          id?: string
+          platform?: string
+          variant_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ad_id?: string
+          concept_id?: string
+          created_at?: string
+          id?: string
+          platform?: string
+          variant_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_ads_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_ads_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "creative_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_ads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_assets: {
+        Row: {
+          concept_id: string
+          created_at: string
+          id: string
+          mime: string
+          name: string
+          path: string
+          size: number
+          uploaded_by: string | null
+          variant_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          concept_id: string
+          created_at?: string
+          id?: string
+          mime?: string
+          name: string
+          path: string
+          size?: number
+          uploaded_by?: string | null
+          variant_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          concept_id?: string
+          created_at?: string
+          id?: string
+          mime?: string
+          name?: string
+          path?: string
+          size?: number
+          uploaded_by?: string | null
+          variant_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_assets_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_assets_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "creative_variants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_assets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_concepts: {
+        Row: {
+          angle: string
+          awareness: string | null
+          brief: Json
+          company_id: string | null
+          cover_path: string | null
+          created_at: string
+          created_by: string | null
+          format: string
+          hook: string
+          id: string
+          is_demo: boolean
+          launched_at: string | null
+          owner_id: string | null
+          persona: string
+          platforms: string[]
+          position: number
+          project_id: string | null
+          status: string
+          tags: string[]
+          task_id: string | null
+          title: string
+          updated_at: string
+          verdict: string
+          workspace_id: string
+        }
+        Insert: {
+          angle?: string
+          awareness?: string | null
+          brief?: Json
+          company_id?: string | null
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          hook?: string
+          id?: string
+          is_demo?: boolean
+          launched_at?: string | null
+          owner_id?: string | null
+          persona?: string
+          platforms?: string[]
+          position?: number
+          project_id?: string | null
+          status?: string
+          tags?: string[]
+          task_id?: string | null
+          title: string
+          updated_at?: string
+          verdict?: string
+          workspace_id: string
+        }
+        Update: {
+          angle?: string
+          awareness?: string | null
+          brief?: Json
+          company_id?: string | null
+          cover_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          format?: string
+          hook?: string
+          id?: string
+          is_demo?: boolean
+          launched_at?: string | null
+          owner_id?: string | null
+          persona?: string
+          platforms?: string[]
+          position?: number
+          project_id?: string | null
+          status?: string
+          tags?: string[]
+          task_id?: string | null
+          title?: string
+          updated_at?: string
+          verdict?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_concepts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_concepts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_concepts_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_concepts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_variants: {
+        Row: {
+          concept_id: string
+          created_at: string
+          hook: string
+          id: string
+          name: string
+          notes: string
+          position: number
+          workspace_id: string
+        }
+        Insert: {
+          concept_id: string
+          created_at?: string
+          hook?: string
+          id?: string
+          name: string
+          notes?: string
+          position?: number
+          workspace_id: string
+        }
+        Update: {
+          concept_id?: string
+          created_at?: string
+          hook?: string
+          id?: string
+          name?: string
+          notes?: string
+          position?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_variants_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_variants_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -997,6 +1917,280 @@ export type Database = {
           },
         ]
       }
+      onboarding_files: {
+        Row: {
+          created_at: string
+          form_id: string
+          id: string
+          mime: string
+          name: string
+          path: string
+          question_id: string
+          size: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          form_id: string
+          id?: string
+          mime?: string
+          name: string
+          path: string
+          question_id: string
+          size?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          form_id?: string
+          id?: string
+          mime?: string
+          name?: string
+          path?: string
+          question_id?: string
+          size?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_files_form_id_fkey"
+            columns: ["form_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_files_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_forms: {
+        Row: {
+          answers: Json
+          automation: Json
+          company_id: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          email_sent_at: string | null
+          id: string
+          intro: string
+          is_demo: boolean
+          last_activity_at: string | null
+          opened_at: string | null
+          options: Json
+          progress: number
+          project_id: string | null
+          remind_count: number
+          reminded_at: string | null
+          sections: Json
+          sent_at: string
+          status: string
+          template_id: string | null
+          title: string
+          token: string
+          updated_at: string
+          verified: Json
+          workspace_id: string
+        }
+        Insert: {
+          answers?: Json
+          automation?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_sent_at?: string | null
+          id?: string
+          intro?: string
+          is_demo?: boolean
+          last_activity_at?: string | null
+          opened_at?: string | null
+          options?: Json
+          progress?: number
+          project_id?: string | null
+          remind_count?: number
+          reminded_at?: string | null
+          sections?: Json
+          sent_at?: string
+          status?: string
+          template_id?: string | null
+          title: string
+          token?: string
+          updated_at?: string
+          verified?: Json
+          workspace_id: string
+        }
+        Update: {
+          answers?: Json
+          automation?: Json
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_sent_at?: string | null
+          id?: string
+          intro?: string
+          is_demo?: boolean
+          last_activity_at?: string | null
+          opened_at?: string | null
+          options?: Json
+          progress?: number
+          project_id?: string | null
+          remind_count?: number
+          reminded_at?: string | null
+          sections?: Json
+          sent_at?: string
+          status?: string
+          template_id?: string | null
+          title?: string
+          token?: string
+          updated_at?: string
+          verified?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_forms_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_forms_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_forms_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_forms_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "onboarding_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "onboarding_forms_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_settings: {
+        Row: {
+          access_email: string
+          auto_company: boolean
+          auto_kpis: boolean
+          auto_project: boolean
+          google_mcc_id: string
+          intro: string
+          meta_business_id: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          access_email?: string
+          auto_company?: boolean
+          auto_kpis?: boolean
+          auto_project?: boolean
+          google_mcc_id?: string
+          intro?: string
+          meta_business_id?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          access_email?: string
+          auto_company?: boolean
+          auto_kpis?: boolean
+          auto_project?: boolean
+          google_mcc_id?: string
+          intro?: string
+          meta_business_id?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_templates: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          icon: string
+          id: string
+          key: string | null
+          name: string
+          position: number
+          sections: Json
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          icon?: string
+          id?: string
+          key?: string | null
+          name: string
+          position?: number
+          sections?: Json
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          icon?: string
+          id?: string
+          key?: string | null
+          name?: string
+          position?: number
+          sections?: Json
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_templates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_stages: {
         Row: {
           color: string
@@ -1256,6 +2450,230 @@ export type Database = {
           },
         ]
       }
+      proposal_otps: {
+        Row: {
+          attempts: number
+          code_hash: string
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          proof_hash: string | null
+          proposal_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number
+          code_hash: string
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          proof_hash?: string | null
+          proposal_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number
+          code_hash?: string
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          proof_hash?: string | null
+          proposal_id?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_otps_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_signature_events: {
+        Row: {
+          at: string
+          id: number
+          ip_hash: string | null
+          ip_trunc: string | null
+          kind: string
+          meta: Json
+          proposal_id: string
+          user_agent: string | null
+          workspace_id: string
+        }
+        Insert: {
+          at?: string
+          id?: never
+          ip_hash?: string | null
+          ip_trunc?: string | null
+          kind: string
+          meta?: Json
+          proposal_id: string
+          user_agent?: string | null
+          workspace_id: string
+        }
+        Update: {
+          at?: string
+          id?: never
+          ip_hash?: string | null
+          ip_trunc?: string | null
+          kind?: string
+          meta?: Json
+          proposal_id?: string
+          user_agent?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_signature_events_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_signature_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_signatures: {
+        Row: {
+          consent_text: string
+          countersign_hash: string | null
+          countersign_ip_trunc: string | null
+          countersign_method: string | null
+          countersign_path: string | null
+          countersign_required: boolean
+          countersign_user_agent: string | null
+          countersigned_at: string | null
+          countersigner_id: string | null
+          countersigner_name: string | null
+          countersigner_role: string | null
+          created_at: string
+          document_hash: string
+          email_verified: boolean
+          email_verified_at: string | null
+          id: string
+          ip_hash: string | null
+          ip_trunc: string | null
+          mention: string
+          pdf_generated_at: string | null
+          pdf_hash: string | null
+          pdf_path: string | null
+          proposal_id: string
+          signature_hash: string
+          signature_method: string
+          signature_path: string
+          signed_at: string
+          signer_company: string
+          signer_email: string
+          signer_first_name: string
+          signer_last_name: string
+          signer_role: string
+          snapshot: Json
+          user_agent: string | null
+          workspace_id: string
+        }
+        Insert: {
+          consent_text: string
+          countersign_hash?: string | null
+          countersign_ip_trunc?: string | null
+          countersign_method?: string | null
+          countersign_path?: string | null
+          countersign_required?: boolean
+          countersign_user_agent?: string | null
+          countersigned_at?: string | null
+          countersigner_id?: string | null
+          countersigner_name?: string | null
+          countersigner_role?: string | null
+          created_at?: string
+          document_hash: string
+          email_verified?: boolean
+          email_verified_at?: string | null
+          id?: string
+          ip_hash?: string | null
+          ip_trunc?: string | null
+          mention?: string
+          pdf_generated_at?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          proposal_id: string
+          signature_hash: string
+          signature_method: string
+          signature_path: string
+          signed_at: string
+          signer_company?: string
+          signer_email: string
+          signer_first_name: string
+          signer_last_name: string
+          signer_role?: string
+          snapshot: Json
+          user_agent?: string | null
+          workspace_id: string
+        }
+        Update: {
+          consent_text?: string
+          countersign_hash?: string | null
+          countersign_ip_trunc?: string | null
+          countersign_method?: string | null
+          countersign_path?: string | null
+          countersign_required?: boolean
+          countersign_user_agent?: string | null
+          countersigned_at?: string | null
+          countersigner_id?: string | null
+          countersigner_name?: string | null
+          countersigner_role?: string | null
+          created_at?: string
+          document_hash?: string
+          email_verified?: boolean
+          email_verified_at?: string | null
+          id?: string
+          ip_hash?: string | null
+          ip_trunc?: string | null
+          mention?: string
+          pdf_generated_at?: string | null
+          pdf_hash?: string | null
+          pdf_path?: string | null
+          proposal_id?: string
+          signature_hash?: string
+          signature_method?: string
+          signature_path?: string
+          signed_at?: string
+          signer_company?: string
+          signer_email?: string
+          signer_first_name?: string
+          signer_last_name?: string
+          signer_role?: string
+          snapshot?: Json
+          user_agent?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_signatures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_signatures_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proposals: {
         Row: {
           accepted_at: string | null
@@ -1263,6 +2681,7 @@ export type Database = {
           blocks: Json
           company_id: string | null
           contact_id: string | null
+          countersign: boolean
           created_at: string
           currency: string
           deal_id: string | null
@@ -1287,6 +2706,7 @@ export type Database = {
           blocks?: Json
           company_id?: string | null
           contact_id?: string | null
+          countersign?: boolean
           created_at?: string
           currency?: string
           deal_id?: string | null
@@ -1311,6 +2731,7 @@ export type Database = {
           blocks?: Json
           company_id?: string | null
           contact_id?: string | null
+          countersign?: boolean
           created_at?: string
           currency?: string
           deal_id?: string | null
@@ -2199,10 +3620,49 @@ export type Database = {
           },
         ]
       }
+      booking_google_public: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          last_error: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          last_error?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          last_error?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_google_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      _clear_demo_booking: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      _demo_bk_day: { Args: { n: number }; Returns: string }
+      _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
+      _demo_creatives: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }
+      _demo_onboarding: { Args: { ws: string }; Returns: undefined }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
         Args: {
@@ -2239,14 +3699,78 @@ export type Database = {
           spend: number
         }[]
       }
+      booking_ensure_profile: {
+        Args: { uid: string; ws: string }
+        Returns: string
+      }
+      booking_my_profile: { Args: { ws: string }; Returns: string }
+      booking_profile_editable: {
+        Args: { p: string; ws: string }
+        Returns: boolean
+      }
+      booking_slugify: { Args: { t: string }; Returns: string }
       bump_link: { Args: { p_link: string }; Returns: undefined }
       can_write: { Args: { ws: string }; Returns: boolean }
+      clear_demo_booking: { Args: { ws: string }; Returns: undefined }
+      clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
       clear_demo_links: { Args: { ws: string }; Returns: undefined }
+      clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       clear_demo_tracking: { Args: { ws: string }; Returns: undefined }
+      create_api_token: {
+        Args: {
+          p_expires_at?: string
+          p_name: string
+          p_scope?: string
+          p_ws: string
+        }
+        Returns: Json
+      }
       create_workspace: {
         Args: { p_name: string; p_slug: string }
         Returns: string
+      }
+      creative_ad_attribution: {
+        Args: {
+          p_ad_keys?: string[]
+          p_end: string
+          p_start: string
+          p_ws: string
+        }
+        Returns: {
+          ad_key: string
+          revenue: number
+          sales: number
+        }[]
+      }
+      creative_ad_daily: {
+        Args: {
+          p_company?: string
+          p_end: string
+          p_start: string
+          p_ws: string
+        }
+        Returns: {
+          ad_account_id: string
+          ad_id: string
+          ad_name: string
+          adset_id: string
+          campaign_id: string
+          clicks: number
+          company_id: string
+          conversion_value: number
+          conversions: number
+          date: string
+          impressions: number
+          platform: string
+          spend: number
+          thruplay: number
+          video_3s: number
+          video_p100: number
+          video_p25: number
+          video_p50: number
+          video_p75: number
+        }[]
       }
       demo_task: {
         Args: {
@@ -2315,9 +3839,46 @@ export type Database = {
         }
         Returns: Json
       }
+      load_demo_booking: { Args: { ws: string }; Returns: number }
+      load_demo_creatives: { Args: { ws: string }; Returns: number }
       load_demo_data: { Args: { ws: string }; Returns: undefined }
       load_demo_links: { Args: { ws: string }; Returns: undefined }
+      load_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       load_demo_tracking: { Args: { ws: string }; Returns: undefined }
+      mcp_act_as: { Args: { p_user: string; p_ws: string }; Returns: undefined }
+      mcp_tracking_conversions: {
+        Args: {
+          p_end: string
+          p_site: string
+          p_start: string
+          p_types: string[]
+          p_user: string
+          p_window: number
+          p_ws: string
+        }
+        Returns: Json
+      }
+      mcp_tracking_stats: {
+        Args: {
+          p_end: string
+          p_site: string
+          p_start: string
+          p_user: string
+          p_ws: string
+        }
+        Returns: Json
+      }
+      onboarding_default_templates: {
+        Args: never
+        Returns: {
+          description: string
+          icon: string
+          key: string
+          name: string
+          position: number
+          sections: Json
+        }[]
+      }
       project_ws: { Args: { p: string }; Returns: string }
       proposal_ws: { Args: { p: string }; Returns: string }
       public_proposal: { Args: { p_token: string }; Returns: Json }
@@ -2332,9 +3893,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      restore_onboarding_templates: { Args: { ws: string }; Returns: undefined }
+      revoke_api_token: { Args: { p_id: string }; Returns: undefined }
+      seed_onboarding: { Args: { ws: string }; Returns: undefined }
       seed_utm_presets: { Args: { ws: string }; Returns: undefined }
       seed_workspace_defaults: { Args: { ws: string }; Returns: undefined }
       shares_workspace: { Args: { other: string }; Returns: boolean }
+      sign_proposal_commit: {
+        Args: {
+          p_event: Json
+          p_proposal: string
+          p_selected: string[]
+          p_sig: Json
+          p_version: string
+        }
+        Returns: undefined
+      }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }
       tracking_conversions: {
