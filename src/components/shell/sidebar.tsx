@@ -138,6 +138,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
           <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
           <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
+          <Item href={`${b}/creatives`} icon="palette" label="Bibliothèque créa" />
         </Section>
 
         <Section id="com" title="Commercial">
@@ -145,6 +146,8 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <Item href={`${b}/crm/companies`} icon="building-2" label="Clients & prospects" />
           <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />
           <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />
+          <Item href={`${b}/onboarding`} icon="list-checks" label="Onboarding clients" />
+          <Item href={`${b}/booking`} icon="calendar" label="Rendez-vous" />
         </Section>
 
         <Section id="perf" title="Performance">
