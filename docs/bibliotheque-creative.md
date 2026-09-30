@@ -56,3 +56,51 @@ Si la partie « annonces » échoue, la synchro des campagnes réussit quand mê
 ## Lier une tâche à un concept
 
 Dans le tiroir d'une tâche étiquetée « Créa », un encart liste ses concepts, permet d'en lier un ou d'en créer un pré-rempli.
+
+## Veille concurrentielle
+
+Onglet **Veille** de la bibliothèque créa. La veille lit la bibliothèque publicitaire Meta par son API officielle (Ad Library, Graph API v26, `GET /ads_archive`), en lecture seule.
+
+### Prérequis
+
+- Un compte Facebook dont l'**identité est confirmée** (facebook.com/ID, de quelques heures à 2 jours) et une **app développeur** (developers.facebook.com) avec les conditions de l'API acceptées sur facebook.com/ads/library/api. Sans cela, Meta renvoie l'erreur 10 / 2332002 (« Application does not have permission ») : l'interface l'explique.
+- Source du jeton : un jeton collé par un admin (bouton **Configurer**, prioritaire), sinon la connexion Meta du reporting. Le jeton collé est stocké dans `creative_intel_settings` (aucune policy : service role uniquement) et n'est jamais renvoyé au navigateur ; l'interface affiche son nom, son expiration et le résultat du dernier test.
+
+### Limites de l'API
+
+- Pubs commerciales consultables seulement pour l'**UE et le Royaume-Uni** (DSA).
+- **Ni dépense, ni impressions, ni engagement.** Pas de média téléchargeable : seuls les textes sont copiés. « Voir l'aperçu » ouvre la pub dans la bibliothèque Meta (`facebook.com/ads/library/?id=…`). L'URL `ad_snapshot_url` renvoyée par Meta contient le jeton : il en est retiré avant stockage.
+- Environ 200 appels par heure : 150 appels au plus par synchro, 5 pages de 100 pubs par surveillance de page (3 pour un mot-clé).
+
+### Surveillances
+
+Par client : une **page concurrente** (recherche par nom, ou ID, ou URL de la page ou de la bibliothèque publicitaire) ou un **mot-clé** (dans la langue des pubs), des pays (FR par défaut), « actives uniquement » ou « toutes » (historique de 90 jours à la première synchro). Synchro manuelle (par surveillance ou toutes) et quotidienne (`/api/cron/creative-intel`, `CRON_SECRET` ; les surveillances synchronisées depuis moins de 12 h sont sautées). Une pub active qui n'est plus renvoyée passe « arrêtée » (seulement si la lecture a été complète).
+
+### Les pubs
+
+- **Longévité** : jours depuis le lancement (jusqu'à l'arrêt pour une pub arrêtée).
+- **Variantes** : même texte principal ou même titre normalisé, sur la même page. « Regrouper les variantes » affiche une carte par concept.
+- **Score « probablement gagnante »** (0 à 100), détaillé sur chaque carte : longévité (7 j = 10, 14 j = 20, 30 j = 35, 60 j = 45, 90 j = 50), variantes (2 = 10, 3 = 15, 4 et plus = 20, 7 et plus = 25), toujours active (15), portée UE (10 k = 4, 100 k = 7, 1 M = 10). **Gagnante probable** : active, en ligne depuis au moins 30 jours et score ≥ 60.
+- **Nouvelle** : vue pour la première fois il y a moins de 7 jours. La vue « Nouveautés de la semaine » les regroupe par concurrent.
+- **Ajouter à la bibliothèque** : crée un concept Idée, étiqueté « Inspiration concurrente », avec la source et le lien, pré-rempli (hook = première phrase, textes dans le brief, angle, format, niveau de conscience et persona si l'IA les a tagués).
+- **Notification** aux membres quand un concurrent surveillé lance au moins 3 pubs dans la semaine (une fois par semaine au plus).
+
+## Recommandations IA
+
+Facultatif : `ANTHROPIC_API_KEY`. Sans clé, la veille, le score et les filtres fonctionnent ; les zones IA affichent un encart explicatif. Modèles : `AI_MODEL_FAST` (tagging, par défaut `claude-haiku-4-5-20251001`) et `AI_MODEL_SMART` (recommandations, par défaut `claude-sonnet-5`). Coût indicatif : environ 1 € pour 1 000 éléments tagués, 5 à 10 centimes par recommandation.
+
+### Tagging
+
+Chaque pub concurrente et chaque concept reçoit : angle, type de hook (question, chiffre, douleur, témoignage, contraste, curiosité, promesse, autorité, offre, humour, autre), hook, niveau de conscience (Schwartz), format probable, promesse, preuve, offre, appel à l'action, persona. Un élément n'est retagué que si son texte change ; par lots de 10, plafonné à `AI_TAG_LIMIT` éléments (40 par défaut) par synchro ou par clic sur « Taguer avec l'IA ».
+
+### Recommandations
+
+Onglet **Recommandations**, par client, bouton **Générer** ; l'historique est conservé. L'IA croise :
+
+1. tes performances réelles sur 90 jours par angle, hook, format et niveau de conscience (ROAS, CPA, hook rate, écart à la moyenne), et les annonces en fatigue ;
+2. ce que les concurrents font durer (la meilleure pub de chaque groupe de variantes, avec score et tags) ;
+3. les trous : angles et types de hook des concurrents jamais testés, niveaux de conscience sans concept.
+
+Sortie : 3 à 5 opportunités (Décliner, Contrer, Terrain vierge) argumentées chiffres à l'appui, avec les pubs concurrentes citées, et pour chacune un brief prêt (titre, angle, 3 hooks, script, plans, format, niveau de conscience, persona, appel à l'action). **Créer le concept** l'ajoute à la bibliothèque au statut Brief, les 3 hooks en variantes.
+
+Outils MCP du module : `list_competitor_ads`, `list_creative_concepts`, `get_creative_recommendations`, `create_creative_concept`.

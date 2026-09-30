@@ -30,12 +30,14 @@ export async function POST(request: NextRequest) {
             [[60, 41], [40, 21], [20, 0]].map(([from, to]) => () => admin.rpc("demo_tracking_seed_part", { ws, p_company: company, p_from: from, p_to: to })),
           ),
           () => admin.rpc("_demo_creatives", { ws }),
+          () => admin.rpc("_demo_intel", { ws }),
           () => admin.rpc("_demo_onboarding", { ws }),
           () => admin.rpc("_demo_booking", { ws, uid: user.id }),
         ]
       : [
           () => sb.rpc("clear_demo_booking", { ws }),
           () => sb.rpc("clear_demo_onboarding", { ws }),
+          () => sb.rpc("clear_demo_intel", { ws }),
           () => sb.rpc("clear_demo_creatives", { ws }),
           () => sb.rpc("clear_demo_tracking", { ws }),
           () => sb.rpc("clear_demo_links", { ws }),

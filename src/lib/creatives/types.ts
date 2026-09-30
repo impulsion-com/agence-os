@@ -1,4 +1,10 @@
 import type { Awareness, Brief, ConceptFormat, ConceptStatus } from "./constants";
+import type { IntelTags } from "./intel-core";
+
+/** Origine d'un concept créé depuis la veille ou une recommandation IA. */
+export type ConceptSource =
+  | { type: "competitor"; ad_id: string; archive_id: string; page_name: string; url: string }
+  | { type: "recommendation"; recommendation_id: string; title: string };
 
 export interface Concept {
   id: string;
@@ -22,6 +28,8 @@ export interface Concept {
   cover_path: string | null;
   position: number;
   is_demo: boolean;
+  source: ConceptSource | null;
+  ai_tags: IntelTags | null;
   created_at: string;
   updated_at: string;
 }
@@ -96,4 +104,4 @@ export interface AdDay {
 export type Attribution = Record<string, { sales: number; revenue: number }>;
 
 export const CONCEPT_COLS =
-  "id, workspace_id, company_id, project_id, task_id, title, angle, hook, persona, awareness, format, platforms, status, brief, tags, verdict, launched_at, owner_id, cover_path, position, is_demo, created_at, updated_at";
+  "id, workspace_id, company_id, project_id, task_id, title, angle, hook, persona, awareness, format, platforms, status, brief, tags, verdict, launched_at, owner_id, cover_path, position, is_demo, source, ai_tags, created_at, updated_at";

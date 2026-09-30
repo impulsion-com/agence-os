@@ -1071,6 +1071,190 @@ export type Database = {
           },
         ]
       }
+      competitor_ads: {
+        Row: {
+          ai_tagged_at: string | null
+          ai_tags: Json | null
+          ai_tags_hash: string | null
+          archive_id: string
+          bodies: string[]
+          captions: string[]
+          concept_id: string | null
+          descriptions: string[]
+          eu_reach: number | null
+          first_seen: string
+          id: string
+          is_active: boolean
+          is_demo: boolean
+          languages: string[]
+          last_seen: string
+          page_id: string
+          page_name: string
+          platforms: string[]
+          snapshot_url: string | null
+          start_time: string | null
+          stop_time: string | null
+          target_ages: string | null
+          target_gender: string | null
+          target_locations: Json | null
+          titles: string[]
+          watch_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ai_tagged_at?: string | null
+          ai_tags?: Json | null
+          ai_tags_hash?: string | null
+          archive_id: string
+          bodies?: string[]
+          captions?: string[]
+          concept_id?: string | null
+          descriptions?: string[]
+          eu_reach?: number | null
+          first_seen?: string
+          id?: string
+          is_active?: boolean
+          is_demo?: boolean
+          languages?: string[]
+          last_seen?: string
+          page_id?: string
+          page_name?: string
+          platforms?: string[]
+          snapshot_url?: string | null
+          start_time?: string | null
+          stop_time?: string | null
+          target_ages?: string | null
+          target_gender?: string | null
+          target_locations?: Json | null
+          titles?: string[]
+          watch_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ai_tagged_at?: string | null
+          ai_tags?: Json | null
+          ai_tags_hash?: string | null
+          archive_id?: string
+          bodies?: string[]
+          captions?: string[]
+          concept_id?: string | null
+          descriptions?: string[]
+          eu_reach?: number | null
+          first_seen?: string
+          id?: string
+          is_active?: boolean
+          is_demo?: boolean
+          languages?: string[]
+          last_seen?: string
+          page_id?: string
+          page_name?: string
+          platforms?: string[]
+          snapshot_url?: string | null
+          start_time?: string | null
+          stop_time?: string | null
+          target_ages?: string | null
+          target_gender?: string | null
+          target_locations?: Json | null
+          titles?: string[]
+          watch_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_ads_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_ads_watch_id_fkey"
+            columns: ["watch_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_watches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_ads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_watches: {
+        Row: {
+          active_only: boolean
+          company_id: string | null
+          countries: string[]
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          id: string
+          is_demo: boolean
+          kind: string
+          last_error: string | null
+          last_notified_at: string | null
+          last_synced_at: string | null
+          page_id: string | null
+          page_name: string
+          search_terms: string
+          workspace_id: string
+        }
+        Insert: {
+          active_only?: boolean
+          company_id?: string | null
+          countries?: string[]
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          last_error?: string | null
+          last_notified_at?: string | null
+          last_synced_at?: string | null
+          page_id?: string | null
+          page_name?: string
+          search_terms?: string
+          workspace_id: string
+        }
+        Update: {
+          active_only?: boolean
+          company_id?: string | null
+          countries?: string[]
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          last_error?: string | null
+          last_notified_at?: string | null
+          last_synced_at?: string | null
+          page_id?: string | null
+          page_name?: string
+          search_terms?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_watches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competitor_watches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           company_id: string | null
@@ -1240,6 +1424,9 @@ export type Database = {
       }
       creative_concepts: {
         Row: {
+          ai_tagged_at: string | null
+          ai_tags: Json | null
+          ai_tags_hash: string | null
           angle: string
           awareness: string | null
           brief: Json
@@ -1257,6 +1444,7 @@ export type Database = {
           platforms: string[]
           position: number
           project_id: string | null
+          source: Json | null
           status: string
           tags: string[]
           task_id: string | null
@@ -1266,6 +1454,9 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          ai_tagged_at?: string | null
+          ai_tags?: Json | null
+          ai_tags_hash?: string | null
           angle?: string
           awareness?: string | null
           brief?: Json
@@ -1283,6 +1474,7 @@ export type Database = {
           platforms?: string[]
           position?: number
           project_id?: string | null
+          source?: Json | null
           status?: string
           tags?: string[]
           task_id?: string | null
@@ -1292,6 +1484,9 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          ai_tagged_at?: string | null
+          ai_tags?: Json | null
+          ai_tags_hash?: string | null
           angle?: string
           awareness?: string | null
           brief?: Json
@@ -1309,6 +1504,7 @@ export type Database = {
           platforms?: string[]
           position?: number
           project_id?: string | null
+          source?: Json | null
           status?: string
           tags?: string[]
           task_id?: string | null
@@ -1341,6 +1537,110 @@ export type Database = {
           },
           {
             foreignKeyName: "creative_concepts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_intel_settings: {
+        Row: {
+          access_token: string | null
+          token_checked_at: string | null
+          token_error: string | null
+          token_expires_at: string | null
+          token_label: string | null
+          token_ok: boolean | null
+          token_user_id: string | null
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          token_checked_at?: string | null
+          token_error?: string | null
+          token_expires_at?: string | null
+          token_label?: string | null
+          token_ok?: boolean | null
+          token_user_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          access_token?: string | null
+          token_checked_at?: string | null
+          token_error?: string | null
+          token_expires_at?: string | null
+          token_label?: string | null
+          token_ok?: boolean | null
+          token_user_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_intel_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creative_recommendations: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          created_concepts: Json
+          id: string
+          is_demo: boolean
+          model: string
+          output: Json
+          stats: Json
+          usage: Json | null
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_concepts?: Json
+          id?: string
+          is_demo?: boolean
+          model?: string
+          output?: Json
+          stats?: Json
+          usage?: Json | null
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_concepts?: Json
+          id?: string
+          is_demo?: boolean
+          model?: string
+          output?: Json
+          stats?: Json
+          usage?: Json | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creative_recommendations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creative_recommendations_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3659,11 +3959,13 @@ export type Database = {
     Functions: {
       _clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       _clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
       _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       _demo_bk_day: { Args: { n: number }; Returns: string }
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
       _demo_creatives: { Args: { ws: string }; Returns: number }
+      _demo_intel: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }
       _demo_onboarding: { Args: { ws: string }; Returns: undefined }
       accept_invitation: { Args: { p_token: string }; Returns: string }
@@ -3717,6 +4019,7 @@ export type Database = {
       clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
+      clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       clear_demo_links: { Args: { ws: string }; Returns: undefined }
       clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       clear_demo_tracking: { Args: { ws: string }; Returns: undefined }
@@ -3773,6 +4076,20 @@ export type Database = {
           video_p25: number
           video_p50: number
           video_p75: number
+        }[]
+      }
+      creative_intel_status: {
+        Args: { ws: string }
+        Returns: {
+          connection_expires_at: string
+          connection_label: string
+          has_connection: boolean
+          has_manual: boolean
+          manual_checked_at: string
+          manual_error: string
+          manual_expires_at: string
+          manual_label: string
+          manual_ok: boolean
         }[]
       }
       demo_task: {
@@ -3845,6 +4162,7 @@ export type Database = {
       load_demo_booking: { Args: { ws: string }; Returns: number }
       load_demo_creatives: { Args: { ws: string }; Returns: number }
       load_demo_data: { Args: { ws: string }; Returns: undefined }
+      load_demo_intel: { Args: { ws: string }; Returns: number }
       load_demo_links: { Args: { ws: string }; Returns: undefined }
       load_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       load_demo_tracking: { Args: { ws: string }; Returns: undefined }

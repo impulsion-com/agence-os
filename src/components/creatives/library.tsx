@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowUp, ChartNoAxesCombined, Kanban, LayoutGrid, Plus, Search, SearchX, Table2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChartNoAxesCombined, Kanban, LayoutGrid, Plus, Radar, Search, SearchX, Sparkles, Table2, X } from "lucide-react";
 
 import "@/styles/reporting.css";
 import "@/styles/creatives.css";
@@ -16,18 +16,23 @@ import { fmtKpi, type Period } from "@/lib/ads/metrics";
 import { AWARE, AWARENESS, CREATIVE_PLATFORMS, FORMAT, FORMATS, STATUS, STATUSES, type ConceptStatus } from "@/lib/creatives/constants";
 import { attributed, ck, fmtCk, type CKpi } from "@/lib/creatives/metrics";
 import type { Concept } from "@/lib/creatives/types";
+import type { IntelData } from "@/lib/creatives/intel-types";
 import { Analysis } from "./analysis";
 import { ConceptCreateModal } from "./concept-create";
+import { Intel } from "./intel";
+import { Recos } from "./recos";
 import { useModel, type LibraryData, type Model } from "./model";
 import { Cover, FatigueBadge, FormatIcon, KpiPills, StatusBadge, useSignedUrls } from "./parts";
 
-export type View = "gallery" | "table" | "board" | "analysis";
+export type View = "gallery" | "table" | "board" | "analysis" | "intel" | "recos";
 
 const VIEWS: { id: View; name: string; icon: ReactNode }[] = [
   { id: "gallery", name: "Galerie", icon: <LayoutGrid size={14} /> },
   { id: "table", name: "Tableau", icon: <Table2 size={14} /> },
   { id: "board", name: "Production", icon: <Kanban size={14} /> },
   { id: "analysis", name: "Analyse", icon: <ChartNoAxesCombined size={14} /> },
+  { id: "intel", name: "Veille", icon: <Radar size={14} /> },
+  { id: "recos", name: "Recommandations", icon: <Sparkles size={14} /> },
 ];
 
 interface Filters {
@@ -42,7 +47,19 @@ interface Filters {
 }
 const NO_FILTERS: Filters = { q: "", company: [], angle: [], format: [], awareness: [], persona: [], status: [], platform: [] };
 
-export function CreativeLibrary({ data, period, view, analysis }: { data: LibraryData; period: Period; view: View; analysis: { company: string | null; min: number } }) {
+export function CreativeLibrary({
+  data,
+  period,
+  view,
+  analysis,
+  intel,
+}: {
+  data: LibraryData;
+  period: Period;
+  view: View;
+  analysis: { company: string | null; min: number };
+  intel?: IntelData | null;
+}) {
   const ws = useWorkspace();
   const router = useRouter();
   const path = usePathname();
@@ -60,6 +77,8 @@ export function CreativeLibrary({ data, period, view, analysis }: { data: Librar
     const q = new URLSearchParams(sp.toString());
     if (v === "gallery") q.delete("view");
     else q.set("view", v);
+    q.delete("new");
+    q.delete("rec");
     router.replace(`${path}?${q}`, { scroll: false });
   };
 
@@ -141,6 +160,10 @@ export function CreativeLibrary({ data, period, view, analysis }: { data: Librar
 
       {view === "analysis" ? (
         <Analysis data={data} model={model} period={period} company={analysis.company} min={analysis.min} />
+      ) : view === "intel" && intel ? (
+        <Intel data={intel} initialWeek={sp.get("new") === "1"} />
+      ) : view === "recos" && intel ? (
+        <Recos data={intel} conceptCount={Object.fromEntries(ws.companies.map((c) => [c.id, concepts.filter((x) => x.company_id === c.id).length]))} />
       ) : (
         <>
           <div className="crv-bar" role="search">

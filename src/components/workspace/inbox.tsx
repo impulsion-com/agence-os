@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CalendarClock, CheckCheck, CircleDot, ClipboardCheck, FileSignature, Handshake, Mail, MailOpen, MessageSquare, UserPlus } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CalendarClock, CheckCheck, CircleDot, ClipboardCheck, FileSignature, Handshake, Mail, MailOpen, MessageSquare, Palette, UserPlus } from "lucide-react";
 
 import "@/styles/workspace.css";
 import { Avatar } from "@/components/ui/avatar";
@@ -65,6 +65,7 @@ const KIND_ICON: Record<Notification["kind"], ReactNode> = {
   proposal: <FileSignature size={11} />,
   onboarding: <ClipboardCheck size={11} />,
   booking: <CalendarClock size={11} />,
+  creative: <Palette size={11} />,
 };
 
 const typing = (e: KeyboardEvent) => {
@@ -145,6 +146,7 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
       if (n.task) openTask(n.task.id);
       else if (n.deal) router.push(`${ws.base}/crm/deals/${n.deal.id}`);
       else if (n.proposal_id) router.push(`${ws.base}/proposals/${n.proposal_id}`);
+      else if (n.kind === "creative") router.push(`${ws.base}/creatives?view=intel&new=1`);
     },
     [openTask, router, ws.base],
   );
@@ -482,9 +484,9 @@ function Preview({
       )}
 
       <div className="pv-actions">
-        {(t || deal || n.proposal_id) && (
+        {(t || deal || n.proposal_id || n.kind === "creative") && (
           <button className="btn btn-primary" onClick={onOpen}>
-            {t ? "Ouvrir la tâche" : deal ? "Ouvrir le deal" : "Ouvrir la proposition"}
+            {t ? "Ouvrir la tâche" : deal ? "Ouvrir le deal" : n.proposal_id ? "Ouvrir la proposition" : "Ouvrir la veille"}
             <kbd style={{ background: "transparent", color: "inherit", borderColor: "color-mix(in srgb, currentColor 35%, transparent)" }}>↵</kbd>
           </button>
         )}
@@ -493,7 +495,7 @@ function Preview({
             Voir le projet
           </Link>
         )}
-        {!t && !deal && !n.proposal_id && <span className="faint">L&apos;objet lié à cette notification a été supprimé.</span>}
+        {!t && !deal && !n.proposal_id && n.kind !== "creative" && <span className="faint">L&apos;objet lié à cette notification a été supprimé.</span>}
       </div>
     </article>
   );

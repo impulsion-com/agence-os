@@ -43,7 +43,7 @@ export const MODULES: ModuleDef[] = [
     icon: "palette",
     group: "Production",
     desc: "Concepts, angles, hooks, briefs créateurs et performance par annonce.",
-    includes: ["Concepts et variantes", "Kanban de production", "Analyse créative et fatigue"],
+    includes: ["Concepts et variantes", "Kanban de production", "Analyse créative et fatigue", "Veille concurrentielle et recommandations IA"],
     routes: ["/creatives"],
   },
   {

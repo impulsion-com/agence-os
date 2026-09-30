@@ -190,6 +190,19 @@ export function ConceptPage({ data, period }: { data: ConceptData; period: Perio
             )}
             {c.angle && <span className="faint">Angle : {c.angle}</span>}
             {c.launched_at && <span className="faint">Lancé le {fmtDate(c.launched_at, true)}</span>}
+            {c.source?.type === "competitor" &&
+              (c.source.url ? (
+                <a className="crv-src" href={c.source.url} target="_blank" rel="noopener noreferrer" title="Ouvre la pub d'origine dans la bibliothèque publicitaire Meta">
+                  Inspiration : {c.source.page_name}
+                </a>
+              ) : (
+                <Link className="crv-src" href={`${ws.base}/creatives?view=intel`}>Inspiration : {c.source.page_name}</Link>
+              ))}
+            {c.source?.type === "recommendation" && (
+              <Link className="crv-src" href={`${ws.base}/creatives?view=recos&rec=${c.source.recommendation_id}${c.company_id ? `&company=${c.company_id}` : ""}`}>
+                Recommandation IA
+              </Link>
+            )}
             <FatigueBadge f={perf.worst} />
           </div>
           <div className="actions">
