@@ -451,7 +451,7 @@ export function ProposalEditor({ data, signatureFont }: { data: EditorData; sign
               Contre-signer
             </button>
           )}
-          {meta.status === "accepted" && ws.canWrite && !waitingCounter && (
+          {meta.status === "accepted" && ws.canWrite && !waitingCounter && ws.has("projects") && (
             <button className="btn btn-sm btn-primary" onClick={() => ui.create({ kind: "project", defaults: { company_id: meta.company_id, name: meta.title } })}>
               <FolderPlus size={13} />
               Créer le projet

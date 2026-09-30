@@ -132,7 +132,9 @@ export interface MenuItem {
 export function MenuList({ items, onClose, search }: { items: MenuItem[]; onClose: () => void; search?: string }) {
   const [q, setQ] = useState("");
   const [act, setAct] = useState(0);
-  const shown = items.filter((i) => i.separator || i.heading || !q || i.label.toLowerCase().includes(q.toLowerCase()));
+  const matched = items.filter((i) => i.separator || i.heading || !q || i.label.toLowerCase().includes(q.toLowerCase()));
+  // Pas de séparateur en tête, en fin ni doublé (groupes vides, modules désactivés)
+  const shown = matched.filter((i, k) => !i.separator || (k > 0 && k < matched.length - 1 && !matched[k - 1].separator && matched.slice(k + 1).some((x) => !x.separator)));
   const selectable = shown.filter((i) => !i.separator && !i.heading);
   const pick = (i: MenuItem) => {
     i.onSelect?.();

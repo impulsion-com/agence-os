@@ -3548,6 +3548,7 @@ export type Database = {
           created_by: string | null
           currency: string
           id: string
+          modules: string[] | null
           name: string
           slug: string
         }
@@ -3557,6 +3558,7 @@ export type Database = {
           created_by?: string | null
           currency?: string
           id?: string
+          modules?: string[] | null
           name: string
           slug: string
         }
@@ -3566,6 +3568,7 @@ export type Database = {
           created_by?: string | null
           currency?: string
           id?: string
+          modules?: string[] | null
           name?: string
           slug?: string
         }

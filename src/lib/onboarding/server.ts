@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readModules } from "@/lib/modules";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { PROJECT_TEMPLATES } from "@/lib/constants";
@@ -169,8 +170,9 @@ export async function runAutomations(admin: Admin, form: OnboardingForm): Promis
     }
   }
 
-  // 3. Projet et tâches de vérification des accès
-  if (opts.project !== false) {
+  // 3. Projet et tâches de vérification des accès (seulement si la gestion de projet est activée)
+  const { data: wsRow } = await admin.from("workspaces").select("modules").eq("id", form.workspace_id).single();
+  if (opts.project !== false && readModules(wsRow?.modules).includes("projects")) {
     const { data: active } = await admin
       .from("projects")
       .select("id")

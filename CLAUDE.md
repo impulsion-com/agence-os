@@ -59,6 +59,10 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   `load_demo_data` (droits de l'utilisateur), puis en service role `_demo_links`,
   `demo_tracking_seed_part` (par client et par tranche de 20 jours, sous le délai de 8 s de l'API),
   `_demo_creatives`, `_demo_onboarding` et `_demo_booking`. Chaque module a son `clear_demo_*`.
+- Modules activables (`src/lib/modules.ts`, colonne `workspaces.modules`, null = tous) : tout nouvel
+  écran, menu, action ou outil MCP propre à un module se conditionne avec `useWorkspace().has("<module>")`
+  et déclare ses routes dans `MODULES[].routes` (le `ModuleGate` de l'AppShell affiche alors la page
+  « module désactivé »). C'est de l'ergonomie, pas de la sécurité : la RLS ne change pas.
 - Emails : `src/lib/email.ts` (Resend, facultatif). Toute fonctionnalité doit marcher sans email.
 - Pages publiques (proposition `/p/`, onboarding `/f/`, rendez-vous `/b/`, rapport `/r/`, liens `/l/`) :
   lecture et écriture uniquement via routes serveur en service role ou RPC `security definer`.

@@ -5,6 +5,7 @@
 //   2. l'ajouter à DOMAINS ci-dessous, avec le libellé affiché dans Réglages > API et MCP.
 // Règles : noms en anglais snake_case et uniques, descriptions et sorties en français,
 // `write: true` pour tout outil qui modifie la base, et TOUJOURS filtrer par ctx.workspace.id.
+import type { ModuleId } from "@/lib/modules";
 import type { AnyTool } from "../types";
 import { attributionTools } from "./attribution";
 import { crmTools } from "./crm";
@@ -15,16 +16,19 @@ import { reportingTools } from "./reporting";
 import { taskTools } from "./tasks";
 import { workspaceTools } from "./workspace";
 
-export const DOMAINS: { label: string; tools: AnyTool[] }[] = [
+// `module` : les outils n'apparaissent que si ce module est activé dans l'espace (Réglages > Modules)
+export const DOMAINS: { label: string; tools: AnyTool[]; module?: ModuleId }[] = [
   { label: "Espace", tools: workspaceTools },
-  { label: "Projets", tools: projectTools },
-  { label: "Tâches", tools: taskTools },
-  { label: "CRM", tools: crmTools },
-  { label: "Propositions", tools: proposalTools },
-  { label: "Reporting", tools: reportingTools },
-  { label: "Attribution", tools: attributionTools },
-  { label: "Liens trackés", tools: linkTools },
+  { label: "Projets", tools: projectTools, module: "projects" },
+  { label: "Tâches", tools: taskTools, module: "projects" },
+  { label: "CRM", tools: crmTools, module: "crm" },
+  { label: "Propositions", tools: proposalTools, module: "proposals" },
+  { label: "Reporting", tools: reportingTools, module: "reporting" },
+  { label: "Attribution", tools: attributionTools, module: "tracking" },
+  { label: "Liens trackés", tools: linkTools, module: "links" },
 ];
+
+export const TOOL_MODULE = new Map<string, ModuleId | undefined>(DOMAINS.flatMap((d) => d.tools.map((t) => [t.name, d.module] as const)));
 
 export const TOOLS: AnyTool[] = DOMAINS.flatMap((d) => d.tools);
 

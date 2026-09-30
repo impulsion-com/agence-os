@@ -247,6 +247,8 @@ kbd, .kbd {
 .side-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
 .side-item.on { background: var(--surface); color: var(--text); font-weight: 500; box-shadow: var(--shadow-card); }
 .side-item .count { margin-left: auto; }
+.side-add-mod { margin-top: 12px; color: var(--text-3); border: 1px dashed var(--border-strong); }
+.side-add-mod:hover { color: var(--text); border-color: var(--text-4); }
 .side-item.sub { padding-left: 30px; height: 28px; font-size: var(--fs-sm); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
@@ -459,3 +461,14 @@ kbd, .kbd {
 
 .mobile-only { display: none; }
 @media (max-width: 900px) { .mobile-only { display: inline-flex; } }
+
+/* Page « module désactivé » */
+.mod-off { max-width: 460px; margin: 8vh auto 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.mod-off h1 { font-size: var(--fs-xl); }
+.mod-off .mod-ic { width: 48px; height: 48px; border-radius: var(--r-lg); display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); margin-bottom: 4px; }
+.mod-off ul { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.mod-off li { display: flex; gap: 8px; align-items: center; font-size: var(--fs-sm); color: var(--text-2); }
+.mod-off li svg { color: var(--green); }
+.mod-off .mod-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+/* L'étape « modules » de la création d'espace a besoin de plus de largeur */
+.auth-card:has(.mods) { width: min(760px, 100%); }

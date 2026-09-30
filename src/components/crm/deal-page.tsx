@@ -172,7 +172,7 @@ export function DealPage({
                 <MenuList
                   onClose={close}
                   items={[
-                    { label: "Créer une proposition", icon: <FileSignature size={14} />, onSelect: () => ui.create({ kind: "proposal", defaults: { company_id: deal.company_id, contact_id: deal.contact_id, deal_id: deal.id } }) },
+                    ...(ws.has("proposals") ? [{ label: "Créer une proposition", icon: <FileSignature size={14} />, onSelect: () => ui.create({ kind: "proposal", defaults: { company_id: deal.company_id, contact_id: deal.contact_id, deal_id: deal.id } }) }] : []),
                     { label: "", separator: true },
                     { label: "Supprimer le deal", danger: true, onSelect: () => setConfirmDel(true) },
                   ]}
@@ -280,10 +280,12 @@ export function DealPage({
         </div>
 
         <aside className="crm-grid-side">
-          <ProposalList
-            proposals={proposals}
-            onCreate={() => ui.create({ kind: "proposal", defaults: { company_id: deal.company_id, contact_id: deal.contact_id, deal_id: deal.id } })}
-          />
+          {ws.has("proposals") && (
+            <ProposalList
+              proposals={proposals}
+              onCreate={() => ui.create({ kind: "proposal", defaults: { company_id: deal.company_id, contact_id: deal.contact_id, deal_id: deal.id } })}
+            />
+          )}
 
           <div className="card crm-panel">
             <div className="card-h"><h3>Contact</h3></div>

@@ -4,9 +4,11 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { TaskDrawerHost } from "@/components/tasks/task-drawer";
+import { moduleOfPath } from "@/lib/modules";
 import { applyPrefs } from "@/lib/prefs";
 import { useWorkspace } from "@/lib/workspace/context";
 import { CrumbsProvider } from "./crumbs";
+import { ModuleGate } from "./module-gate";
 import { CommandPalette } from "./palette";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -29,7 +31,8 @@ function Shortcuts({ onToggle }: { onToggle: () => void }) {
       const k = e.key.toLowerCase();
       if (Date.now() - g < 900) {
         const dest: Record<string, string> = { h: "", i: "/inbox", m: "/my-tasks", p: "/projects", c: "/crm", r: "/reporting", t: "/tasks", s: "/settings" };
-        if (k in dest) {
+        const mod = k in dest ? moduleOfPath(dest[k]) : null;
+        if (k in dest && (!mod || ws.has(mod))) {
           e.preventDefault();
           router.push(ws.base + dest[k]);
         }
@@ -41,13 +44,13 @@ function Shortcuts({ onToggle }: { onToggle: () => void }) {
       else if (k === "/") {
         e.preventDefault();
         ui.setPalette(true);
-      } else if (ws.canWrite && k === "c") {
+      } else if (ws.canWrite && k === "c" && ws.has("projects")) {
         e.preventDefault();
         ui.create({ kind: "task" });
-      } else if (ws.canWrite && k === "p" && !document.querySelector(".drawer")) {
+      } else if (ws.canWrite && k === "p" && ws.has("projects") && !document.querySelector(".drawer")) {
         e.preventDefault();
         ui.create({ kind: "project" });
-      } else if (ws.canWrite && k === "d" && !document.querySelector(".drawer")) {
+      } else if (ws.canWrite && k === "d" && ws.has("crm") && !document.querySelector(".drawer")) {
         e.preventDefault();
         ui.create({ kind: "deal" });
       }
@@ -83,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {mobileOpen && <div className="scrim" style={{ zIndex: 54 }} onClick={() => setMobileOpen(false)} />}
           <div className="main">
             <Topbar sideHidden={hidden} onToggle={toggle} />
-            <main className="content" id="content">{children}</main>
+            <main className="content" id="content"><ModuleGate>{children}</ModuleGate></main>
           </div>
         </div>
         <CommandPalette />

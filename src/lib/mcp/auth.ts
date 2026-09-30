@@ -1,3 +1,4 @@
+import { readModules } from "@/lib/modules";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -51,7 +52,7 @@ export async function authenticate(token: string | null, request: Request): Prom
 
   const [member, workspace, profile] = await Promise.all([
     db.from("workspace_members").select("role").eq("workspace_id", t.workspace_id).eq("user_id", t.user_id).maybeSingle(),
-    db.from("workspaces").select("id, name, slug, currency").eq("id", t.workspace_id).maybeSingle(),
+    db.from("workspaces").select("id, name, slug, currency, modules").eq("id", t.workspace_id).maybeSingle(),
     db.from("profiles").select("full_name, email").eq("id", t.user_id).maybeSingle(),
   ]);
   if (!member.data || !workspace.data) throw new AuthError("Tu ne fais plus partie de cet espace : ce jeton ne donne plus accès.", 403);
@@ -66,7 +67,7 @@ export async function authenticate(token: string | null, request: Request): Prom
   return {
     db,
     user: { id: t.user_id, name: profile.data?.full_name || profile.data?.email || "", email: profile.data?.email ?? "" },
-    workspace: { id: workspace.data.id, name: workspace.data.name, slug: workspace.data.slug, currency: workspace.data.currency || "EUR" },
+    workspace: { id: workspace.data.id, name: workspace.data.name, slug: workspace.data.slug, currency: workspace.data.currency || "EUR", modules: readModules(workspace.data.modules) },
     role,
     scope,
     canWrite: scope === "write" && role !== "guest",

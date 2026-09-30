@@ -74,12 +74,13 @@ export function useDealStageFlow(stages: PipelineStage[], apply: (id: string, pa
       }
       if (stage.kind === "won") {
         const ok = await persist(deal, stage, { stage_id: stage.id, closed_at: new Date().toISOString(), lost_reason: "", ...pos }, "Deal gagné");
-        if (ok) setWon(deal);
+        // Proposer le projet d'onboarding seulement si la gestion de projet est activée
+        if (ok && ws.has("projects")) setWon(deal);
         return;
       }
       await persist(deal, stage, { stage_id: stage.id, closed_at: null, lost_reason: "", ...pos }, `Déplacé vers ${stage.name}`);
     },
-    [apply, mutate, persist, stages],
+    [apply, mutate, persist, stages, ws],
   );
 
   const element = (

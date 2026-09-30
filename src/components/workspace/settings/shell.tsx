@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import "@/styles/workspace.css";
 import { Icon } from "@/components/ui/icon";
+import type { ModuleId } from "@/lib/modules";
 import { useWorkspace } from "@/lib/workspace/context";
 
 interface NavItem {
@@ -13,6 +14,7 @@ interface NavItem {
   icon: string;
   label: string;
   admin?: boolean;
+  module?: ModuleId;
 }
 
 const SECTIONS: { title: string; items: NavItem[] }[] = [
@@ -28,6 +30,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Espace de travail",
     items: [
       { href: "workspace", icon: "settings", label: "Général" },
+      { href: "modules", icon: "layout-grid", label: "Modules" },
       { href: "members", icon: "user-plus", label: "Membres et invitations" },
       { href: "teams", icon: "layers", label: "Équipes" },
       { href: "labels", icon: "filter", label: "Étiquettes" },
@@ -37,15 +40,15 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Commercial",
     items: [
-      { href: "pipeline", icon: "handshake", label: "Pipeline" },
-      { href: "services", icon: "receipt", label: "Catalogue de services" },
+      { href: "pipeline", icon: "handshake", label: "Pipeline", module: "crm" },
+      { href: "services", icon: "receipt", label: "Catalogue de services", module: "proposals" },
     ],
   },
   {
     title: "Reporting",
     items: [
-      { href: "integrations", icon: "plug", label: "Connexions publicitaires" },
-      { href: "utm", icon: "link", label: "Conventions UTM" },
+      { href: "integrations", icon: "plug", label: "Connexions publicitaires", module: "reporting" },
+      { href: "utm", icon: "link", label: "Conventions UTM", module: "links" },
     ],
   },
 ];
@@ -59,7 +62,9 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   return (
     <div className="set">
       <nav className="set-nav" aria-label="Réglages">
-        {SECTIONS.map((s) => (
+        {SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !i.module || ws.has(i.module)) }))
+          .filter((s) => s.items.length)
+          .map((s) => (
           <div key={s.title} style={{ display: "contents" }}>
             <div className="side-title">{s.title}</div>
             {s.items.map((i) => {

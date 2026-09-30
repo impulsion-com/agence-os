@@ -1,4 +1,5 @@
 // Types du serveur MCP d'Agence OS : contexte d'un appel et définition d'un outil.
+import type { ModuleId } from "@/lib/modules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { z } from "zod";
 
@@ -12,7 +13,7 @@ export interface McpContext {
   /** Client service role : chaque requête DOIT filtrer par ctx.workspace.id */
   db: AdminDB;
   user: { id: string; name: string; email: string };
-  workspace: { id: string; name: string; slug: string; currency: string };
+  workspace: { id: string; name: string; slug: string; currency: string; modules: ModuleId[] };
   role: Role;
   scope: "read" | "write";
   /** Écriture autorisée : jeton en lecture+écriture ET rôle autre qu'invité */

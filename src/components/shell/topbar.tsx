@@ -58,11 +58,15 @@ export function Topbar({ sideHidden, onToggle }: { sideHidden: boolean; onToggle
             </button>
           )}
           items={[
-            { label: "Tâche", icon: <Icon name="circle-check" size={14} />, sub: "C", onSelect: () => ui.create({ kind: "task" }) },
-            { label: "Projet", icon: <Icon name="folder-kanban" size={14} />, sub: "P", onSelect: () => ui.create({ kind: "project" }) },
+            ...(ws.has("projects")
+              ? [
+                  { label: "Tâche", icon: <Icon name="circle-check" size={14} />, sub: "C", onSelect: () => ui.create({ kind: "task" }) },
+                  { label: "Projet", icon: <Icon name="folder-kanban" size={14} />, sub: "P", onSelect: () => ui.create({ kind: "project" }) },
+                ]
+              : []),
             { label: "", separator: true },
-            { label: "Deal", icon: <Icon name="handshake" size={14} />, sub: "D", onSelect: () => ui.create({ kind: "deal" }) },
-            { label: "Proposition", icon: <Icon name="file-signature" size={14} />, onSelect: () => ui.create({ kind: "proposal" }) },
+            ...(ws.has("crm") ? [{ label: "Deal", icon: <Icon name="handshake" size={14} />, sub: "D", onSelect: () => ui.create({ kind: "deal" }) }] : []),
+            ...(ws.has("proposals") ? [{ label: "Proposition", icon: <Icon name="file-signature" size={14} />, onSelect: () => ui.create({ kind: "proposal" }) }] : []),
             { label: "", separator: true },
             { label: "Inviter un membre", icon: <Icon name="user-plus" size={14} />, onSelect: () => ui.create({ kind: "invite" }) },
           ]}

@@ -12,6 +12,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace/context";
 import type { TaskStatus } from "@/lib/types";
 import { openTask } from "@/components/tasks/view-state";
+import { moduleOfPath, needsCompanies } from "@/lib/modules";
 import { useUI } from "./ui-context";
 
 interface Cmd {
@@ -62,9 +63,9 @@ export function CommandPalette() {
       const sb = supabaseBrowser();
       const like = `%${q.trim()}%`;
       const [tasks, deals, contacts] = await Promise.all([
-        sb.from("tasks").select("id, title, number, status, project_id").eq("workspace_id", ws.workspace.id).ilike("title", like).is("archived_at", null).limit(8),
-        sb.from("deals").select("id, title").eq("workspace_id", ws.workspace.id).ilike("title", like).limit(5),
-        sb.from("contacts").select("id, first_name, last_name, email").eq("workspace_id", ws.workspace.id).or(`first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}`).limit(5),
+        (ws.has("projects") ? sb.from("tasks").select("id, title, number, status, project_id").eq("workspace_id", ws.workspace.id).ilike("title", like).is("archived_at", null).limit(8) : Promise.resolve({ data: [] as { id: string; title: string; number: number; status: string; project_id: string }[] })),
+        (ws.has("crm") ? sb.from("deals").select("id, title").eq("workspace_id", ws.workspace.id).ilike("title", like).limit(5) : Promise.resolve({ data: [] as { id: string; title: string }[] })),
+        (ws.has("crm") ? sb.from("contacts").select("id, first_name, last_name, email").eq("workspace_id", ws.workspace.id).or(`first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}`).limit(5) : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string; email: string }[] })),
       ]);
       const go = (href: string) => () => { router.push(href); close(); };
       setRemote([
@@ -92,18 +93,30 @@ export function CommandPalette() {
       ["Activité", "activity", `${b}/activity`], ["Réglages", "settings", `${b}/settings`],
     ];
     const act = (fn: () => void) => () => { close(); fn(); };
+    // Masque les pages des modules désactivés
+    const navOn = nav.filter(([, , h]) => {
+      const rel = h.slice(b.length);
+      if (rel === "/crm/companies") return needsCompanies(ws.modules);
+      const m = moduleOfPath(rel);
+      return !m || ws.has(m);
+    });
     return [
       ...(ws.canWrite
         ? [
-            { id: "a-task", group: "Actions", label: "Créer une tâche", icon: <Icon name="plus" size={15} />, hint: "C", run: act(() => ui.create({ kind: "task" })) },
-            { id: "a-proj", group: "Actions", label: "Créer un projet", icon: <Icon name="folder-kanban" size={15} />, run: act(() => ui.create({ kind: "project" })) },
-            { id: "a-deal", group: "Actions", label: "Créer un deal", icon: <Icon name="handshake" size={15} />, run: act(() => ui.create({ kind: "deal" })) },
-            { id: "a-prop", group: "Actions", label: "Créer une proposition", icon: <Icon name="file-signature" size={15} />, run: act(() => ui.create({ kind: "proposal" })) },
+            ...(ws.has("projects")
+              ? [
+                  { id: "a-task", group: "Actions", label: "Créer une tâche", icon: <Icon name="plus" size={15} />, hint: "C", run: act(() => ui.create({ kind: "task" })) },
+                  { id: "a-proj", group: "Actions", label: "Créer un projet", icon: <Icon name="folder-kanban" size={15} />, run: act(() => ui.create({ kind: "project" })) },
+                ]
+              : []),
+            ...(ws.has("crm") ? [{ id: "a-deal", group: "Actions", label: "Créer un deal", icon: <Icon name="handshake" size={15} />, run: act(() => ui.create({ kind: "deal" })) }] : []),
+            ...(ws.has("proposals") ? [{ id: "a-prop", group: "Actions", label: "Créer une proposition", icon: <Icon name="file-signature" size={15} />, run: act(() => ui.create({ kind: "proposal" })) }] : []),
             { id: "a-inv", group: "Actions", label: "Inviter un membre", icon: <Icon name="user-plus" size={15} />, run: act(() => ui.create({ kind: "invite" })) },
           ]
         : []),
-      ...ws.projects.filter((p) => !p.archived_at).map((p) => ({ id: "p" + p.id, group: "Projets", label: p.name, icon: <ObjIcon icon={p.icon} color={p.color} size={18} />, hint: p.key, run: go(`${b}/projects/${p.key}`) })),
-      ...nav.map(([l, i, h]) => ({ id: "n" + h, group: "Aller à", label: l, icon: <Icon name={i} size={15} />, run: go(h) })),
+      ...(ws.isAdmin ? [{ id: "a-mod", group: "Actions", label: "Gérer les modules de l'espace", icon: <Icon name="layout-grid" size={15} />, run: go(`${b}/settings/modules`) }] : []),
+      ...ws.projects.filter((p) => !p.archived_at && ws.has("projects")).map((p) => ({ id: "p" + p.id, group: "Projets", label: p.name, icon: <ObjIcon icon={p.icon} color={p.color} size={18} />, hint: p.key, run: go(`${b}/projects/${p.key}`) })),
+      ...navOn.map(([l, i, h]) => ({ id: "n" + h, group: "Aller à", label: l, icon: <Icon name={i} size={15} />, run: go(h) })),
       ...ws.members.map((m) => ({ id: "m" + m.user_id, group: "Membres", label: m.profile.full_name, icon: <Avatar profile={m.profile} size={18} title={false} />, run: go(`${b}/members/${m.user_id}`) })),
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps

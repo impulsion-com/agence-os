@@ -13,6 +13,8 @@ import { PROJECT_STATUS, colorOf } from "@/lib/constants";
 import { MONTHS, WDL, addDays, diffDays, fmtDate, greeting, parseDay, today } from "@/lib/format";
 import { money, pct } from "@/lib/format";
 import { isOverdue } from "@/lib/tasks";
+import { Icon } from "@/components/ui/icon";
+import { MODULE, type ModuleId } from "@/lib/modules";
 import { useWorkspace } from "@/lib/workspace/context";
 import type { Profile } from "@/lib/types";
 import { ActivityList } from "./activity-line";
@@ -116,6 +118,7 @@ export function HomeView({ data }: { data: HomeData }) {
         ? `Tu as ${s.mineOpen} tâche${s.mineOpen > 1 ? "s" : ""} ouverte${s.mineOpen > 1 ? "s" : ""}, rien d'urgent pour l'instant.`
         : "Rien d'assigné pour l'instant, voici ce qui bouge dans l'espace.";
 
+  const intro = ws.has("projects") ? context : "Voici ce qui bouge dans ton espace.";
   const list = tab === "upcoming" ? s.myUpcoming : tab === "overdue" ? s.myOverdue : s.myDone;
 
   return (
@@ -126,7 +129,7 @@ export function HomeView({ data }: { data: HomeData }) {
             {greeting()}, {ws.me.full_name.split(/\s+/)[0] || "toi"}
           </h1>
           <p suppressHydrationWarning>
-            {dateLabel} · {context}
+            {dateLabel} · {intro}
           </p>
         </div>
         {ws.canWrite && (
@@ -137,43 +140,57 @@ export function HomeView({ data }: { data: HomeData }) {
                 Inviter
               </button>
             )}
-            <button className="btn" onClick={() => ui.create({ kind: "project" })}>
-              <FolderKanban size={14} />
-              Nouveau projet
-            </button>
-            <button className="btn btn-primary" onClick={() => ui.create({ kind: "task" })}>
-              <Plus size={14} />
-              Nouvelle tâche
-            </button>
+            {ws.has("projects") ? (
+              <>
+                <button className="btn" onClick={() => ui.create({ kind: "project" })}>
+                  <FolderKanban size={14} />
+                  Nouveau projet
+                </button>
+                <button className="btn btn-primary" onClick={() => ui.create({ kind: "task" })}>
+                  <Plus size={14} />
+                  Nouvelle tâche
+                </button>
+              </>
+            ) : ws.has("crm") ? (
+              <button className="btn btn-primary" onClick={() => ui.create({ kind: "deal" })}>
+                <Plus size={14} />
+                Nouveau deal
+              </button>
+            ) : null}
           </div>
         )}
       </div>
 
-      <div className="stats">
-        <Link href={`${ws.base}/projects`} className="stat">
-          <div className="k"><FolderKanban size={14} />Projets actifs</div>
-          <div className="v">{s.activeProjects.length}</div>
-          <div className={`d${s.atRisk ? " bad" : ""}`}>{s.atRisk ? `dont ${s.atRisk} à risque` : "aucun à risque"}</div>
-        </Link>
-        <Link href={`${ws.base}/my-tasks`} className="stat">
-          <div className="k"><CircleDashed size={14} />Tâches ouvertes</div>
-          <div className="v">{s.open}</div>
-          <div className="d">dont {s.mineOpen} assignée{s.mineOpen > 1 ? "s" : ""} à moi</div>
-        </Link>
-        <div className="stat">
-          <div className="k"><CircleCheck size={14} />Terminées</div>
-          <div className="v">{s.doneWeek}</div>
-          <div className="d ok">cette semaine</div>
+      {ws.has("projects") ? (
+  <div className="stats">
+          <Link href={`${ws.base}/projects`} className="stat">
+            <div className="k"><FolderKanban size={14} />Projets actifs</div>
+            <div className="v">{s.activeProjects.length}</div>
+            <div className={`d${s.atRisk ? " bad" : ""}`}>{s.atRisk ? `dont ${s.atRisk} à risque` : "aucun à risque"}</div>
+          </Link>
+          <Link href={`${ws.base}/my-tasks`} className="stat">
+            <div className="k"><CircleDashed size={14} />Tâches ouvertes</div>
+            <div className="v">{s.open}</div>
+            <div className="d">dont {s.mineOpen} assignée{s.mineOpen > 1 ? "s" : ""} à moi</div>
+          </Link>
+          <div className="stat">
+            <div className="k"><CircleCheck size={14} />Terminées</div>
+            <div className="v">{s.doneWeek}</div>
+            <div className="d ok">cette semaine</div>
+          </div>
+          <Link href={`${ws.base}/overview`} className="stat">
+            <div className="k"><Clock size={14} />En retard</div>
+            <div className={`v${s.overdue ? " bad" : ""}`}>{s.overdue}</div>
+            <div className={`d${s.overdue ? " bad" : ""}`}>{s.overdue ? "à traiter" : "tout est dans les temps"}</div>
+          </Link>
         </div>
-        <Link href={`${ws.base}/overview`} className="stat">
-          <div className="k"><Clock size={14} />En retard</div>
-          <div className={`v${s.overdue ? " bad" : ""}`}>{s.overdue}</div>
-          <div className={`d${s.overdue ? " bad" : ""}`}>{s.overdue ? "à traiter" : "tout est dans les temps"}</div>
-        </Link>
-      </div>
+      ) : (
+        <ModuleShortcuts />
+      )}
 
       <div className="dash">
         <div className="col-main">
+          {ws.has("projects") && (
           <section className="card" aria-labelledby="h-mytasks">
             <div className="card-h">
               <h2 id="h-mytasks">Mes tâches</h2>
@@ -221,16 +238,20 @@ export function HomeView({ data }: { data: HomeData }) {
               </EmptyState>
             )}
           </section>
+          )}
 
-          <ProjectsProgress tasks={data.tasks} />
+          {ws.has("projects") && <ProjectsProgress tasks={data.tasks} />}
 
-          <div className="dash-2">
-            <CommercialCard c={data.commercial} currency={cur} />
-            <PerformanceCard sp={data.spend} currency={cur} />
-          </div>
+          {(ws.has("crm") || ws.has("reporting")) && (
+            <div className={ws.has("crm") && ws.has("reporting") ? "dash-2" : undefined}>
+              {ws.has("crm") && <CommercialCard c={data.commercial} currency={cur} />}
+              {ws.has("reporting") && <PerformanceCard sp={data.spend} currency={cur} />}
+            </div>
+          )}
         </div>
 
         <div className="col-side">
+          {ws.has("projects") && (
           <section className="card" aria-labelledby="h-deadlines">
             <div className="card-h">
               <h2 id="h-deadlines">Échéances à venir</h2>
@@ -270,6 +291,7 @@ export function HomeView({ data }: { data: HomeData }) {
               </div>
             )}
           </section>
+          )}
 
           <section className="card" aria-labelledby="h-activity">
             <div className="card-h">
@@ -478,5 +500,37 @@ function PerformanceCard({ sp, currency }: { sp: HomeData["spend"]; currency: st
         </EmptyState>
       )}
     </section>
+  );
+}
+
+// Accueil sans gestion de projet : accès direct aux modules activés
+function ModuleShortcuts() {
+  const ws = useWorkspace();
+  const links: [ModuleId, string][] = [
+    ["crm", "/crm"], ["proposals", "/proposals"], ["onboarding", "/onboarding"], ["booking", "/booking"],
+    ["creatives", "/creatives"], ["reporting", "/reporting"], ["tracking", "/tracking"], ["links", "/links"],
+  ];
+  const on = links.filter(([m]) => ws.has(m));
+  return (
+    <div className="stats" style={{ marginBottom: 16 }}>
+      {on.map(([m, href]) => (
+        <Link key={m} href={ws.base + href} className="stat">
+          <div className="k">
+            <Icon name={MODULE[m].icon} size={14} />
+            {MODULE[m].name}
+          </div>
+          <div className="d" style={{ marginTop: 6 }}>{MODULE[m].desc}</div>
+        </Link>
+      ))}
+      {ws.isAdmin && on.length < links.length && (
+        <Link href={`${ws.base}/settings/modules`} className="stat">
+          <div className="k">
+            <Plus size={14} />
+            Ajouter des modules
+          </div>
+          <div className="d" style={{ marginTop: 6 }}>Gestion de projet, reporting, attribution…</div>
+        </Link>
+      )}
+    </div>
   );
 }

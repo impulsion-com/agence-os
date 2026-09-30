@@ -143,14 +143,18 @@ export function CompanyPage({
     );
   };
 
-  const tabs: { id: Tab; label: string; n?: number }[] = [
-    { id: "overview", label: "Vue d'ensemble" },
-    { id: "contacts", label: "Contacts", n: contacts.length },
-    { id: "deals", label: "Deals", n: deals.length },
-    { id: "projects", label: "Projets", n: projects.length },
-    { id: "proposals", label: "Propositions", n: proposals.length },
-    { id: "activity", label: "Activités", n: activities.length },
-  ];
+  // Onglets selon les modules activés de l'espace
+  const commercial = ws.has("crm") || ws.has("proposals") || ws.has("onboarding") || ws.has("booking");
+  const tabs = (
+    [
+      { id: "overview", label: "Vue d'ensemble" },
+      commercial && { id: "contacts", label: "Contacts", n: contacts.length },
+      ws.has("crm") && { id: "deals", label: "Deals", n: deals.length },
+      ws.has("projects") && { id: "projects", label: "Projets", n: projects.length },
+      ws.has("proposals") && { id: "proposals", label: "Propositions", n: proposals.length },
+      ws.has("crm") && { id: "activity", label: "Activités", n: activities.length },
+    ] as ({ id: Tab; label: string; n?: number } | false)[]
+  ).filter((t): t is { id: Tab; label: string; n?: number } => !!t);
 
   const newDeal = () => ui.create({ kind: "deal", defaults: { company_id: c.id, contact_id: contacts.length === 1 ? contacts[0].id : null } });
 
@@ -179,15 +183,19 @@ export function CompanyPage({
           </div>
         </div>
         <div className="crm-dhead-actions">
-          <Link href={`${ws.base}/reporting/${c.id}`} className="btn">
-            <ChartColumn size={14} /> Voir le reporting
-          </Link>
+          {ws.has("reporting") && (
+            <Link href={`${ws.base}/reporting/${c.id}`} className="btn">
+              <ChartColumn size={14} /> Voir le reporting
+            </Link>
+          )}
           {!ro && (
             <>
-              <SendOnboardingButton companyId={c.id} />
-              <button className="btn btn-primary" onClick={newDeal}>
-                <Plus size={14} /> Nouveau deal
-              </button>
+              {ws.has("onboarding") && <SendOnboardingButton companyId={c.id} />}
+              {ws.has("crm") && (
+                <button className="btn btn-primary" onClick={newDeal}>
+                  <Plus size={14} /> Nouveau deal
+                </button>
+              )}
               <Popover
                 align="end"
                 trigger={(open) => (
@@ -201,8 +209,8 @@ export function CompanyPage({
                     onClose={close}
                     items={[
                       { label: "Modifier", icon: <Pencil size={14} />, onSelect: () => setEditing(true) },
-                      { label: "Nouveau projet", icon: <FolderKanban size={14} />, onSelect: () => ui.create({ kind: "project", defaults: { company_id: c.id } }) },
-                      { label: "Nouvelle proposition", icon: <Plus size={14} />, onSelect: () => ui.create({ kind: "proposal", defaults: { company_id: c.id } }) },
+                      ...(ws.has("projects") ? [{ label: "Nouveau projet", icon: <FolderKanban size={14} />, onSelect: () => ui.create({ kind: "project", defaults: { company_id: c.id } }) }] : []),
+                      ...(ws.has("proposals") ? [{ label: "Nouvelle proposition", icon: <Plus size={14} />, onSelect: () => ui.create({ kind: "proposal", defaults: { company_id: c.id } }) }] : []),
                       { label: "", separator: true },
                       { label: "Supprimer l'entreprise", icon: <Trash2 size={14} />, danger: true, onSelect: () => setConfirmDel(true) },
                     ]}
@@ -310,12 +318,14 @@ export function CompanyPage({
               </div>
               <ContactRows contacts={contacts.slice(0, 5)} empty="Aucun contact pour l'instant." />
             </div>
-            <div className="card crm-panel">
-              <div className="card-h">
-                <h3>Deals ouverts <span className="count">{openDeals.length}</span></h3>
+            {ws.has("crm") && (
+              <div className="card crm-panel">
+                <div className="card-h">
+                  <h3>Deals ouverts <span className="count">{openDeals.length}</span></h3>
+                </div>
+                <DealRows compact deals={openDeals.slice(0, 5)} stages={stages} empty="Aucun deal en cours." />
               </div>
-              <DealRows compact deals={openDeals.slice(0, 5)} stages={stages} empty="Aucun deal en cours." />
-            </div>
+            )}
           </aside>
         </div>
       )}

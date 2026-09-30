@@ -60,6 +60,11 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 - Serveur MCP : Claude Code, Claude Desktop ou Cowork lisent et pilotent tâches, CRM, propositions,
   reporting et attribution avec un jeton personnel.
 
+**Modules à la carte**
+- À la création de l'espace, un profil type (media buyer freelance, CRM seul, gestion de projet seule,
+  agence complète, pilotage de la performance) ou un choix module par module ; modifiable à tout
+  moment dans Réglages > Modules. Menus, accueil, actions et outils MCP s'adaptent, les données restent.
+
 **Équipe**
 - Espaces multi-agences, invitations, rôles (propriétaire, admin, membre, invité en lecture
   seule), équipes (Media buying, Creative strategy, Account management, Tracking & data).

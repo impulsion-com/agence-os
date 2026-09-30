@@ -33,6 +33,8 @@ export interface Workspace {
   slug: string;
   accent: Accent;
   currency: string;
+  // modules activés (null = tous) : voir src/lib/modules.ts
+  modules: string[] | null;
   created_at: string;
 }
 

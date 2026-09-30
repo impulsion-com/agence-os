@@ -8,11 +8,14 @@ import type { Database, Json } from "@/lib/database.types";
 
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
+import { readModules, type ModuleId } from "@/lib/modules";
 import type { Member, Project } from "@/lib/types";
 import type { WorkspaceData } from "./load";
 
 interface Ctx extends WorkspaceData {
   base: string; // préfixe des URLs : /w/<slug>
+  modules: ModuleId[]; // modules activés dans l'espace
+  has: (m: ModuleId) => boolean;
   canWrite: boolean;
   isAdmin: boolean;
   member: (id: string | null | undefined) => Member | undefined;
@@ -31,9 +34,12 @@ export function WorkspaceProvider({ data, children }: { data: WorkspaceData; chi
     const projects = new Map(data.projects.map((p) => [p.id, p]));
     const companies = new Map(data.companies.map((c) => [c.id, c]));
     const labels = new Map(data.labels.map((l) => [l.id, l]));
+    const on = readModules(data.workspace.modules);
     return {
       ...data,
       base: `/w/${data.workspace.slug}`,
+      modules: on,
+      has: (m) => on.includes(m),
       canWrite: data.role !== "guest",
       isAdmin: data.role === "owner" || data.role === "admin",
       member: (id) => (id ? members.get(id) : undefined),

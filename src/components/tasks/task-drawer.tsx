@@ -501,7 +501,7 @@ function TaskBody(props: BodyProps) {
       {task.recurrence && <p className="faint td-note">À la fin de cette tâche, la prochaine occurrence sera créée automatiquement.</p>}
 
       <Description task={task} ro={ro} onSave={(description) => up({ description })} />
-      {isCreativeTask(task.label_ids.map((id) => ws.label(id)?.name ?? "")) && (
+      {ws.has("creatives") && isCreativeTask(task.label_ids.map((id) => ws.label(id)?.name ?? "")) && (
         <CreativeTaskLink taskId={task.id} projectId={task.project_id} taskTitle={task.title} />
       )}
       <Subtasks {...props} ro={ro} />

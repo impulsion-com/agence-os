@@ -10,6 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { ObjIcon } from "@/components/ui/misc";
 import { Menu } from "@/components/ui/overlay";
 import { APP_NAME, PROJECT_STATUS } from "@/lib/constants";
+import { MODULES, needsCompanies } from "@/lib/modules";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { applyPrefs } from "@/lib/prefs";
 import { useMutate, useWorkspace } from "@/lib/workspace/context";
@@ -79,6 +80,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
   const path = usePathname();
   const mutate = useMutate();
   const b = ws.base;
+  const has = ws.has;
 
   const active = ws.projects.filter((p) => !p.archived_at);
   const favs = ws.favorites.map((id) => ws.project(id)).filter((p) => p && !p.archived_at);
@@ -124,37 +126,48 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
       <div className="side-scroll">
         <Item href={b} icon="house" label="Accueil" exact />
         <Item href={`${b}/inbox`} icon="inbox" label="Boîte de réception" count={ws.unread} accent />
-        <Item href={`${b}/my-tasks`} icon="circle-check" label="Mes tâches" count={ws.myOpen} />
-        <Item href={`${b}/favorites`} icon="star" label="Favoris" />
+        {has("projects") && <Item href={`${b}/my-tasks`} icon="circle-check" label="Mes tâches" count={ws.myOpen} />}
+        {has("projects") && <Item href={`${b}/favorites`} icon="star" label="Favoris" />}
         <button className="side-item" onClick={() => ui.setPalette(true)}>
           <Icon name="search" size={16} />
           <span>Rechercher</span>
           <kbd style={{ marginLeft: "auto" }}>⌘K</kbd>
         </button>
 
-        <Section id="prod" title="Production">
-          <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
-          <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
-          <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
-          <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
-          <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
-          <Item href={`${b}/creatives`} icon="palette" label="Bibliothèque créa" />
-        </Section>
+        {(has("projects") || has("creatives")) && (
+          <Section id="prod" title="Production">
+            {has("projects") && (
+              <>
+                <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
+                <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
+                <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
+                <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
+                <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
+              </>
+            )}
+            {has("creatives") && <Item href={`${b}/creatives`} icon="palette" label="Bibliothèque créa" />}
+          </Section>
+        )}
 
-        <Section id="com" title="Commercial">
-          <Item href={`${b}/crm`} icon="handshake" label="Pipeline" exact />
-          <Item href={`${b}/crm/companies`} icon="building-2" label="Clients & prospects" />
-          <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />
-          <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />
-          <Item href={`${b}/onboarding`} icon="list-checks" label="Onboarding clients" />
-          <Item href={`${b}/booking`} icon="calendar" label="Rendez-vous" />
-        </Section>
+        {/* La liste des clients reste visible dès qu'un module s'en sert, même sans CRM */}
+        {(has("crm") || has("proposals") || has("onboarding") || has("booking") || needsCompanies(ws.modules)) && (
+          <Section id="com" title={has("crm") || has("proposals") || has("onboarding") || has("booking") ? "Commercial" : "Clients"}>
+            {has("crm") && <Item href={`${b}/crm`} icon="handshake" label="Pipeline" exact />}
+            {needsCompanies(ws.modules) && <Item href={`${b}/crm/companies`} icon="building-2" label={has("crm") ? "Clients & prospects" : "Clients"} />}
+            {has("crm") && <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />}
+            {has("proposals") && <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />}
+            {has("onboarding") && <Item href={`${b}/onboarding`} icon="list-checks" label="Onboarding clients" />}
+            {has("booking") && <Item href={`${b}/booking`} icon="calendar" label="Rendez-vous" />}
+          </Section>
+        )}
 
-        <Section id="perf" title="Performance">
-          <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />
-          <Item href={`${b}/tracking`} icon="mouse-pointer-click" label="Attribution" />
-          <Item href={`${b}/links`} icon="link" label="Liens trackés" />
-        </Section>
+        {(has("reporting") || has("tracking") || has("links")) && (
+          <Section id="perf" title="Performance">
+            {has("reporting") && <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />}
+            {has("tracking") && <Item href={`${b}/tracking`} icon="mouse-pointer-click" label="Attribution" />}
+            {has("links") && <Item href={`${b}/links`} icon="link" label="Liens trackés" />}
+          </Section>
+        )}
 
         <Section id="team" title="Agence" defaultOpen={false}>
           <Item href={`${b}/members`} icon="users" label="Membres" />
@@ -162,6 +175,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <Item href={`${b}/activity`} icon="activity" label="Activité" />
         </Section>
 
+        {has("projects") && (
         <Section
           id="proj"
           title="Projets"
@@ -204,6 +218,14 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           })}
           {!sideProjects.length && <div className="faint" style={{ padding: "4px 8px", fontSize: "var(--fs-sm)" }}>Aucun projet pour l&apos;instant</div>}
         </Section>
+        )}
+
+        {ws.isAdmin && ws.modules.length < MODULES.length && (
+          <Link href={`${b}/settings/modules`} className="side-item side-add-mod">
+            <Plus size={15} />
+            <span>Ajouter des modules</span>
+          </Link>
+        )}
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", padding: 8 }}>

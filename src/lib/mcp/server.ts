@@ -6,7 +6,7 @@ import { APP_NAME } from "@/lib/constants";
 import type { Json } from "@/lib/database.types";
 import { AuthError, authenticate, readToken } from "./auth";
 import { LIMITS, clientIp, hit, peek } from "./rate-limit";
-import { TOOLS } from "./tools";
+import { TOOLS, TOOL_MODULE } from "./tools";
 import { ToolError, type AnyTool, type McpContext } from "./types";
 
 // Serveur MCP en Streamable HTTP, mode sans état : chaque POST porte un message
@@ -55,7 +55,11 @@ function inputSchema(t: AnyTool) {
   return schemaCache.get(t.name);
 }
 
-const visible = (ctx: McpContext) => TOOLS.filter((t) => !t.write || ctx.canWrite);
+const moduleOn = (ctx: McpContext, name: string) => {
+  const m = TOOL_MODULE.get(name);
+  return !m || ctx.workspace.modules.includes(m);
+};
+const visible = (ctx: McpContext) => TOOLS.filter((t) => (!t.write || ctx.canWrite) && moduleOn(ctx, t.name));
 
 function describe(t: AnyTool) {
   return {
@@ -78,6 +82,7 @@ async function callTool(ctx: McpContext, params: Record<string, unknown>, struct
   const name = String(params.name ?? "");
   const tool = TOOLS.find((t) => t.name === name);
   if (!tool) return { error: { code: -32602, message: `Outil inconnu : ${name}` } };
+  if (!moduleOn(ctx, name)) return { error: { code: -32602, message: `Le module de l'outil ${name} est désactivé dans cet espace (Réglages > Modules).` } };
   const text = (s: string, isError = false, data?: unknown) => ({
     result: { content: [{ type: "text", text: s }], ...(structured && data ? { structuredContent: data } : {}), ...(isError ? { isError: true } : {}) },
   });

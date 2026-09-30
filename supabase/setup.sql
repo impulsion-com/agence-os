@@ -1,5 +1,5 @@
 -- Agence OS : installation complète (généré par scripts/build-setup-sql.mjs, ne pas modifier à la main)
--- Migrations incluses : 0001_schema.sql, 0002_member_profile_fk.sql, 0003_demo_data.sql, 0005_revoke_anon_helpers.sql, 0020_workspace_notifications.sql, 0040_proposals.sql, 0050_reporting.sql, 0060_tracking_links.sql, 0061_tracking_attribution.sql, 0062_links.sql, 0063_tracking_secret.sql, 0064_demo_tracking_chunks.sql, 0070_proposal_signature.sql, 0071_onboarding.sql, 0072_creatives.sql, 0073_booking.sql, 0074_api_tokens.sql
+-- Migrations incluses : 0001_schema.sql, 0002_member_profile_fk.sql, 0003_demo_data.sql, 0005_revoke_anon_helpers.sql, 0020_workspace_notifications.sql, 0040_proposals.sql, 0050_reporting.sql, 0060_tracking_links.sql, 0061_tracking_attribution.sql, 0062_links.sql, 0063_tracking_secret.sql, 0064_demo_tracking_chunks.sql, 0070_proposal_signature.sql, 0071_onboarding.sql, 0072_creatives.sql, 0073_booking.sql, 0074_api_tokens.sql, 0080_workspace_modules.sql
 
 -- =====================================================================
 -- 0001_schema.sql
@@ -4141,3 +4141,10 @@ revoke execute on function public.mcp_tracking_stats(uuid, uuid, uuid, date, dat
 grant execute on function public.mcp_act_as(uuid, uuid) to service_role;
 grant execute on function public.mcp_tracking_conversions(uuid, uuid, uuid, date, date, int, text[]) to service_role;
 grant execute on function public.mcp_tracking_stats(uuid, uuid, uuid, date, date) to service_role;
+
+-- =====================================================================
+-- 0080_workspace_modules.sql
+-- =====================================================================
+-- Modules activés par espace (null = tous, pour les espaces existants).
+-- Ergonomie seulement : la RLS reste la protection des données.
+alter table public.workspaces add column if not exists modules text[];
