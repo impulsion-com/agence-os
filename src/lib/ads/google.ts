@@ -10,12 +10,13 @@ const API = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const clean = (id: string) => id.replace(/\D/g, "");
 export const fmtCustomerId = (id: string) => clean(id).replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3");
 
-export function googleAuthUrl(redirectUri: string, state: string) {
+/** URL de consentement Google. `scopes` : Google Ads par défaut, analytics.readonly pour GA4 (même client OAuth). */
+export function googleAuthUrl(redirectUri: string, state: string, scopes: string[] = GOOGLE_SCOPES) {
   const p = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: GOOGLE_SCOPES.join(" "),
+    scope: scopes.join(" "),
     access_type: "offline", // pour obtenir un refresh token
     prompt: "consent", // force le refresh token même si l'accès a déjà été accordé
     include_granted_scopes: "true",
@@ -41,7 +42,7 @@ async function tokenRequest(body: Record<string, string>) {
   };
   if (!res.ok || !json.access_token) {
     if (json.error === "invalid_grant")
-      throw new AdsError("L'accès Google a été révoqué ou a expiré : reconnecte Google Ads dans Réglages > Connexions publicitaires.", "token");
+      throw new AdsError("L'accès Google a été révoqué ou a expiré : reconnecte ce compte Google dans Réglages > Connexions.", "token");
     throw new AdsError(`Google OAuth : ${json.error_description || json.error || res.status}`);
   }
   return json;

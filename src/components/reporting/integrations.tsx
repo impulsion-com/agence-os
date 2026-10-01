@@ -14,13 +14,16 @@ import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import { ago, fmtDate } from "@/lib/format";
 import { platformColor, platformName } from "@/lib/ads/metrics";
 import type { AvailableAccount, ConnectionPublic, TrackedAccount } from "@/lib/ads/types";
+import type { AnalyticsSource } from "@/lib/analytics/types";
+import { ClarityCard, Ga4Card, OtherSources } from "./analytics-integrations";
 import { Crumbs, useSync } from "./common";
 
 interface Status {
   meta: { configured: boolean; missing: string[] };
   google: { configured: boolean; missing: string[] };
+  ga4: { configured: boolean; missing: string[] };
   cron: boolean;
-  redirect: { meta: string; google: string };
+  redirect: { meta: string; google: string; ga4: string };
   cronPath: string;
 }
 
@@ -28,6 +31,8 @@ interface Props {
   status: Status;
   connections: ConnectionPublic[];
   accounts: TrackedAccount[];
+  /** Propriétés GA4 et projets Clarity suivis (sans aucun jeton) */
+  sources: AnalyticsSource[];
   notice: { connected?: string; accounts?: string; error?: string };
 }
 
@@ -51,7 +56,7 @@ const daysUntil = (ts: string) => Math.round((new Date(ts).getTime() - Date.now(
 
 const fmtGoogleId = (id: string) => id.replace(/^(\d{3})(\d{3})(\d{4})$/, "$1-$2-$3");
 
-export function Integrations({ status, connections, accounts, notice }: Props) {
+export function Integrations({ status, connections, accounts, sources, notice }: Props) {
   const ws = useWorkspace();
   const router = useRouter();
   const path = usePathname();
@@ -62,11 +67,11 @@ export function Integrations({ status, connections, accounts, notice }: Props) {
 
   return (
     <div className="page" style={{ maxWidth: 920 }}>
-      <Crumbs items={[{ label: "Réglages", href: `${ws.base}/settings` }, { label: "Connexions publicitaires" }]} />
+      <Crumbs items={[{ label: "Réglages", href: `${ws.base}/settings` }, { label: "Connexions" }]} />
       <div className="ph">
         <div>
-          <h1>Connexions publicitaires</h1>
-          <p>Connecte tes comptes Meta Ads et Google Ads en lecture seule, puis associe chaque compte à un client pour alimenter le reporting.</p>
+          <h1>Connexions</h1>
+          <p>Connecte en lecture seule tes plateformes publicitaires et les outils d&apos;analyse du site, puis associe chaque compte, propriété ou projet à un client pour alimenter le reporting.</p>
         </div>
         <div className="actions">
           <Link className="btn" href={`${ws.base}/reporting`}>
@@ -79,10 +84,14 @@ export function Integrations({ status, connections, accounts, notice }: Props) {
         <div className="rp-note" role="status" style={{ marginBottom: 16, background: "var(--green-soft)", borderColor: "color-mix(in srgb, var(--green) 25%, transparent)" }}>
           <CircleCheck size={15} style={{ color: "var(--green)" }} />
           <span style={{ flex: 1 }}>
-            {INFO[notice.connected as "meta" | "google"]?.name ?? "Plateforme"} connecté.{" "}
-            {Number(notice.accounts) > 0
-              ? `${notice.accounts} compte${Number(notice.accounts) > 1 ? "s" : ""} publicitaire${Number(notice.accounts) > 1 ? "s" : ""} trouvé${Number(notice.accounts) > 1 ? "s" : ""} : coche ceux à suivre et associe-les à un client.`
-              : "Aucun compte publicitaire trouvé pour l'instant : vérifie tes accès puis actualise la liste."}
+            {notice.connected === "ga4" ? "Google Analytics" : (INFO[notice.connected as "meta" | "google"]?.name ?? "Plateforme")} connecté.{" "}
+            {notice.connected === "ga4"
+              ? Number(notice.accounts) > 0
+                ? `${notice.accounts} propriété${Number(notice.accounts) > 1 ? "s" : ""} GA4 trouvée${Number(notice.accounts) > 1 ? "s" : ""} : coche celles à suivre et associe-les à un client.`
+                : "Aucune propriété GA4 trouvée pour l'instant : vérifie les accès de ce compte Google puis actualise la liste."
+              : Number(notice.accounts) > 0
+                ? `${notice.accounts} compte${Number(notice.accounts) > 1 ? "s" : ""} publicitaire${Number(notice.accounts) > 1 ? "s" : ""} trouvé${Number(notice.accounts) > 1 ? "s" : ""} : coche ceux à suivre et associe-les à un client.`
+                : "Aucun compte publicitaire trouvé pour l'instant : vérifie tes accès puis actualise la liste."}
           </span>
           <button className="btn btn-ghost btn-sm btn-icon" onClick={clearNotice} aria-label="Fermer">
             <X size={13} />
@@ -103,6 +112,9 @@ export function Integrations({ status, connections, accounts, notice }: Props) {
         {(["meta", "google"] as const).map((p) => (
           <PlatformCard key={p} platform={p} status={status} connections={connections.filter((c) => c.platform === p)} accounts={accounts} activeConnIds={connections.map((c) => c.id)} />
         ))}
+
+        <Ga4Card status={{ ga4: status.ga4, redirect: status.redirect.ga4 }} connections={connections.filter((c) => c.platform === "ga4")} sources={sources} activeConnIds={connections.map((c) => c.id)} />
+        <ClarityCard sources={sources} />
 
         {detached.length > 0 && (
           <div className="card">
@@ -136,12 +148,17 @@ export function Integrations({ status, connections, accounts, notice }: Props) {
           </div>
         )}
 
+        <OtherSources sources={sources} activeConnIds={connections.map((c) => c.id)} />
+
         <div className="card">
           <div className="card-h">
             <div className="head">
               <div>
                 <h2>Synchronisation automatique</h2>
-                <p>Chaque jour, les 7 derniers jours sont relus pour intégrer les conversions attribuées en retard. La première synchro d&apos;un compte importe 90 jours.</p>
+                <p>
+                  Chaque jour, les 7 derniers jours des comptes publicitaires et des propriétés GA4 sont relus (conversions attribuées en retard, données retraitées), et un instantané de chaque projet Clarity est
+                  enregistré. La première synchro d&apos;un compte ou d&apos;une propriété importe 90 jours.
+                </p>
               </div>
             </div>
             {status.cron ? <Badge color="var(--green)">Active</Badge> : <Badge color="var(--amber)">À configurer</Badge>}
@@ -177,18 +194,21 @@ function TechInfo({ status }: { status: Status }) {
         URL de redirection OAuth à déclarer
       </summary>
       <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-        {(["meta", "google"] as const).map((p) => (
-          <div key={p} className="field">
-            <span className="label">{INFO[p].name}</span>
-            <div className="rp-share-link">
-              <input className="input" readOnly value={status.redirect[p]} onFocus={(e) => e.target.select()} aria-label={`URL de redirection ${INFO[p].name}`} />
-              <button className="btn btn-icon" onClick={() => copy(status.redirect[p])} aria-label="Copier">
-                <Copy size={14} />
-              </button>
+        {(["meta", "google", "ga4"] as const).map((p) => {
+          const name = p === "ga4" ? "Google Analytics 4" : INFO[p].name;
+          return (
+            <div key={p} className="field">
+              <span className="label">{name}</span>
+              <div className="rp-share-link">
+                <input className="input" readOnly value={status.redirect[p]} onFocus={(e) => e.target.select()} aria-label={`URL de redirection ${name}`} />
+                <button className="btn btn-icon" onClick={() => copy(status.redirect[p])} aria-label="Copier">
+                  <Copy size={14} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-        <span className="hint faint" style={{ fontSize: 12 }}>Le pas à pas complet est dans docs/reporting.md.</span>
+          );
+        })}
+        <span className="hint faint" style={{ fontSize: 12 }}>Le pas à pas complet est dans docs/reporting.md et docs/analytics.md.</span>
       </div>
     </details>
   );

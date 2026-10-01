@@ -151,6 +151,10 @@ async function main() {
   check(!perfC.isError, "get_performance d'un client (mois dernier)", perfC.text);
   const camps = await tool(R.token, "get_campaigns", { sort_by: "roas", limit: 5 });
   check(!camps.isError, "get_campaigns triées par ROAS", camps.text);
+  const siteA = await tool(R.token, "get_site_analytics", { company: "Maison Lumen", period: "90d", limit: 5 });
+  check(!siteA.isError && siteA.data?.ga4?.current?.sessions > 0 && Array.isArray(siteA.data?.clarity?.problem_pages) && /Pages à problèmes/.test(siteA.text), "get_site_analytics (GA4 et Clarity de démo)", siteA.text);
+  const siteNone = await tool(R.token, "get_site_analytics", { company: "Vélo Nord" });
+  check(!siteNone.isError && siteNone.data?.ga4 === null && /Aucune source d'analytics/.test(siteNone.text), "get_site_analytics d'un client sans source : message clair", siteNone.text);
   const attr = await tool(R.token, "get_attribution", { company: "Maison Lumen", goal: "sales", model: "linear" });
   check(!attr.isError && attr.data?.channels, `get_attribution (${attr.data?.totals?.conversions ?? 0} ventes)`, attr.text);
   const links = await tool(R.token, "list_links", { limit: 5 });

@@ -61,25 +61,28 @@ function linePath(xs: number[], ys: (number | null)[]) {
 }
 
 // ---------------------------------------------------------------------
-// Graphique quotidien : dépense (barres) au-dessus, indicateur choisi (ligne) en dessous.
+// Graphique quotidien à deux panneaux : une série en barres au-dessus, une série en ligne
+// en dessous (avec, si on veut, la même série sur la période précédente).
 // Deux panneaux avec chacun leur axe, alignés sur le même axe du temps
 // (jamais deux échelles sur un même graphique).
 // ---------------------------------------------------------------------
-export function DailyChart({
+export interface ChartSeries {
+  label: string;
+  /** valeur exacte (infobulle) */
+  format: (v: number | null) => string;
+  /** valeur abrégée (axe) */
+  compact: (v: number) => string;
+}
+
+export function DualChart({
   days,
-  spend,
-  metric,
-  values,
-  prev,
-  currency,
+  top,
+  bottom,
   prevLabel = "Période précédente",
 }: {
   days: string[];
-  spend: number[];
-  metric: Kpi;
-  values: (number | null)[];
-  prev?: (number | null)[];
-  currency: string;
+  top: ChartSeries & { values: (number | null)[] };
+  bottom: ChartSeries & { values: (number | null)[]; prev?: (number | null)[] };
   prevLabel?: string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
@@ -96,8 +99,11 @@ export function DailyChart({
   const band = (W - L - R) / n;
   const bw = Math.max(1, Math.min(24, band - 2));
   const xs = days.map((_, i) => L + band * i + band / 2);
+  const bars = top.values;
+  const values = bottom.values;
+  const prev = bottom.prev;
 
-  const s1 = useMemo(() => scale(spend), [spend]);
+  const s1 = useMemo(() => scale(bars), [bars]);
   const s2 = useMemo(() => scale([...values, ...(prev ?? [])]), [values, prev]);
   const y1 = (v: number) => top1 + h1 - (v / s1.top) * h1;
   const y2 = (v: number) => top2 + h2 - (v / s2.top) * h2;
@@ -118,14 +124,14 @@ export function DailyChart({
     <div className={`rp-chart${hover !== null ? " hovering" : ""}`} ref={ref}>
       <div className="rp-legend" style={{ padding: "0 0 8px" }}>
         <span style={{ ["--c" as string]: "var(--viz-1)" }}>
-          <i className="sw" /> Dépense
+          <i className="sw" /> {top.label}
         </span>
         <span style={{ ["--c" as string]: "var(--viz-2)" }}>
-          <i className="ln" /> {KPI_LABEL[metric]}
+          <i className="ln" /> {bottom.label}
         </span>
         {prev && (
           <span style={{ ["--c" as string]: "var(--viz-prev)" }}>
-            <i className="ln" /> {KPI_LABEL[metric]}, {prevLabel.toLowerCase()}
+            <i className="ln" /> {bottom.label}, {prevLabel.toLowerCase()}
           </span>
         )}
       </div>
@@ -135,7 +141,7 @@ export function DailyChart({
           height={H}
           role="img"
           tabIndex={0}
-          aria-label={`Dépense quotidienne et ${KPI_LABEL[metric]} par jour. Utilise les flèches pour parcourir les jours.`}
+          aria-label={`${top.label} et ${bottom.label} par jour. Utilise les flèches pour parcourir les jours.`}
           onPointerMove={(e) => pick(e.clientX, e.currentTarget.getBoundingClientRect())}
           onPointerLeave={() => setHover(null)}
           onBlur={() => setHover(null)}
@@ -145,8 +151,8 @@ export function DailyChart({
             else if (e.key === "Escape") setHover(null);
           }}
         >
-          {/* Panneau 1 : dépense */}
-          <text className="panel-t" x={0} y={top1 - 10}>Dépense</text>
+          {/* Panneau 1 : barres */}
+          <text className="panel-t" x={0} y={top1 - 10}>{top.label}</text>
           <g className="grid">
             {s1.ticks.slice(1).map((t) => (
               <line key={t} x1={L} x2={W - R} y1={y1(t)} y2={y1(t)} />
@@ -154,16 +160,16 @@ export function DailyChart({
           </g>
           {s1.ticks.map((t) => (
             <text key={t} x={L - 8} y={y1(t) + 3.5} textAnchor="end">
-              {fmtCompact("spend", t, currency)}
+              {top.compact(t)}
             </text>
           ))}
-          {spend.map((v, i) => (
-            <path key={i} className={`bar${hover === i ? " on" : ""}`} d={barPath(xs[i] - bw / 2, y1(v), bw, top1 + h1 - y1(v))} />
+          {bars.map((v, i) => (
+            <path key={i} className={`bar${hover === i ? " on" : ""}`} d={barPath(xs[i] - bw / 2, y1(v ?? 0), bw, top1 + h1 - y1(v ?? 0))} />
           ))}
           <line className="base" x1={L} x2={W - R} y1={top1 + h1} y2={top1 + h1} />
 
-          {/* Panneau 2 : indicateur */}
-          <text className="panel-t" x={0} y={top2 - 10}>{KPI_LABEL[metric]}</text>
+          {/* Panneau 2 : ligne */}
+          <text className="panel-t" x={0} y={top2 - 10}>{bottom.label}</text>
           <g className="grid">
             {s2.ticks.slice(1).map((t) => (
               <line key={t} x1={L} x2={W - R} y1={y2(t)} y2={y2(t)} />
@@ -171,12 +177,16 @@ export function DailyChart({
           </g>
           {s2.ticks.map((t) => (
             <text key={t} x={L - 8} y={y2(t) + 3.5} textAnchor="end">
-              {fmtCompact(metric, t, currency)}
+              {bottom.compact(t)}
             </text>
           ))}
           <line className="base" x1={L} x2={W - R} y1={top2 + h2} y2={top2 + h2} />
           {prev && <path className="line prev" d={linePath(xs, prev.map((v) => (v === null ? null : y2(v))))} />}
           <path className="line" d={linePath(xs, values.map((v) => (v === null ? null : y2(v))))} />
+          {/* Point isolé (jour entouré de jours sans donnée) : une ligne seule ne le montrerait pas */}
+          {values.map((v, i) =>
+            v !== null && (values[i - 1] ?? null) === null && (values[i + 1] ?? null) === null ? <circle key={i} className="pt" cx={xs[i]} cy={y2(v)} r={2.5} /> : null,
+          )}
 
           {/* Axe du temps */}
           {xTicks.map(({ d, i }) => (
@@ -197,12 +207,40 @@ export function DailyChart({
       {hover !== null && (
         <div className="rp-tip" style={{ left: flip ? undefined : tipLeft, right: flip ? width - (xs[hover] / W) * width + 12 : undefined, top: 30 }} role="status">
           <div className="h">{fmtDate(days[hover], true)}</div>
-          <TipRow color="var(--viz-1)" label="Dépense" value={fmtKpi("spend", spend[hover], currency)} />
-          <TipRow color="var(--viz-2)" label={KPI_LABEL[metric]} value={fmtKpi(metric, values[hover], currency)} />
-          {prev && <TipRow color="var(--viz-prev)" label={prevLabel} value={fmtKpi(metric, prev[hover] ?? null, currency)} />}
+          <TipRow color="var(--viz-1)" label={top.label} value={top.format(bars[hover] ?? null)} />
+          <TipRow color="var(--viz-2)" label={bottom.label} value={bottom.format(values[hover] ?? null)} />
+          {prev && <TipRow color="var(--viz-prev)" label={prevLabel} value={bottom.format(prev[hover] ?? null)} />}
         </div>
       )}
     </div>
+  );
+}
+
+/** Dépense (barres) et indicateur publicitaire choisi (ligne). */
+export function DailyChart({
+  days,
+  spend,
+  metric,
+  values,
+  prev,
+  currency,
+  prevLabel = "Période précédente",
+}: {
+  days: string[];
+  spend: number[];
+  metric: Kpi;
+  values: (number | null)[];
+  prev?: (number | null)[];
+  currency: string;
+  prevLabel?: string;
+}) {
+  return (
+    <DualChart
+      days={days}
+      prevLabel={prevLabel}
+      top={{ label: "Dépense", values: spend, format: (v) => fmtKpi("spend", v, currency), compact: (v) => fmtCompact("spend", v, currency) }}
+      bottom={{ label: KPI_LABEL[metric], values, prev, format: (v) => fmtKpi(metric, v, currency), compact: (v) => fmtCompact(metric, v, currency) }}
+    />
   );
 }
 

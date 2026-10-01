@@ -1,6 +1,6 @@
 # Reporting publicitaire : configurer Meta Ads et Google Ads
 
-Tout se fait en lecture seule : l'application ne peut ni créer, ni modifier, ni mettre en pause une campagne. Les jetons restent côté serveur (table `ad_connections`, inaccessible depuis le navigateur). Remplace `https://agence.exemple.fr` par ta valeur de `NEXT_PUBLIC_APP_URL`. Les URL de redirection exactes sont aussi affichées et copiables dans Réglages > Connexions publicitaires.
+Tout se fait en lecture seule : l'application ne peut ni créer, ni modifier, ni mettre en pause une campagne. Les jetons restent côté serveur (table `ad_connections`, inaccessible depuis le navigateur). Remplace `https://agence.exemple.fr` par ta valeur de `NEXT_PUBLIC_APP_URL`. Les URL de redirection exactes sont aussi affichées et copiables dans Réglages > Connexions.
 
 | Étape | Où | Résultat |
 | --- | --- | --- |
@@ -8,7 +8,7 @@ Tout se fait en lecture seule : l'application ne peut ni créer, ni modifier, ni
 | 2. Projet Google Cloud | console.cloud.google.com | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | 3. Jeton développeur | ads.google.com (compte administrateur) | `GOOGLE_ADS_DEVELOPER_TOKEN` |
 | 4. Synchro quotidienne | Vercel ou autre | `CRON_SECRET` |
-| 5. Connexion et association | Agence OS > Réglages > Connexions publicitaires | Reporting alimenté |
+| 5. Connexion et association | Agence OS > Réglages > Connexions | Reporting alimenté |
 
 ## 1. Meta Ads
 
@@ -57,7 +57,7 @@ Facultatif : `OAUTH_STATE_SECRET` (signature du `state` OAuth ; par défaut, la 
 
 ## 4. Dans Agence OS
 
-1. Réglages > Connexions publicitaires (admin) : Connecter Meta Ads ou Google Ads.
+1. Réglages > Connexions (admin) : Connecter Meta Ads ou Google Ads.
 2. Coche les comptes à suivre (90 jours importés aussitôt) et **associe chaque compte à un client**. Un compte sans client n'apparaît pas dans le reporting.
 3. Objectifs (fiche client) : budget et conversions mensuels (ramenés à la période), CPA, ROAS, CTR, CPC. Vert = atteint, ambre = proche (écart de moins de 15 %, budget à ± 25 %), rouge = loin.
 4. Nouveau rapport > Partager : le lien `/r/<jeton>` est public et imprimable en PDF. « Désactiver le partage » coupe le lien.

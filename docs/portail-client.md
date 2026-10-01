@@ -105,7 +105,7 @@ La page Portail client (menu Commercial) résume tout : portails actifs, personn
 | Onglet | Fonctionnalité | Module requis | Contenu |
 | --- | --- | --- | --- |
 | Accueil | toujours | aucun | mot de l'agence, à valider, nouveautés, résumé 30 jours, rendez-vous, onboarding |
-| Performance | `reporting` | reporting | période, KPI et objectifs, graphique, campagnes, rapports publiés |
+| Performance | `reporting` | reporting | publicité (KPI, objectifs, campagnes), site (GA4), comportement (Clarity), rapports publiés |
 | Projet | `tasks` | projects | tâches partagées par statut, fiche, échanges, validation |
 | Créas | `creatives` | creatives | créas soumises, approbation ou demande de modifications |
 | Fichiers | `files` | projects | fichiers partagés, aperçu, téléchargement, dépôt |

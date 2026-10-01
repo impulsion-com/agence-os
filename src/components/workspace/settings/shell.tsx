@@ -47,7 +47,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Reporting",
     items: [
-      { href: "integrations", icon: "plug", label: "Connexions publicitaires", module: "reporting" },
+      { href: "integrations", icon: "plug", label: "Connexions", module: "reporting" },
       { href: "utm", icon: "link", label: "Conventions UTM", module: "links" },
     ],
   },

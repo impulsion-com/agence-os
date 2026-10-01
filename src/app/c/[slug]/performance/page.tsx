@@ -4,6 +4,7 @@ import { FeatureOff, LoadError } from "@/components/portal/bits";
 import { PerformanceView, ReportReader } from "@/components/portal/performance";
 import type { ReportData } from "@/lib/ads/load";
 import { resolvePeriod } from "@/lib/ads/metrics";
+import type { SiteAnalytics } from "@/lib/analytics/types";
 import { hasFeature, resolvePortal } from "@/lib/portal/load";
 import { UUID } from "@/lib/portal/nav";
 import type { PortalReporting } from "@/lib/portal/types";
@@ -25,7 +26,11 @@ export default async function PortalPerformancePage({ params, searchParams }: Pa
   }
 
   const period = resolvePeriod(sp);
-  const { data, error } = await p.sb.rpc("portal_reporting", { p_company: company, p_start: period.start, p_end: period.end, p_prev_start: period.prevStart });
+  // Publicité, puis site (GA4) et comportement (Clarity) : deux fonctions portal_*, chacune vérifie l'accès
+  const [{ data, error }, site] = await Promise.all([
+    p.sb.rpc("portal_reporting", { p_company: company, p_start: period.start, p_end: period.end, p_prev_start: period.prevStart }),
+    p.sb.rpc("portal_site_analytics", { p_company: company, p_start: period.start, p_end: period.end, p_prev_start: period.prevStart, p_prev_end: period.prevEnd }),
+  ]);
   if (error || !data) return <LoadError />;
-  return <PerformanceView data={data as unknown as PortalReporting} period={period} />;
+  return <PerformanceView data={data as unknown as PortalReporting} analytics={(site.data as unknown as SiteAnalytics | null) ?? null} period={period} />;
 }

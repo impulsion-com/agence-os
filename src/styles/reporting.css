@@ -92,6 +92,7 @@
 .rp-chart .line { fill: none; stroke: var(--viz-2); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .rp-chart .line.prev { stroke: var(--viz-prev); stroke-width: 1.5; }
 .rp-chart .dot { fill: var(--viz-2); stroke: var(--surface); stroke-width: 2; }
+.rp-chart .pt { fill: var(--viz-2); }
 .rp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-2); }
 .rp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .rp-legend .sw { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
@@ -256,3 +257,98 @@ ul.rp-steps { list-style: disc; }
 .rp-conn .head { flex: 1 1 240px; }
 .rp-note > * { min-width: 0; }
 .rp-note code { overflow-wrap: anywhere; }
+
+/* ---------- Analytics de site (GA4, Clarity) ---------- */
+/* Nombre de cartes d'une rangée (les règles responsives ci-dessus gardent la main sous 1240 px) */
+@media (min-width: 1241px) {
+  .rp-kpis.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rp-kpis.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .rp-kpis.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.rp-doc .rp-kpis.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rp-kpi .tg .rp-spark { flex-shrink: 0; }
+.rp-kpi .src { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-2xs); color: var(--text-3); margin-top: 8px; }
+
+.rp-grid.top { align-items: start; }
+/* Blocs empilés d'une section de rapport (une colonne qui ne s'élargit jamais au-delà de la page) */
+.rp-flow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+/* Sélecteur d'indicateur : défile sur lui-même plutôt que d'élargir la carte sur mobile */
+.rp-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.rp-seg::-webkit-scrollbar { display: none; }
+.rp-seg button { white-space: nowrap; flex-shrink: 0; }
+.rp-tbl td.two { padding-top: 7px; padding-bottom: 7px; }
+/* Tableau à nombreuses colonnes (reporting global avec les colonnes GA4) : cellules resserrées */
+.rp-tbl.tight th, .rp-tbl.tight td { padding-left: 7px; padding-right: 7px; }
+
+/* Onglets du tableau de bord client */
+.rp-tabs-row .tab svg { color: var(--text-3); }
+.rp-tabs-row .tab.on svg { color: var(--text); }
+.rp-tabs-row .tab .tool { margin-left: -2px; }
+.rp-tabs-row .tab .off { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+
+/* Taux avec barre proportionnelle dans un tableau */
+.rp-rate { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 96px; }
+.rp-rate i { display: block; width: 40px; height: 5px; border-radius: 3px; background: var(--surface-3); position: relative; overflow: hidden; flex-shrink: 0; }
+.rp-rate i::after { content: ""; position: absolute; inset: 0; width: calc(var(--p) * 100%); border-radius: 3px; background: var(--c); }
+.rp-rank { width: 18px; height: 18px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); font-size: var(--fs-2xs); font-weight: 600; display: grid; place-items: center; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* Constats en clair */
+.rp-insights { list-style: none; margin: 0; padding: 0 14px 14px; display: grid; gap: 10px; }
+.rp-insights li { display: flex; gap: 10px; font-size: var(--fs); line-height: 1.5; color: var(--text); }
+.rp-insights li svg { flex-shrink: 0; margin-top: 3px; color: var(--text-3); }
+.rp-insights li.bad svg { color: var(--st-far); }
+.rp-insights li.warn svg { color: var(--st-near); }
+
+/* Comparaison des sources de conversions (vue d'ensemble) */
+.rp-cmp { display: grid; gap: 0; }
+.rp-cmp .row { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px 16px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--divider); font-size: var(--fs); }
+.rp-cmp .row.head { border-top: 0; padding-top: 0; padding-bottom: 8px; font-size: var(--fs-xs); color: var(--text-3); font-weight: 500; }
+.rp-cmp .row .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rp-cmp .row .who b { font-weight: 500; }
+.rp-cmp .row .who small { display: block; color: var(--text-3); font-size: var(--fs-xs); }
+.rp-cmp .row .n { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-cmp .row .n b { font-weight: 600; }
+.rp-cmp .row .n .bar { display: block; height: 4px; border-radius: 2px; background: var(--surface-3); margin-top: 5px; overflow: hidden; }
+.rp-cmp .row .n .bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: var(--c); border-radius: 2px; margin-left: auto; }
+.rp-cmp .row.sub .who { padding-left: 16px; color: var(--text-2); }
+.rp-explain { display: grid; gap: 8px; padding: 12px 14px 14px; border-top: 1px solid var(--divider); font-size: var(--fs-sm); color: var(--text-2); line-height: 1.55; }
+.rp-explain p { display: flex; gap: 8px; }
+.rp-explain svg { flex-shrink: 0; margin-top: 2px; color: var(--text-3); }
+
+/* Sources connectées (vue d'ensemble) et états vides par source */
+.rp-sources { display: grid; }
+.rp-sources .src { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--divider); min-width: 0; }
+.rp-sources .src:first-child { border-top: 0; }
+.rp-sources .src .ic { width: 28px; height: 28px; border-radius: var(--r-sm); background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; flex-shrink: 0; }
+.rp-sources .src .ic.on { background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
+.rp-sources .src .t { font-weight: 500; font-size: var(--fs); }
+.rp-sources .src .s { font-size: var(--fs-xs); color: var(--text-3); }
+.rp-sources .src > div { min-width: 0; flex: 1; }
+
+/* Formulaire d'ajout (projet Clarity) */
+.rp-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; border-top: 1px solid var(--divider); background: var(--surface-2); }
+.rp-form .wide { grid-column: 1 / -1; }
+.rp-form .foot { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.rp-conn .acc .links { display: inline-flex; gap: 2px; }
+.rp-conn .acc .opt { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
+.rp-conn .acc .opt .select { height: 26px; font-size: var(--fs-xs); padding: 0 24px 0 8px; width: auto; max-width: 240px; }
+
+/* Sections cochables de l'éditeur de rapport */
+.rp-checks { display: grid; gap: 8px; }
+.rp-checks label { display: flex; gap: 10px; align-items: flex-start; font-size: var(--fs-sm); cursor: pointer; }
+.rp-checks label input { margin-top: 2px; }
+.rp-checks label small { display: block; color: var(--text-3); font-size: var(--fs-xs); margin-top: 1px; }
+.rp-checks label.off { cursor: default; color: var(--text-3); }
+
+@media (max-width: 560px) {
+  .rp-tabs-row .tab { padding: 0 7px; gap: 5px; }
+  .rp-tabs-row .tab .tool, .rp-tabs-row .tab svg { display: none; }
+  .rp-form { grid-template-columns: minmax(0, 1fr); }
+  .rp-cmp .row { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 4px 10px; padding: 10px 12px; }
+  .rp-rate { min-width: 0; }
+  .rp-rate i { display: none; }
+  .rp-tabs-row { gap: 4px; }
+}
+@media print {
+  .rp-insights li { break-inside: avoid; }
+}

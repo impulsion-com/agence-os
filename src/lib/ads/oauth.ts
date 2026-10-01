@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { GA4_SCOPES } from "@/lib/analytics/ga4";
 import { AdsError, appUrl, integrationStatus, redirectUri } from "./config";
 import { googleAuthUrl, googleExchangeCode } from "./google";
 import { guard } from "./guard";
@@ -11,7 +12,7 @@ import { metaAuthUrl, metaExchangeCode } from "./meta";
 import { NONCE_COOKIE, createState, verifyState } from "./state";
 import { refreshConnectionAccounts } from "./sync";
 
-type P = "meta" | "google";
+type P = "meta" | "google" | "ga4";
 
 const back = (req: NextRequest, slug: string | null, params: Record<string, string>) => {
   const url = new URL(slug ? `/w/${slug}/settings/integrations` : "/", appUrl(req));
@@ -32,7 +33,12 @@ export async function oauthStart(req: NextRequest, platform: P) {
     return NextResponse.redirect(back(req, g.workspace.slug, { error: `Configuration serveur incomplète : ${status.missing.join(", ")}` }));
 
   const { state, nonce } = createState({ w: g.workspace.id, s: g.workspace.slug, u: g.userId, p: platform });
-  const target = platform === "meta" ? metaAuthUrl(redirectUri("meta", req), state) : googleAuthUrl(redirectUri("google", req), state);
+  const target =
+    platform === "meta"
+      ? metaAuthUrl(redirectUri("meta", req), state)
+      : platform === "ga4"
+        ? googleAuthUrl(redirectUri("ga4", req), state, GA4_SCOPES)
+        : googleAuthUrl(redirectUri("google", req), state);
   const res = NextResponse.redirect(target);
   res.cookies.set(NONCE_COOKIE, nonce, { httpOnly: true, sameSite: "lax", secure: req.nextUrl.protocol === "https:", path: "/api/integrations", maxAge: 600 });
   return res;
@@ -66,7 +72,7 @@ export async function oauthCallback(req: NextRequest, platform: P) {
     const tok =
       platform === "meta"
         ? await metaExchangeCode(code, redirectUri("meta", req)).then((t) => ({ ...t, refresh_token: null as string | null }))
-        : await googleExchangeCode(code, redirectUri("google", req)).then((t) => ({ ...t, expires_at: null as string | null }));
+        : await googleExchangeCode(code, redirectUri(platform, req)).then((t) => ({ ...t, expires_at: null as string | null }));
 
     // Reconnexion du même compte utilisateur : on met à jour la connexion existante
     const { data: existing } = tok.user_id
@@ -101,7 +107,8 @@ export async function oauthCallback(req: NextRequest, platform: P) {
       /* l'erreur est enregistrée sur la connexion et affichée dans les réglages */
     }
     // Les comptes déjà suivis qui étaient en erreur de jeton repartent proprement
-    if (existing) await admin.from("ad_accounts").update({ sync_error: null }).eq("connection_id", existing.id);
+    if (existing && platform === "ga4") await admin.from("analytics_sources").update({ sync_error: null }).eq("connection_id", existing.id);
+    else if (existing) await admin.from("ad_accounts").update({ sync_error: null }).eq("connection_id", existing.id);
     return done(back(req, st.s, { connected: platform, accounts: String(count) }));
   } catch (e) {
     const msg = e instanceof AdsError || e instanceof Error ? e.message : "Erreur inconnue";

@@ -12,7 +12,7 @@ export interface OAuthState {
   w: string; // workspace id
   s: string; // slug (redirection de retour)
   u: string; // user id
-  p: "meta" | "google";
+  p: "meta" | "google" | "ga4";
   n: string; // nonce
   e: number; // expiration (ms)
 }

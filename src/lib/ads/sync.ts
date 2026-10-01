@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { syncAccountAds } from "./ad-sync";
 import { AdsError, FIRST_SYNC_DAYS, ROLLING_SYNC_DAYS } from "./config";
+import { ga4ListProperties } from "@/lib/analytics/ga4";
 import { googleAccessToken, googleListAccounts, googleMetrics } from "./google";
 import { metaInsights, metaListAccounts } from "./meta";
 import type { AvailableAccount, FetchedRow, SyncResult } from "./types";
@@ -33,14 +34,15 @@ const daysAgo = (n: number) => isoUTC(new Date(Date.now() - n * 864e5));
 
 const errMsg = (e: unknown) => (e instanceof AdsError ? e.message : e instanceof Error ? e.message : String(e)).slice(0, 500);
 
-/** Jeton d'accès utilisable pour une connexion (rafraîchi pour Google). */
+/** Jeton d'accès utilisable pour une connexion (rafraîchi pour Google Ads et Google Analytics). */
 export async function accessTokenFor(conn: ConnRow): Promise<string> {
-  if (conn.platform === "google") {
-    if (!conn.refresh_token) throw new AdsError("Connexion Google sans refresh token : reconnecte Google Ads.", "token");
+  if (conn.platform === "google" || conn.platform === "ga4") {
+    if (!conn.refresh_token)
+      throw new AdsError(`Connexion Google sans refresh token : reconnecte ${conn.platform === "ga4" ? "Google Analytics" : "Google Ads"}.`, "token");
     return googleAccessToken(conn.refresh_token);
   }
   if (conn.expires_at && new Date(conn.expires_at).getTime() < Date.now())
-    throw new AdsError("Le jeton Meta a expiré : reconnecte Meta dans Réglages > Connexions publicitaires.", "token");
+    throw new AdsError("Le jeton Meta a expiré : reconnecte Meta dans Réglages > Connexions.", "token");
   return conn.access_token;
 }
 
@@ -48,7 +50,7 @@ export async function accessTokenFor(conn: ConnRow): Promise<string> {
 export async function refreshConnectionAccounts(admin: Admin, conn: ConnRow, token?: string): Promise<AvailableAccount[]> {
   try {
     const t = token ?? (await accessTokenFor(conn));
-    const accounts = conn.platform === "google" ? await googleListAccounts(t) : await metaListAccounts(t);
+    const accounts = conn.platform === "ga4" ? await ga4ListProperties(t) : conn.platform === "google" ? await googleListAccounts(t) : await metaListAccounts(t);
     await admin
       .from("ad_connections")
       .update({ accounts: accounts as unknown as never, accounts_refreshed_at: new Date().toISOString(), last_error: null })

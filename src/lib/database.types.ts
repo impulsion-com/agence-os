@@ -413,6 +413,128 @@ export type Database = {
           },
         ]
       }
+      analytics_secrets: {
+        Row: {
+          source_id: string
+          token: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          source_id: string
+          token: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          source_id?: string
+          token?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_secrets_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
+            referencedRelation: "analytics_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_secrets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analytics_sources: {
+        Row: {
+          company_id: string | null
+          connection_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          external_id: string
+          first_synced_at: string | null
+          id: string
+          is_demo: boolean
+          kind: string
+          last_synced_at: string | null
+          name: string
+          settings: Json
+          sync_error: string | null
+          timezone: string | null
+          workspace_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          external_id: string
+          first_synced_at?: string | null
+          id?: string
+          is_demo?: boolean
+          kind: string
+          last_synced_at?: string | null
+          name?: string
+          settings?: Json
+          sync_error?: string | null
+          timezone?: string | null
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string | null
+          connection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          external_id?: string
+          first_synced_at?: string | null
+          id?: string
+          is_demo?: boolean
+          kind?: string
+          last_synced_at?: string | null
+          name?: string
+          settings?: Json
+          sync_error?: string | null
+          timezone?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_sources_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_sources_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "ad_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_sources_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "ad_connections_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_sources_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_tokens: {
         Row: {
           created_at: string
@@ -972,6 +1094,108 @@ export type Database = {
           },
           {
             foreignKeyName: "bookings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clarity_daily: {
+        Row: {
+          active_time: number | null
+          bot_sessions: number
+          date: string
+          dead_clicks: number
+          dead_sessions: number
+          device: string
+          error_click_sessions: number
+          error_clicks: number
+          excessive_scrolls: number
+          excessive_sessions: number
+          key: string
+          pages_per_session: number | null
+          quickback_sessions: number
+          quickbacks: number
+          rage_clicks: number
+          rage_sessions: number
+          scope: string
+          script_error_sessions: number
+          script_errors: number
+          scroll_depth: number | null
+          sessions: number
+          source_id: string
+          total_time: number | null
+          users: number
+          window_days: number
+          workspace_id: string
+        }
+        Insert: {
+          active_time?: number | null
+          bot_sessions?: number
+          date: string
+          dead_clicks?: number
+          dead_sessions?: number
+          device?: string
+          error_click_sessions?: number
+          error_clicks?: number
+          excessive_scrolls?: number
+          excessive_sessions?: number
+          key?: string
+          pages_per_session?: number | null
+          quickback_sessions?: number
+          quickbacks?: number
+          rage_clicks?: number
+          rage_sessions?: number
+          scope: string
+          script_error_sessions?: number
+          script_errors?: number
+          scroll_depth?: number | null
+          sessions?: number
+          source_id: string
+          total_time?: number | null
+          users?: number
+          window_days?: number
+          workspace_id: string
+        }
+        Update: {
+          active_time?: number | null
+          bot_sessions?: number
+          date?: string
+          dead_clicks?: number
+          dead_sessions?: number
+          device?: string
+          error_click_sessions?: number
+          error_clicks?: number
+          excessive_scrolls?: number
+          excessive_sessions?: number
+          key?: string
+          pages_per_session?: number | null
+          quickback_sessions?: number
+          quickbacks?: number
+          rage_clicks?: number
+          rage_sessions?: number
+          scope?: string
+          script_error_sessions?: number
+          script_errors?: number
+          scroll_depth?: number | null
+          sessions?: number
+          source_id?: string
+          total_time?: number | null
+          users?: number
+          window_days?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clarity_daily_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clarity_daily_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2035,6 +2259,183 @@ export type Database = {
           },
           {
             foreignKeyName: "deals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ga4_channels_daily: {
+        Row: {
+          channel: string
+          date: string
+          engaged_sessions: number
+          engagement_seconds: number
+          key_events: number
+          medium: string
+          new_users: number
+          purchases: number
+          revenue: number
+          sessions: number
+          source: string
+          source_id: string
+          users: number
+          workspace_id: string
+        }
+        Insert: {
+          channel?: string
+          date: string
+          engaged_sessions?: number
+          engagement_seconds?: number
+          key_events?: number
+          medium?: string
+          new_users?: number
+          purchases?: number
+          revenue?: number
+          sessions?: number
+          source?: string
+          source_id: string
+          users?: number
+          workspace_id: string
+        }
+        Update: {
+          channel?: string
+          date?: string
+          engaged_sessions?: number
+          engagement_seconds?: number
+          key_events?: number
+          medium?: string
+          new_users?: number
+          purchases?: number
+          revenue?: number
+          sessions?: number
+          source?: string
+          source_id?: string
+          users?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ga4_channels_daily_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ga4_channels_daily_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ga4_dims_daily: {
+        Row: {
+          date: string
+          dim: string
+          engaged_sessions: number
+          engagement_seconds: number
+          key_events: number
+          new_users: number
+          pageviews: number
+          purchases: number
+          revenue: number
+          sessions: number
+          source_id: string
+          users: number
+          value: string
+          workspace_id: string
+        }
+        Insert: {
+          date: string
+          dim: string
+          engaged_sessions?: number
+          engagement_seconds?: number
+          key_events?: number
+          new_users?: number
+          pageviews?: number
+          purchases?: number
+          revenue?: number
+          sessions?: number
+          source_id: string
+          users?: number
+          value?: string
+          workspace_id: string
+        }
+        Update: {
+          date?: string
+          dim?: string
+          engaged_sessions?: number
+          engagement_seconds?: number
+          key_events?: number
+          new_users?: number
+          pageviews?: number
+          purchases?: number
+          revenue?: number
+          sessions?: number
+          source_id?: string
+          users?: number
+          value?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ga4_dims_daily_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ga4_dims_daily_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ga4_pages_daily: {
+        Row: {
+          date: string
+          engaged_sessions: number
+          key_events: number
+          page: string
+          sessions: number
+          source_id: string
+          workspace_id: string
+        }
+        Insert: {
+          date: string
+          engaged_sessions?: number
+          key_events?: number
+          page: string
+          sessions?: number
+          source_id: string
+          workspace_id: string
+        }
+        Update: {
+          date?: string
+          engaged_sessions?: number
+          key_events?: number
+          page?: string
+          sessions?: number
+          source_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ga4_pages_daily_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "analytics_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ga4_pages_daily_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -3297,6 +3698,7 @@ export type Database = {
           period_end: string
           period_start: string
           public_token: string
+          sections: string[]
           shared: boolean
           title: string
           workspace_id: string
@@ -3311,6 +3713,7 @@ export type Database = {
           period_end: string
           period_start: string
           public_token?: string
+          sections?: string[]
           shared?: boolean
           title: string
           workspace_id: string
@@ -3325,6 +3728,7 @@ export type Database = {
           period_end?: string
           period_start?: string
           public_token?: string
+          sections?: string[]
           shared?: boolean
           title?: string
           workspace_id?: string
@@ -4165,12 +4569,14 @@ export type Database = {
       }
     }
     Functions: {
+      _clear_demo_analytics: { Args: { ws: string }; Returns: undefined }
       _clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       _clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       _clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
       _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       _clear_demo_portal: { Args: { ws: string }; Returns: undefined }
+      _demo_analytics: { Args: { ws: string }; Returns: number }
       _demo_bk_day: { Args: { n: number }; Returns: string }
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
       _demo_creatives: { Args: { ws: string }; Returns: number }
@@ -4179,6 +4585,27 @@ export type Database = {
       _demo_onboarding: { Args: { ws: string }; Returns: undefined }
       _demo_portal: { Args: { ws: string }; Returns: number }
       _demo_portal_texts: { Args: never; Returns: string[] }
+      _report_analytics: {
+        Args: {
+          p_company: string
+          p_end: string
+          p_sections: string[]
+          p_start: string
+        }
+        Returns: Json
+      }
+      _site_analytics: {
+        Args: {
+          p_client?: boolean
+          p_company: string
+          p_end: string
+          p_parts?: string[]
+          p_prev_end?: string
+          p_prev_start?: string
+          p_start: string
+        }
+        Returns: Json
+      }
       accept_client_invitation: { Args: { p_token: string }; Returns: Json }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
@@ -4216,6 +4643,16 @@ export type Database = {
           spend: number
         }[]
       }
+      analytics_overview: {
+        Args: { p_end: string; p_start: string; p_ws: string }
+        Returns: {
+          company_id: string
+          key_events: number
+          purchases: number
+          revenue: number
+          sessions: number
+        }[]
+      }
       booking_ensure_profile: {
         Args: { uid: string; ws: string }
         Returns: string
@@ -4228,6 +4665,7 @@ export type Database = {
       booking_slugify: { Args: { t: string }; Returns: string }
       bump_link: { Args: { p_link: string }; Returns: undefined }
       can_write: { Args: { ws: string }; Returns: boolean }
+      clear_demo_analytics: { Args: { ws: string }; Returns: undefined }
       clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
@@ -4373,6 +4811,7 @@ export type Database = {
         }
         Returns: Json
       }
+      load_demo_analytics: { Args: { ws: string }; Returns: number }
       load_demo_booking: { Args: { ws: string }; Returns: number }
       load_demo_creatives: { Args: { ws: string }; Returns: number }
       load_demo_data: { Args: { ws: string }; Returns: undefined }
@@ -4563,6 +5002,16 @@ export type Database = {
         Returns: undefined
       }
       portal_require_write: { Args: { p_company: string }; Returns: undefined }
+      portal_site_analytics: {
+        Args: {
+          p_company: string
+          p_end: string
+          p_prev_end?: string
+          p_prev_start?: string
+          p_start: string
+        }
+        Returns: Json
+      }
       portal_task: {
         Args: { p_company: string; p_task: string }
         Returns: Json
@@ -4623,6 +5072,16 @@ export type Database = {
           p_version: string
         }
         Returns: undefined
+      }
+      site_analytics: {
+        Args: {
+          p_company: string
+          p_end: string
+          p_prev_end?: string
+          p_prev_start?: string
+          p_start: string
+        }
+        Returns: Json
       }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }

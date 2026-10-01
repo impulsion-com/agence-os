@@ -5,6 +5,11 @@ import {
   KPI_LABEL, ZERO, add, delta, fmtDelta, fmtKpi, kpi, platformName, resolvePeriod, scaledTarget, STATE_LABEL, targetState, worst, type Kpi, type Period,
   type Totals,
 } from "@/lib/ads/metrics";
+import {
+  FRICTION_KEYS, FRICTION_META, change, channelName, clarityInsights, claritySplit, deviceName, fmtDuration, fmtInt, fmtMoney, fmtPct, fmtSiteKpi, frictionRate, ga4Split,
+  paidTotals, problemPages, rate, siteKpi, type SiteKpi,
+} from "@/lib/analytics/calc";
+import type { SiteAnalytics } from "@/lib/analytics/types";
 import type { KpiMetric } from "@/lib/types";
 import { companiesLite, resolveCompany, table, truncate, url } from "../helpers";
 import { ToolError, defineTool, type McpContext } from "../types";
@@ -242,4 +247,146 @@ const getCampaigns = defineTool({
   },
 });
 
-export const reportingTools = [getPerformance, getCampaigns];
+const SITE_KPIS: SiteKpi[] = ["sessions", "users", "engagement_rate", "key_events", "conversion_rate", "revenue"];
+const SITE_LABEL: Record<string, string> = { sessions: "Sessions", users: "Utilisateurs", engagement_rate: "Taux d'engagement", key_events: "Évènements clés", conversion_rate: "Taux de conversion", revenue: "Revenu" };
+
+const getSiteAnalytics = defineTool({
+  name: "get_site_analytics",
+  title: "Analytics du site",
+  description:
+    "Trafic et comportement sur le site d'un client sur une période. Google Analytics 4 : sessions, utilisateurs, taux d'engagement, évènements clés, taux de conversion et revenu, avec variation vs période précédente, répartition par canal, sources / medium, pages de destination et appareils. Microsoft Clarity : part des sessions avec clics de rage, clics morts, retours rapides, défilement excessif et erreurs de script, profondeur de défilement, pages à problèmes classées et constats en clair. Indique aussi l'écart entre les conversions GA4 des canaux payants et celles déclarées par les plateformes via get_performance.",
+  input: z.object({
+    company: z.string().describe("Client (nom ou identifiant)"),
+    limit: z.number().int().min(3).max(30).default(10).describe("Nombre de lignes par tableau (canaux, sources, pages)"),
+    ...periodInput,
+  }),
+  run: async (a, ctx) => {
+    const p = periodOf(a);
+    const company = await resolveCompany(ctx, a.company);
+    // Fonction interne sans contrôle d'accès : le client vient d'être résolu dans l'espace du jeton
+    const { data: raw, error } = await ctx.db.rpc("_site_analytics", { p_company: company.id, p_start: p.start, p_end: p.end, p_prev_start: p.prevStart, p_prev_end: p.prevEnd });
+    if (error) throw new Error(error.message);
+    const sa = raw as unknown as SiteAnalytics;
+    const link = `${url.reporting(ctx, company.id)}?tab=site`;
+    if (!sa?.ga4 && !sa?.clarity)
+      return {
+        text: `Aucune source d'analytics reliée à ${company.name}. Associe une propriété Google Analytics 4 ou un projet Microsoft Clarity dans Réglages > Connexions (${url.base(ctx)}/settings/integrations).`,
+        data: { ga4: null, clarity: null },
+      };
+
+    const lines = [`# Site de ${company.name} · ${p.label} (${p.start} au ${p.end})`, `Comparaison : ${p.prevStart} au ${p.prevEnd}`];
+    const out: Record<string, unknown> = { period: { start: p.start, end: p.end, previous_start: p.prevStart, previous_end: p.prevEnd } };
+
+    if (sa.ga4) {
+      const g = sa.ga4;
+      const currency = g.currency || ctx.workspace.currency;
+      const { cur, prev } = ga4Split(g.daily, p);
+      const hasPrev = prev.sessions > 0;
+      const paid = paidTotals(g.channels);
+      lines.push(
+        "",
+        `## Trafic (Google Analytics 4 : ${g.sources.map((s) => s.name).join(", ")})`,
+        SITE_KPIS.map((k) => {
+          const v = siteKpi(cur, k);
+          const d = hasPrev ? change(v, siteKpi(prev, k)) : null;
+          return `${SITE_LABEL[k]} ${fmtSiteKpi(k, v, currency)}${d !== null ? ` (${fmtDelta(d)})` : ""}`;
+        }).join(" · "),
+        `Canaux payants : ${fmtInt(paid.sessions)} sessions, ${fmtSiteKpi("key_events", paid.key_events)} évènements clés${paid.revenue ? `, ${fmtMoney(paid.revenue, currency)}` : ""}.`,
+      );
+      const events = [...new Set(g.sources.map((s) => s.key_event).filter(Boolean))];
+      if (events.length) lines.push(`Évènement clé retenu : ${events.join(", ")}.`);
+      if (!cur.sessions) lines.push("Aucune session sur la période.");
+      else {
+        lines.push(
+          "",
+          "### Par canal",
+          table(
+            ["Canal", "Sessions", "Évol.", "Évèn. clés", "Taux de conv.", "Revenu"],
+            g.channels.slice(0, a.limit).map((c) => [channelName(c.channel), fmtInt(c.sessions), fmtDelta(change(c.sessions, c.prev_sessions || null)), fmtSiteKpi("key_events", c.key_events), fmtPct(rate(c.key_events, c.sessions), 2), fmtMoney(c.revenue, currency)]),
+          ),
+          "",
+          "### Sources / medium",
+          table(
+            ["Source / medium", "Sessions", "Engagement", "Évèn. clés", "Taux de conv."],
+            g.sources_medium.slice(0, a.limit).map((r) => [truncate(`${r.source} / ${r.medium}`, 50), fmtInt(r.sessions), fmtPct(rate(r.engaged, r.sessions), 0), fmtSiteKpi("key_events", r.key_events), fmtPct(rate(r.key_events, r.sessions), 2)]),
+          ),
+          "",
+          "### Pages de destination",
+          table(
+            ["Page", "Sessions", "Engagement", "Évèn. clés", "Taux de conv."],
+            g.pages.slice(0, a.limit).map((r) => [truncate(r.page, 60), fmtInt(r.sessions), fmtPct(rate(r.engaged, r.sessions), 0), fmtSiteKpi("key_events", r.key_events), fmtPct(rate(r.key_events, r.sessions), 2)]),
+          ),
+          "",
+          `Appareils : ${g.devices.map((d) => `${deviceName(d.device)} ${fmtInt(d.sessions)} sessions (conv. ${fmtPct(rate(d.key_events, d.sessions), 2)})`).join(" · ")}`,
+        );
+      }
+      out.ga4 = {
+        currency,
+        current: Object.fromEntries(SITE_KPIS.map((k) => [k, siteKpi(cur, k)])),
+        previous: hasPrev ? Object.fromEntries(SITE_KPIS.map((k) => [k, siteKpi(prev, k)])) : null,
+        paid_channels: paid,
+        channels: g.channels.slice(0, a.limit),
+        sources_medium: g.sources_medium.slice(0, a.limit),
+        landing_pages: g.pages.slice(0, a.limit),
+        devices: g.devices,
+        synced_at: g.synced_at,
+      };
+    } else lines.push("", "Google Analytics 4 n'est pas relié à ce client.");
+
+    if (sa.clarity) {
+      const c = sa.clarity;
+      const { cur, prev } = claritySplit(c.daily, p);
+      const hasPrev = prev.days > 0 && prev.sessions > 0;
+      const pages = problemPages(c.pages, a.limit);
+      const insights = clarityInsights(c, p, 6);
+      lines.push("", `## Comportement (Microsoft Clarity : ${c.sources.map((s) => s.name).join(", ")})`);
+      if (!cur.sessions) lines.push(`Aucun instantané sur la période. ${c.first_day ? `Les données commencent le ${c.first_day} (Clarity ne donne pas d'historique).` : "Le premier instantané sera pris à la prochaine synchro."}`);
+      else {
+        lines.push(
+          `${fmtInt(cur.sessions)} sessions observées sur ${cur.days} jour(s)${c.first_day && c.first_day > p.start ? `, données depuis le ${c.first_day}` : ""}. Part des sessions concernées :`,
+          FRICTION_KEYS.map((k) => {
+            const v = frictionRate(cur, k);
+            const d = hasPrev ? change(v, frictionRate(prev, k)) : null;
+            return `${FRICTION_META[k].label} ${fmtPct(v, 2)}${d !== null ? ` (${fmtDelta(d)})` : ""}`;
+          }).join(" · "),
+          `Profondeur de défilement ${fmtPct(cur.scroll_depth, 0)} · temps actif ${fmtDuration(cur.active_time)}.`,
+        );
+        if (pages.length)
+          lines.push(
+            "",
+            "### Pages à problèmes (clics de rage ou clics morts)",
+            table(
+              ["Page", "Sessions", "Clics de rage", "Clics morts", "Retours rapides", "Défilement", "Appareil le plus touché"],
+              pages.map((x) => {
+                const worst = [...x.devices].sort((m, n) => n.rage_sessions + n.dead_sessions - (m.rage_sessions + m.dead_sessions))[0];
+                return [truncate(x.path, 60), fmtInt(x.sessions), fmtPct(x.rage_rate, 1), fmtPct(x.dead_rate, 1), fmtPct(x.quickback_rate, 1), fmtPct(x.scroll_depth, 0), worst ? deviceName(worst.device) : "-"];
+              }),
+            ),
+          );
+        lines.push("", `Appareils : ${c.devices.map((d) => `${deviceName(d.device)} ${fmtInt(d.sessions)} sessions (rage ${fmtPct(frictionRate(d, "rage"), 1)}, morts ${fmtPct(frictionRate(d, "dead"), 1)})`).join(" · ")}`);
+        if (insights.length) lines.push("", "### Constats", ...insights.map((i) => `- ${i.text}`));
+      }
+      out.clarity = {
+        first_day: c.first_day,
+        sessions: cur.sessions,
+        days: cur.days,
+        friction_rates: Object.fromEntries(FRICTION_KEYS.map((k) => [k, frictionRate(cur, k)])),
+        previous_friction_rates: hasPrev ? Object.fromEntries(FRICTION_KEYS.map((k) => [k, frictionRate(prev, k)])) : null,
+        scroll_depth: cur.scroll_depth,
+        active_time_seconds: cur.active_time,
+        problem_pages: pages.map((x) => ({ url: x.url, sessions: x.sessions, rage_rate: x.rage_rate, dead_rate: x.dead_rate, quickback_rate: x.quickback_rate, scroll_depth: x.scroll_depth, rage_share: x.rage_share })),
+        devices: c.devices.map((d) => ({ device: d.device, sessions: d.sessions, rage_rate: frictionRate(d, "rage"), dead_rate: frictionRate(d, "dead") })),
+        insights: insights.map((i) => i.text),
+      };
+    } else lines.push("", "Microsoft Clarity n'est pas relié à ce client.");
+
+    if (sa.first_party) {
+      lines.push("", `Tracking first-party : ${fmtInt(sa.first_party.purchases)} ventes (${fmtMoney(sa.first_party.revenue, ctx.workspace.currency)}), ${fmtInt(sa.first_party.leads)} prospects.`);
+      out.first_party = sa.first_party;
+    }
+    lines.push("", link);
+    return { text: lines.join("\n"), data: out };
+  },
+});
+
+export const reportingTools = [getPerformance, getCampaigns, getSiteAnalytics];

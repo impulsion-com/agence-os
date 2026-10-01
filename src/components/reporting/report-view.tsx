@@ -17,8 +17,10 @@ import {
 } from "@/lib/ads/metrics";
 import { chartSeries, groupTotals, splitTotals } from "@/lib/ads/series";
 import type { ReportData } from "@/lib/ads/load";
+import type { ClarityData, Ga4Data } from "@/lib/analytics/types";
 import { DailyChart, ShareBars } from "./charts";
 import { Delta, KpiCards } from "./kpi";
+import { ChannelShare, ClarityHistoryNote, FrictionCards, Ga4Footnote, InsightList, LandingTable, ProblemPages, SiteKpis, SiteTrend, useClarity, useGa4, useInsights } from "./site-analytics";
 
 const METRICS: Kpi[] = ["conversions", "roas", "cpa", "ctr", "cpc"];
 const MAX_CAMPAIGNS = 15;
@@ -27,7 +29,7 @@ const MAX_CAMPAIGNS = 15;
  * Rapport tel que le client le voit (vouvoiement). Utilisé par la page publique /r/[token]
  * et par l'aperçu de l'éditeur, à partir des mêmes données (forme de la RPC public_report).
  */
-export function ReportView({ data, embedded, actions }: { data: ReportData; embedded?: boolean; actions?: ReactNode }) {
+export function ReportView({ data, embedded, actions, editing }: { data: ReportData; embedded?: boolean; actions?: ReactNode; /** aperçu de l'éditeur : signale une section cochée sans source */ editing?: boolean }) {
   const { report, workspace, company, accounts, targets } = data;
   const currency = workspace.currency || "EUR";
   const period = useMemo(() => withPrevious("custom", report.period_start, report.period_end), [report.period_start, report.period_end]);
@@ -58,8 +60,12 @@ export function ReportView({ data, embedded, actions }: { data: ReportData; embe
     }),
     null,
   );
-  const platforms = [...new Set(accounts.map((a) => platformName(a.platform)))];
+  const sections = report.sections ?? [];
+  const ga4 = sections.includes("site") ? (data.analytics?.ga4 ?? null) : null;
+  const clarity = sections.includes("behavior") ? (data.analytics?.clarity ?? null) : null;
+  const platforms = [...new Set(accounts.map((a) => platformName(a.platform))), ...(ga4 ? ["Google Analytics 4"] : []), ...(clarity ? ["Microsoft Clarity"] : [])];
   const empty = cur.spend === 0 && cur.impressions === 0;
+  const prevLabel = `vs ${rangeLabel(period.prevStart, period.prevEnd).replace(/^./, (c) => c.toLowerCase())}`;
 
   return (
     <article className={`rp-doc${embedded ? " embedded" : ""}`}>
@@ -84,9 +90,10 @@ export function ReportView({ data, embedded, actions }: { data: ReportData; embe
         </>
       )}
 
-      <h2 className="sec">Indicateurs clés</h2>
+      {!(empty && (ga4 || clarity)) && <h2 className="sec">Indicateurs clés</h2>}
       {empty ? (
-        <div className="card empty-note">Aucune donnée publicitaire n&apos;est disponible sur cette période.</div>
+        // Rapport sans publicité mais avec le site : inutile d'afficher un bloc vide
+        ga4 || clarity ? null : <div className="card empty-note">Aucune donnée publicitaire n&apos;est disponible sur cette période.</div>
       ) : (
         <KpiCards
           cur={cur}
@@ -204,6 +211,9 @@ export function ReportView({ data, embedded, actions }: { data: ReportData; embe
         </>
       )}
 
+      {ga4 ? <SiteSection ga4={ga4} period={period} prevLabel={prevLabel} /> : editing && sections.includes("site") ? <MissingSource name="Trafic du site" tool="propriété Google Analytics 4" /> : null}
+      {clarity ? <BehaviorSection clarity={clarity} period={period} prevLabel={prevLabel} /> : editing && sections.includes("behavior") ? <MissingSource name="Comportement sur le site" tool="projet Microsoft Clarity" /> : null}
+
       {report.next_steps.trim() && (
         <>
           <h2 className="sec">Prochaines étapes</h2>
@@ -221,5 +231,87 @@ export function ReportView({ data, embedded, actions }: { data: ReportData; embe
         </span>
       </footer>
     </article>
+  );
+}
+
+type Dates = { start: string; end: string; prevStart: string; prevEnd: string };
+
+/** Section facultative « Trafic du site » (Google Analytics 4), telle que le client la lit. */
+function SiteSection({ ga4, period, prevLabel }: { ga4: Ga4Data; period: Dates; prevLabel: string }) {
+  const { cur } = useGa4(ga4, period);
+  return (
+    <>
+      <h2 className="sec">Trafic du site</h2>
+      {cur.sessions === 0 ? (
+        <div className="card empty-note">Aucune visite n&apos;a été mesurée sur votre site pendant cette période.</div>
+      ) : (
+        <div className="rp-flow">
+          <SiteKpis ga4={ga4} period={period} prevLabel={prevLabel} />
+          <SiteTrend ga4={ga4} period={period} title="Sessions et conversion par jour" />
+          <div className="card">
+            <div className="card-h">
+              <h3 style={{ fontSize: "var(--fs)" }}>D&apos;où viennent vos visiteurs</h3>
+              <span className="faint" style={{ fontSize: 12 }}>Part des sessions</span>
+            </div>
+            <ChannelShare ga4={ga4} period={period} />
+          </div>
+          <div className="card">
+            <div className="card-h">
+              <h3 style={{ fontSize: "var(--fs)" }}>Pages d&apos;arrivée les plus visitées</h3>
+            </div>
+            <LandingTable ga4={ga4} period={period} limit={8} sortable={false} />
+          </div>
+        </div>
+      )}
+      <Ga4Footnote ga4={ga4} />
+    </>
+  );
+}
+
+/** Section facultative « Comportement sur le site » (Microsoft Clarity), telle que le client la lit. */
+function BehaviorSection({ clarity, period, prevLabel }: { clarity: ClarityData; period: Dates; prevLabel: string }) {
+  const { cur } = useClarity(clarity, period);
+  const insights = useInsights(clarity, period, 4);
+  return (
+    <>
+      <h2 className="sec">Comportement sur le site</h2>
+      {cur.sessions === 0 ? (
+        <div className="card empty-note">
+          Le suivi du comportement {clarity.first_day ? `a commencé le ${fmtDate(clarity.first_day, true)}` : "vient de commencer"} : aucune session n&apos;a encore été observée sur cette période.
+        </div>
+      ) : (
+        <div className="rp-flow">
+          <ClarityHistoryNote clarity={clarity} period={period} client />
+          <FrictionCards clarity={clarity} period={period} prevLabel={prevLabel} />
+          {insights.length > 0 && (
+            <div className="card">
+              <div className="card-h">
+                <h3 style={{ fontSize: "var(--fs)" }}>Ce que nous observons</h3>
+              </div>
+              <InsightList insights={insights} />
+            </div>
+          )}
+          <div className="card">
+            <div className="card-h">
+              <h3 style={{ fontSize: "var(--fs)" }}>Pages à améliorer en priorité</h3>
+              <span className="faint" style={{ fontSize: 12 }}>Part des sessions avec clics de rage ou clics morts</span>
+            </div>
+            <ProblemPages clarity={clarity} limit={5} />
+          </div>
+        </div>
+      )}
+      <p className="fainter" style={{ fontSize: 12, marginTop: 12 }}>
+        Source : Microsoft Clarity. Un clic de rage est une série de clics rapprochés au même endroit, un clic mort un clic sans effet : les deux signalent un élément qui ne réagit pas comme attendu.
+      </p>
+    </>
+  );
+}
+
+/** Aperçu de l'éditeur : section cochée alors que le client n'a pas la source correspondante. */
+function MissingSource({ name, tool }: { name: string; tool: string }) {
+  return (
+    <div className="card empty-note no-print" style={{ marginTop: 32 }}>
+      Section « {name} » : aucune {tool} n&apos;est reliée à ce client. Elle n&apos;apparaîtra pas dans la version client.
+    </div>
   );
 }

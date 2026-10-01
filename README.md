@@ -32,6 +32,8 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 **Reporting**
 - Connexion Meta Ads et Google Ads, synchronisation quotidienne des campagnes.
 - Tableau de bord par client : dépense, conversions, CPA, ROAS, CTR, CPC, objectifs.
+- Google Analytics 4 (trafic, canaux, pages, conversions du site) et Microsoft Clarity (clics de rage,
+  clics morts, pages à problèmes) par client, avec les écarts entre sources expliqués.
 - Rapports mensuels commentés, partagés par lien et imprimables en PDF.
 
 **Tracking et attribution**
@@ -80,7 +82,7 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 ## Démarrer
 
 Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase + Vercel, gratuit,
-environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md), [portail client](docs/portail-client.md).
+environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md), [portail client](docs/portail-client.md), [analytics GA4 et Clarity](docs/analytics.md).
 
 ## Stack technique
 

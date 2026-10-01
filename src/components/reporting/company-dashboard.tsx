@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, ChartColumn, FilePlus2, FileText, Plug, Table2, Target, Upload } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, ChartColumn, FilePlus2, FileText, Globe, LayoutDashboard, Megaphone, MousePointerClick, Plug, Table2, Target, Upload } from "lucide-react";
 
 import "@/styles/reporting.css";
 import { useToast } from "@/components/ui/toast";
@@ -23,6 +23,8 @@ import {
 } from "@/lib/ads/metrics";
 import { chartSeries, groupTotals, splitTotals } from "@/lib/ads/series";
 import type { TrackedAccount } from "@/lib/ads/types";
+import type { SiteAnalytics } from "@/lib/analytics/types";
+import { BehaviorTab, OverviewTab, SiteTab, type DashTab } from "./company-analytics";
 import { DailyChart, ShareBars } from "./charts";
 import { CompanyMark, Crumbs, ReportsTable, SortTh, SyncButton, useSort, type ReportItem } from "./common";
 import { Delta, KpiCards } from "./kpi";
@@ -58,14 +60,27 @@ interface Props {
   prevCampaigns: Campaign[];
   targets: { id: string; metric: string; target: number }[];
   reports: ReportItem[];
+  /** Analytics de site du client (GA4, Clarity, tracking first-party) ; null s'il n'a aucune source */
+  analytics: SiteAnalytics | null;
+  tab: DashTab;
 }
+
+// `tool` : précision masquée sur mobile, où les quatre onglets doivent tenir sur une ligne
+const TABS: { id: DashTab; name: string; tool?: string; icon: typeof Globe }[] = [
+  { id: "overview", name: "Vue d'ensemble", icon: LayoutDashboard },
+  { id: "ads", name: "Publicité", icon: Megaphone },
+  { id: "site", name: "Site", tool: "GA4", icon: Globe },
+  { id: "behavior", name: "Comportement", tool: "Clarity", icon: MousePointerClick },
+];
 
 const CHART_METRICS: Kpi[] = ["conversions", "roas", "cpa", "ctr", "cpc"];
 type CampCol = "name" | "spend" | "dspend" | "impressions" | "clicks" | "ctr" | "cpc" | "conversions" | "cpa" | "value" | "roas";
 
-export function CompanyDashboard({ period, company, accounts, rows, campaigns, prevCampaigns, targets, reports }: Props) {
+export function CompanyDashboard({ period, company, accounts, rows, campaigns, prevCampaigns, targets, reports, analytics, tab }: Props) {
   const ws = useWorkspace();
   const router = useRouter();
+  const path = usePathname();
+  const sp = useSearchParams();
   const toast = useToast();
   const currency = ws.workspace.currency || "EUR";
   const [metric, setMetric] = useState<Kpi>(() => (campaigns.some((c) => c.conversion_value > 0) ? "roas" : "conversions"));
@@ -99,9 +114,26 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
     return kpi(c.t, k as Kpi);
   });
 
-  const connected = accounts.some((a) => a.connection_id && !a.external_id.startsWith("demo-"));
-  const errors = accounts.filter((a) => a.sync_error);
-  const lastSync = accounts.map((a) => a.last_synced_at).filter(Boolean).sort().at(-1);
+  const ga4 = analytics?.ga4 ?? null;
+  const clarity = analytics?.clarity ?? null;
+  const siteSources = [...(ga4?.sources ?? []), ...(clarity?.sources ?? [])];
+  const connected = accounts.some((a) => a.connection_id && !a.external_id.startsWith("demo-")) || siteSources.some((s) => !s.demo);
+  const errors = [...accounts.filter((a) => a.sync_error).map((a) => `${a.name} : ${a.sync_error}`), ...siteSources.filter((s) => s.sync_error).map((s) => `${s.name} : ${s.sync_error}`)];
+  const lastSync = [...accounts.map((a) => a.last_synced_at), ga4?.synced_at, clarity?.synced_at].filter(Boolean).sort().at(-1);
+  const hasData = accounts.length > 0 || !!ga4 || !!clarity;
+  const available: Record<DashTab, boolean> = { overview: true, ads: accounts.length > 0, site: !!ga4, behavior: !!clarity };
+  const summary = [
+    accounts.length ? `${accounts.length} compte${accounts.length > 1 ? "s" : ""} publicitaire${accounts.length > 1 ? "s" : ""}` : null,
+    ga4 ? "Google Analytics 4" : null,
+    clarity ? "Microsoft Clarity" : null,
+  ].filter(Boolean);
+
+  const setTab = (t: DashTab) => {
+    const q = new URLSearchParams(sp.toString());
+    if (t === "overview") q.delete("tab");
+    else q.set("tab", t);
+    router.push(`${path}${q.size ? `?${q}` : ""}`, { scroll: false });
+  };
 
   const newReport = async () => {
     setCreating(true);
@@ -136,9 +168,7 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
           <div style={{ minWidth: 0 }}>
             <h1 className="trunc" style={{ fontSize: "var(--fs-2xl)" }}>{company.name}</h1>
             <p className="muted" style={{ marginTop: 4 }}>
-              {accounts.length
-                ? `${accounts.length} compte${accounts.length > 1 ? "s" : ""} publicitaire${accounts.length > 1 ? "s" : ""} · synchronisé ${lastSync ? ago(lastSync) : "jamais"}`
-                : "Aucun compte publicitaire associé"}
+              {summary.length ? `${summary.join(" · ")} · synchronisé ${lastSync ? ago(lastSync) : "jamais"}` : "Aucune source de données associée"}
             </p>
           </div>
         </div>
@@ -158,7 +188,39 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
         )}
       </div>
 
-      {!accounts.length ? (
+      <div className="rp-tabs-row">
+        <div className="tabs" role="tablist" aria-label="Vues du tableau de bord">
+          {TABS.map((t) => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)} title={available[t.id] ? undefined : "Source non reliée à ce client"}>
+              <t.icon size={14} aria-hidden /> {t.name}
+              {t.tool && <span className="tool">({t.tool})</span>}
+              {!available[t.id] && <i className="off" aria-label="non relié" />}
+            </button>
+          ))}
+        </div>
+        {hasData && <PeriodPicker period={period} />}
+      </div>
+
+      {errors.length > 0 && (
+        <div className="rp-note err" role="alert" style={{ marginBottom: 16 }}>
+          <AlertTriangle size={15} />
+          <span>
+            {errors.join(" · ")}{" "}
+            <Link href={`${ws.base}/settings/integrations`} style={{ textDecoration: "underline" }}>
+              Voir les connexions
+            </Link>
+          </span>
+        </div>
+      )}
+
+      {tab === "overview" && (
+        <OverviewTab period={period} company={company} accounts={accounts} rows={rows} cur={cur} prev={prev} analytics={analytics} currency={currency} onTab={setTab} onCsv={() => setModal("csv")} />
+      )}
+      {tab === "site" && <SiteTab period={period} company={company} ga4={ga4} />}
+      {tab === "behavior" && <BehaviorTab period={period} company={company} clarity={clarity} />}
+
+      {tab === "ads" &&
+        (!accounts.length ? (
         <div className="card">
           <div className="empty">
             <div className="ic">
@@ -180,21 +242,6 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
         </div>
       ) : (
         <>
-          <div className="rp-filters">
-            <PeriodPicker period={period} />
-          </div>
-          {errors.length > 0 && (
-            <div className="rp-note err" role="alert" style={{ marginBottom: 16 }}>
-              <AlertTriangle size={15} />
-              <span>
-                {errors.map((a) => `${a.name} : ${a.sync_error}`).join(" · ")}{" "}
-                <Link href={`${ws.base}/settings/integrations`} style={{ textDecoration: "underline" }}>
-                  Voir les connexions
-                </Link>
-              </span>
-            </div>
-          )}
-
           <KpiCards cur={cur} prev={prev} targets={targetMap} days={period.days} currency={currency} />
 
           <div className="rp-grid">
@@ -337,8 +384,9 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
             )}
           </div>
         </>
-      )}
+        ))}
 
+      {tab === "overview" && (
       <div className="card rp-section">
         <div className="card-h">
           <h2>Rapports</h2>
@@ -361,6 +409,7 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
           }
         />
       </div>
+      )}
 
       {modal === "targets" && <TargetsModal companyId={company.id} targets={targets} onClose={() => setModal(null)} />}
       {modal === "csv" && <CsvImportModal companyId={company.id} accounts={accounts} onClose={() => setModal(null)} />}

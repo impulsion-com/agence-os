@@ -28,7 +28,8 @@ export interface FetchedRow {
 export interface ConnectionPublic {
   id: string;
   workspace_id: string;
-  platform: "meta" | "google";
+  // ga4 : connexion Google Analytics (le cache `accounts` contient alors les propriétés accessibles)
+  platform: "meta" | "google" | "ga4";
   label: string;
   expires_at: string | null;
   created_at: string;

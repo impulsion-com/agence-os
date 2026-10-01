@@ -147,7 +147,7 @@ try {
   const sVis = await insert("creative_assets", { workspace_id: ws.id, concept_id: cVis.id, name: "test-portail-crea.txt", path: await put(`${ws.id}/creatives/${cVis.id}/test-portail-crea.txt`, "crea"), size: 4, mime: "text/plain" });
   const sInt = await insert("creative_assets", { workspace_id: ws.id, concept_id: cInt.id, name: "test-portail-crea-interne.txt", path: await put(`${ws.id}/creatives/${cInt.id}/test-portail-crea-interne.txt`, SECRET), size: 19, mime: "text/plain" });
   const rep = { workspace_id: ws.id, period_start: "2026-08-01", period_end: "2026-08-31" };
-  const rVis = await insert("reports", { ...rep, company_id: lumen.id, title: `${TAG} rapport publié`, commentary: "Commentaire publié", shared: true });
+  const rVis = await insert("reports", { ...rep, company_id: lumen.id, title: `${TAG} rapport publié`, commentary: "Commentaire publié", shared: true, sections: ["site"] });
   const rInt = await insert("reports", { ...rep, company_id: lumen.id, title: `${TAG} brouillon ${SECRET}`, commentary: SECRET, shared: false });
   // Kalia : mêmes objets, tous partagés avec SON client (pas le nôtre)
   const kTask = await insert("tasks", { workspace_id: ws.id, project_id: KAL.id, title: `${TAG} tâche Kalia ${SECRET}`, status: "review", client_visible: true });
@@ -165,6 +165,7 @@ try {
     reporting: {
       portal_reporting: (sb, c) => sb.rpc("portal_reporting", { p_company: c, p_start: "2026-09-01", p_end: "2026-09-30" }),
       portal_report: (sb, c, o) => sb.rpc("portal_report", { p_company: c, p_report: o.report }),
+      portal_site_analytics: (sb, c) => sb.rpc("portal_site_analytics", { p_company: c, p_start: "2026-09-01", p_end: "2026-09-30" }),
     },
     tasks: {
       portal_tasks: (sb, c) => sb.rpc("portal_tasks", { p_company: c }),
@@ -287,6 +288,22 @@ try {
   check("portal_reporting : uniquement les comptes publicitaires de l'entreprise", (reporting.data?.accounts ?? []).every((a) => lumenAccounts.includes(a.id)) && (reporting.data?.metrics ?? []).every((m) => lumenAccounts.includes(m.account)), `${reporting.data?.accounts?.length} compte(s), ${reporting.data?.metrics?.length} ligne(s)`);
   const report = await read("portal_report", CALLS.reporting.portal_report(client, L, OWN));
   check("portal_report : rapport publié lisible, au format de public_report", report.data?.report?.id === rVis.id && Array.isArray(report.data.metrics) && !("public_token" in report.data.report) && !("created_by" in report.data.report), why(report));
+  // Analytics de site (GA4, Clarity) : agrégats de l'entreprise seulement, version « client »
+  const siteA = await read("portal_site_analytics", CALLS.reporting.portal_site_analytics(client, L));
+  const lumenRows = must(await admin.from("analytics_sources").select("id, kind").eq("company_id", L), "sources d'analytics") ?? [];
+  const lumenSources = lumenRows.map((x) => x.id);
+  const hasGa4 = lumenRows.some((x) => x.kind === "ga4");
+  const siteSources = [...(siteA.data?.ga4?.sources ?? []), ...(siteA.data?.clarity?.sources ?? [])];
+  check("portal_site_analytics : uniquement les sources de l'entreprise", !siteA.error && siteSources.every((x) => lumenSources.includes(x.id)) && siteSources.length === lumenSources.length, `${siteSources.length} source(s) sur ${lumenSources.length}`);
+  check("portal_site_analytics : ni identifiant externe, ni erreur de synchro, ni tracking first-party", siteSources.every((x) => !("external_id" in x) && !("sync_error" in x) && !("connected" in x)) && siteA.data?.first_party === null, why(siteA));
+  check("portal_report : la section cochée (trafic du site) est jointe, pas l'autre", (hasGa4 ? !!report.data?.analytics?.ga4 : report.data?.analytics?.ga4 === null) && report.data?.analytics?.clarity === null && JSON.stringify(report.data?.report?.sections) === '["site"]', JSON.stringify(report.data?.report?.sections));
+  const pub = await anonyme.rpc("public_report", { p_token: rVis.public_token });
+  payloads.public_report = JSON.stringify(pub.data ?? null);
+  check("public_report : sections en version client, sans jeton public", !pub.error && (hasGa4 ? !!pub.data?.analytics?.ga4 : pub.data?.analytics?.ga4 === null) && pub.data?.analytics?.clarity === null && pub.data.analytics.first_party === null && !("public_token" in pub.data.report) && !/external_id|sync_error/.test(payloads.public_report), why(pub));
+  const pubK = await anonyme.rpc("public_report", { p_token: kReport.public_token });
+  check("public_report sans section cochée : aucune donnée de site", !pubK.error && pubK.data?.analytics === null, why(pubK));
+  const pubInt = await anonyme.rpc("public_report", { p_token: rInt.public_token });
+  check("public_report d'un rapport non publié : rien", pubInt.data === null);
   await read("portal_documents", CALLS.documents.portal_documents(client, L));
   await read("portal_onboarding", CALLS.onboarding.portal_onboarding(client, L));
   await read("portal_booking", CALLS.booking.portal_booking(client, L));
@@ -352,7 +369,7 @@ try {
   await insert("client_users", { workspace_id: tw.id, company_id: tc.id, user_id: me.id });
   const m1 = await client.rpc("portal_context", { p_slug: tempSlug });
   check("modules = [crm] : aucune fonctionnalité dans le contexte", m1.data?.portals?.[0]?.features?.length === 0, JSON.stringify(m1.data?.portals?.[0]?.features));
-  for (const [name, call] of [["portal_tasks", CALLS.tasks.portal_tasks], ["portal_reporting", CALLS.reporting.portal_reporting], ["portal_creatives", CALLS.creatives.portal_creatives], ["portal_files", CALLS.files.portal_files], ["portal_documents", CALLS.documents.portal_documents], ["portal_onboarding", CALLS.onboarding.portal_onboarding], ["portal_booking", CALLS.booking.portal_booking]]) {
+  for (const [name, call] of [["portal_tasks", CALLS.tasks.portal_tasks], ["portal_reporting", CALLS.reporting.portal_reporting], ["portal_site_analytics", CALLS.reporting.portal_site_analytics], ["portal_creatives", CALLS.creatives.portal_creatives], ["portal_files", CALLS.files.portal_files], ["portal_documents", CALLS.documents.portal_documents], ["portal_onboarding", CALLS.onboarding.portal_onboarding], ["portal_booking", CALLS.booking.portal_booking]]) {
     const r = await call(client, tc.id, OWN);
     check(`${name} : refusé, module désactivé`, denied(r) && r.error.code === "42501", why(r));
   }
@@ -397,8 +414,15 @@ try {
     ["ad_daily", client.rpc("ad_daily", { p_ws: ws.id, ...D }), empty],
     ["ad_campaigns", client.rpc("ad_campaigns", { p_ws: ws.id, ...D, p_company: L }), empty],
     ["creative_ad_daily", client.rpc("creative_ad_daily", { p_ws: ws.id, ...D }), empty],
+    ["analytics_overview", client.rpc("analytics_overview", { p_ws: ws.id, ...D }), empty],
+    // analytics de site : réservée aux membres (null pour un client, même sur sa propre entreprise)
+    ["site_analytics (sa propre entreprise)", client.rpc("site_analytics", { p_company: L, ...D }), empty],
+    ["site_analytics (Kalia)", client.rpc("site_analytics", { p_company: K, ...D }), empty],
     ["link_attribution", client.rpc("link_attribution", { p_ws: ws.id, p_link: link?.id ?? NIL, p_from: "2026-01-01", p_to: "2026-12-31" }), zero],
     // fonctions internes : jamais appelables par un client
+    ["_site_analytics (interne)", client.rpc("_site_analytics", { p_company: L, ...D }), denied],
+    ["_report_analytics (interne)", client.rpc("_report_analytics", { p_company: L, ...D, p_sections: ["site", "behavior"] }), denied],
+    ["_demo_analytics (interne)", client.rpc("_demo_analytics", { ws: ws.id }), denied],
     ["portal_company_tasks (interne)", client.rpc("portal_company_tasks", { p_company: L }), denied],
     ["portal_company_files (interne)", client.rpc("portal_company_files", { p_company: L }), denied],
     ["portal_person (interne)", client.rpc("portal_person", { p_user: agenceId, p_company: L }), denied],
@@ -414,7 +438,7 @@ try {
   const sum = await client.rpc("spend_summary", { ws: ws.id, days: 30 });
   check("spend_summary : aucune dépense, aucun compte", !sum.error && Number(sum.data?.spend ?? 0) === 0 && Number(sum.data?.accounts ?? 0) === 0, why(sum));
   // Fonctions de démo et de remise à zéro : essayées sur l'espace temporaire (où le client a un portail mais n'est pas membre)
-  for (const fn of ["load_demo_data", "clear_demo_data", "load_demo_tracking", "clear_demo_tracking", "load_demo_links", "clear_demo_links", "load_demo_onboarding", "clear_demo_onboarding", "load_demo_creatives", "clear_demo_creatives", "load_demo_booking", "clear_demo_booking", "load_demo_intel", "clear_demo_intel", "load_demo_portal", "clear_demo_portal", "restore_onboarding_templates"]) {
+  for (const fn of ["load_demo_data", "clear_demo_data", "load_demo_tracking", "clear_demo_tracking", "load_demo_links", "clear_demo_links", "load_demo_onboarding", "clear_demo_onboarding", "load_demo_creatives", "clear_demo_creatives", "load_demo_booking", "clear_demo_booking", "load_demo_intel", "clear_demo_intel", "load_demo_portal", "clear_demo_portal", "load_demo_analytics", "clear_demo_analytics", "restore_onboarding_templates"]) {
     const r = await client.rpc(fn, { ws: tw.id });
     check(`${fn} : réservé aux membres`, !!r.error, why(r));
   }
@@ -617,7 +641,8 @@ try {
       "tracking_conversions", "tracking_people", "tracking_site_secret", "tracking_stats",
       "load_demo_data", "clear_demo_data", "load_demo_tracking", "clear_demo_tracking", "load_demo_links", "clear_demo_links",
       "load_demo_onboarding", "clear_demo_onboarding", "load_demo_creatives", "clear_demo_creatives", "load_demo_booking", "clear_demo_booking",
-      "load_demo_intel", "clear_demo_intel", "load_demo_portal", "clear_demo_portal",
+      "load_demo_intel", "clear_demo_intel", "load_demo_portal", "clear_demo_portal", "load_demo_analytics", "clear_demo_analytics",
+      "site_analytics", "portal_site_analytics",
       "portal_features", "portal_can", "portal_is_preview", "portal_require", "portal_task_visible", "portal_me", "portal_touch",
       "portal_effective_features", "portal_context", "portal_home", "portal_reporting", "portal_report", "portal_tasks", "portal_task",
       "portal_task_comment", "portal_task_review", "portal_creatives", "portal_creative", "portal_creative_review", "portal_files",

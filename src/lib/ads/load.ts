@@ -1,5 +1,7 @@
 import "server-only";
 
+import { loadSiteAnalytics, loadSiteOverview } from "@/lib/analytics/load";
+import type { SiteAnalytics } from "@/lib/analytics/types";
 import { supabaseServer } from "@/lib/supabase/server";
 import { withPrevious, type Period } from "./metrics";
 import type { TrackedAccount } from "./types";
@@ -72,12 +74,13 @@ async function daily(sb: SB, ws: string, start: string, end: string, company?: s
 /** Données de /reporting (tous les clients). */
 export async function loadOverview(ws: string, period: Period) {
   const sb = await supabaseServer();
-  const [accounts, rows, targets, reports, conns] = await Promise.all([
+  const [accounts, rows, targets, reports, conns, site] = await Promise.all([
     sb.from("ad_accounts").select(ACCOUNT_COLS).eq("workspace_id", ws).order("name"),
     daily(sb, ws, period.prevStart, period.end),
     sb.from("kpi_targets").select("company_id, metric, target").eq("workspace_id", ws),
     sb.from("reports").select(REPORT_COLS).eq("workspace_id", ws).order("created_at", { ascending: false }).limit(300),
-    sb.from("ad_connections_public").select("id", { count: "exact", head: true }).eq("workspace_id", ws),
+    sb.from("ad_connections_public").select("id", { count: "exact", head: true }).eq("workspace_id", ws).in("platform", ["meta", "google"]),
+    loadSiteOverview(ws, period),
   ]);
   return {
     accounts: (accounts.data ?? []) as TrackedAccount[],
@@ -85,6 +88,7 @@ export async function loadOverview(ws: string, period: Period) {
     targets: (targets.data ?? []).map((t) => ({ ...t, target: Number(t.target) })),
     reports: (reports.data ?? []) as ReportListItem[],
     connections: conns.count ?? 0,
+    site,
   };
 }
 
@@ -135,6 +139,8 @@ export interface ReportData {
     next_steps: string;
     shared: boolean;
     created_at: string;
+    /** Sections facultatives : « site » (trafic GA4), « behavior » (comportement Clarity) */
+    sections?: string[];
   };
   workspace: { name: string; accent: string; currency: string };
   company: { name: string };
@@ -151,22 +157,26 @@ export interface ReportData {
     conversions: number;
     value: number;
   }[];
+  /** Analytics de site de la période du rapport (seules les sections cochées dans la version client) */
+  analytics?: SiteAnalytics | null;
 }
 
 export async function loadReport(ws: { id: string; name: string; accent: string; currency: string }, reportId: string) {
   const sb = await supabaseServer();
   const { data: r } = await sb
     .from("reports")
-    .select("id, company_id, title, period_start, period_end, commentary, next_steps, shared, created_at, public_token")
+    .select("id, company_id, title, period_start, period_end, commentary, next_steps, shared, created_at, public_token, sections")
     .eq("id", reportId)
     .eq("workspace_id", ws.id)
     .maybeSingle();
   if (!r) return null;
   const p = withPrevious("custom", r.period_start, r.period_end);
-  const [company, accounts, targets] = await Promise.all([
+  // L'éditeur charge toujours GA4 et Clarity : cocher une section met à jour l'aperçu sans enregistrer
+  const [company, accounts, targets, analytics] = await Promise.all([
     sb.from("companies").select("name").eq("id", r.company_id).maybeSingle(),
     sb.from("ad_accounts").select("id, platform, name, currency").eq("company_id", r.company_id),
     sb.from("kpi_targets").select("metric, target").eq("company_id", r.company_id),
+    loadSiteAnalytics(r.company_id, p, sb),
   ]);
   const ids = (accounts.data ?? []).map((a) => a.id);
   const metrics = ids.length
@@ -211,6 +221,7 @@ export async function loadReport(ws: { id: string; name: string; accent: string;
       conversions: Number(m.conversions),
       value: Number(m.conversion_value),
     })),
+    analytics,
   };
   return { data, publicToken: public_token };
 }

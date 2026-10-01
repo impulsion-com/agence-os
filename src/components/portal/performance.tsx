@@ -2,26 +2,168 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChartColumn, FileText, Printer } from "lucide-react";
+import { ArrowLeft, ChartColumn, FileText, Globe, Megaphone, MousePointerClick, Printer } from "lucide-react";
 
 import "@/styles/reporting.css";
 import { DailyChart, ShareBars } from "@/components/reporting/charts";
 import { Delta, KpiCards } from "@/components/reporting/kpi";
 import { PeriodPicker } from "@/components/reporting/period-picker";
 import { ReportView } from "@/components/reporting/report-view";
+import {
+  ChannelShare, ClarityHistoryNote, DeviceFriction, DeviceShare, FrictionCards, Ga4Footnote, InsightList, LandingTable, ProblemPages, SiteKpis, SiteTrend, useClarity, useGa4, useInsights,
+} from "@/components/reporting/site-analytics";
 import type { ReportData } from "@/lib/ads/load";
 import { KPI_LABEL, fmtKpi, kpi, platformColor, platformName, rangeLabel, type Kpi, type Period, type Totals } from "@/lib/ads/metrics";
 import { chartSeries, groupTotals, splitTotals } from "@/lib/ads/series";
-import { ago } from "@/lib/format";
+import type { ClarityData, Ga4Data, SiteAnalytics } from "@/lib/analytics/types";
+import { ago, fmtDate } from "@/lib/format";
 import type { PortalReportItem, PortalReporting } from "@/lib/portal/types";
-import { usePortal } from "./context";
+import { usePortal, useUrlParam } from "./context";
 import { Empty } from "./bits";
 
 const METRICS: Kpi[] = ["conversions", "roas", "cpa", "ctr", "cpc"];
 const MAX_CAMPAIGNS = 20;
 
-/** Performance publicitaire du client : indicateurs, évolution quotidienne, campagnes et rapports publiés. */
-export function PerformanceView({ data, period }: { data: PortalReporting; period: Period }) {
+type View = "ads" | "site" | "behavior";
+
+/**
+ * Performance du client : publicité, site (GA4) et comportement sur le site (Clarity), puis les rapports publiés.
+ * Les rubriques « Site » et « Comportement » n'apparaissent que si l'agence a relié ces outils.
+ */
+export function PerformanceView({ data, analytics, period }: { data: PortalReporting; analytics: SiteAnalytics | null; period: Period }) {
+  const ga4 = analytics?.ga4 ?? null;
+  const clarity = analytics?.clarity ?? null;
+  const [param, setParam] = useUrlParam("view");
+  const tabs: { id: View; name: string; icon: typeof Globe }[] = [
+    { id: "ads", name: "Publicité", icon: Megaphone },
+    ...(ga4 ? [{ id: "site" as const, name: "Site", icon: Globe }] : []),
+    ...(clarity ? [{ id: "behavior" as const, name: "Comportement", icon: MousePointerClick }] : []),
+  ];
+  // Sans compte publicitaire, on ouvre directement sur ce qui existe
+  const fallback: View = data.accounts.length || !tabs[1] ? "ads" : tabs[1].id;
+  const view = tabs.find((t) => t.id === param)?.id ?? fallback;
+  const platforms = [...new Set(data.accounts.map((a) => platformName(a.platform)))];
+  const synced = [data.synced_at, ga4?.synced_at, clarity?.synced_at].filter(Boolean).sort().at(-1);
+
+  return (
+    <>
+      <div className="ptl-ph">
+        <div>
+          <h1>Performance</h1>
+          <p>
+            {tabs.length > 1 ? "Vos campagnes publicitaires, le trafic de votre site et le comportement de vos visiteurs." : `Les résultats de vos campagnes publicitaires${platforms.length ? ` (${platforms.join(", ")})` : ""}.`}
+            {synced && <span suppressHydrationWarning> Données mises à jour {ago(synced)}.</span>}
+          </p>
+        </div>
+        {(data.accounts.length > 0 || tabs.length > 1) && <PeriodPicker period={period} />}
+      </div>
+
+      {tabs.length > 1 && (
+        <div className="tabs" role="tablist" aria-label="Rubriques de la performance" style={{ marginBottom: 20 }}>
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" aria-selected={view === t.id} className={`tab${view === t.id ? " on" : ""}`} onClick={() => setParam(t.id === fallback ? null : t.id)}>
+              <t.icon size={14} aria-hidden /> {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "site" && ga4 ? <SiteView ga4={ga4} period={period} /> : view === "behavior" && clarity ? <BehaviorView clarity={clarity} period={period} /> : <AdsView data={data} period={period} />}
+
+      <Reports reports={data.reports} />
+    </>
+  );
+}
+
+const prevLabelOf = (period: Period) => `vs ${rangeLabel(period.prevStart, period.prevEnd).replace(/^./, (c) => c.toLowerCase())}`;
+
+/** Trafic du site (Google Analytics 4). */
+function SiteView({ ga4, period }: { ga4: Ga4Data; period: Period }) {
+  const { cur } = useGa4(ga4, period);
+  if (cur.sessions === 0)
+    return (
+      <div className="card">
+        <Empty icon={<Globe size={18} />} title="Aucune visite mesurée sur cette période">
+          Choisissez une autre période pour afficher le trafic de votre site.
+        </Empty>
+      </div>
+    );
+  return (
+    <>
+      <SiteKpis ga4={ga4} period={period} prevLabel={prevLabelOf(period)} />
+      <div className="ptl-sec">
+        <h2>Évolution quotidienne</h2>
+      </div>
+      <SiteTrend ga4={ga4} period={period} title="Sessions et conversion par jour" />
+      <div className="ptl-sec">
+        <h2>D&apos;où viennent vos visiteurs</h2>
+      </div>
+      <div className="rp-grid top" style={{ marginTop: 0, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+        <div className="card" style={{ paddingTop: 14 }}>
+          <ChannelShare ga4={ga4} period={period} />
+        </div>
+        <div className="card" style={{ paddingTop: 14 }}>
+          <DeviceShare ga4={ga4} />
+        </div>
+      </div>
+      <div className="ptl-sec">
+        <h2>Pages d&apos;arrivée</h2>
+      </div>
+      <div className="card">
+        <LandingTable ga4={ga4} period={period} limit={12} />
+      </div>
+      <Ga4Footnote ga4={ga4} />
+    </>
+  );
+}
+
+/** Comportement des visiteurs (Microsoft Clarity). */
+function BehaviorView({ clarity, period }: { clarity: ClarityData; period: Period }) {
+  const { cur } = useClarity(clarity, period);
+  const insights = useInsights(clarity, period, 4);
+  if (cur.sessions === 0)
+    return (
+      <div className="card">
+        <Empty icon={<MousePointerClick size={18} />} title="Aucune session observée sur cette période">
+          {clarity.first_day ? `Le suivi du comportement a commencé le ${fmtDate(clarity.first_day, true)}. Choisissez une période plus récente.` : "Le suivi du comportement vient de commencer : les premières données arrivent dès demain."}
+        </Empty>
+      </div>
+    );
+  return (
+    <>
+      <ClarityHistoryNote clarity={clarity} period={period} client />
+      <FrictionCards clarity={clarity} period={period} prevLabel={prevLabelOf(period)} />
+      {insights.length > 0 && (
+        <>
+          <div className="ptl-sec">
+            <h2>Ce que nous observons</h2>
+          </div>
+          <div className="card" style={{ paddingTop: 14 }}>
+            <InsightList insights={insights} />
+          </div>
+        </>
+      )}
+      <div className="ptl-sec">
+        <h2>Pages à améliorer en priorité</h2>
+      </div>
+      <div className="card">
+        <ProblemPages clarity={clarity} limit={8} />
+      </div>
+      <div className="ptl-sec">
+        <h2>Par appareil</h2>
+      </div>
+      <div className="card" style={{ paddingTop: 14 }}>
+        <DeviceFriction clarity={clarity} />
+      </div>
+      <p className="fainter" style={{ fontSize: 12, marginTop: 12 }}>
+        Source : Microsoft Clarity. Un clic de rage est une série de clics rapprochés au même endroit, un clic mort un clic sans effet : les deux signalent un élément qui ne réagit pas comme attendu.
+      </p>
+    </>
+  );
+}
+
+/** Performance publicitaire : indicateurs, évolution quotidienne, campagnes. */
+function AdsView({ data, period }: { data: PortalReporting; period: Period }) {
   const { currency } = usePortal();
   const rows = useMemo(() => data.metrics.map((m) => ({ ...m, date: String(m.date).slice(0, 10) })), [data.metrics]);
   const accById = useMemo(() => new Map(data.accounts.map((a) => [a.id, a])), [data.accounts]);
@@ -54,18 +196,6 @@ export function PerformanceView({ data, period }: { data: PortalReporting; perio
 
   return (
     <>
-      <div className="ptl-ph">
-        <div>
-          <h1>Performance</h1>
-          <p>
-            Les résultats de vos campagnes publicitaires
-            {data.accounts.length ? ` (${[...new Set(data.accounts.map((a) => platformName(a.platform)))].join(", ")})` : ""}.
-            {data.synced_at && <span suppressHydrationWarning> Données mises à jour {ago(data.synced_at)}.</span>}
-          </p>
-        </div>
-        {data.accounts.length > 0 && <PeriodPicker period={period} />}
-      </div>
-
       {!data.accounts.length ? (
         <div className="card">
           <Empty icon={<ChartColumn size={18} />} title="Aucun compte publicitaire relié pour le moment">
@@ -200,8 +330,6 @@ export function PerformanceView({ data, period }: { data: PortalReporting; perio
           </div>
         </>
       )}
-
-      <Reports reports={data.reports} />
     </>
   );
 }

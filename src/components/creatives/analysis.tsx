@@ -125,7 +125,7 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
         <EmptyState
           icon="chart-column"
           title="Pas encore de données par annonce"
-          text="Connecte Meta ou Google Ads dans Réglages > Connexions publicitaires : la synchro rapatrie la performance de chaque annonce. Lie ensuite tes annonces aux concepts pour les analyser par angle, format et hook."
+          text="Connecte Meta ou Google Ads dans Réglages > Connexions : la synchro rapatrie la performance de chaque annonce. Lie ensuite tes annonces aux concepts pour les analyser par angle, format et hook."
         />
       </div>
     );

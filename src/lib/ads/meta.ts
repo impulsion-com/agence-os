@@ -26,7 +26,7 @@ async function graph<T>(url: string, attempt = 0): Promise<T> {
     await sleep([4000, 15000, 45000][attempt]);
     return graph<T>(url, attempt + 1);
   }
-  if (err.code === 190) throw new AdsError("Le jeton Meta a expiré ou a été révoqué : reconnecte Meta dans Réglages > Connexions publicitaires.", "token");
+  if (err.code === 190) throw new AdsError("Le jeton Meta a expiré ou a été révoqué : reconnecte Meta dans Réglages > Connexions.", "token");
   if (err.code === 200 || err.code === 10) throw new AdsError("Permission Meta insuffisante : vérifie que l'app a bien l'accès ads_read et que tu as accès à ce compte.", "permission");
   if (err.code && RATE_CODES.has(err.code)) throw new AdsError("Limite de requêtes Meta atteinte : réessaie dans quelques minutes.", "rate");
   throw new AdsError(`Meta : ${err.error_user_msg || err.message}`);

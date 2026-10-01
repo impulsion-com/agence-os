@@ -52,13 +52,15 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   régénérer les types : `./scripts/gen-types.sh <project-ref>` (ou la CLI Supabase).
 - Tout est cloisonné par `workspace_id` + RLS (`is_member`, `can_write`, `is_admin`).
   Le rôle `guest` lit sans écrire.
+- Analytics de site (GA4, Clarity) : `src/lib/analytics/`, voir `docs/analytics.md`. Les jetons Clarity
+  sont dans `analytics_secrets` (aucune policy).
 - `ad_connections` (jetons OAuth) n'a aucune policy : lecture/écriture uniquement via le
   service role. La vue `ad_connections_public` expose les colonnes sans secret.
 - Pages publiques via RPC `security definer` : `public_proposal`, `respond_proposal`, `public_report`.
 - Données de démo : chargées et supprimées par `POST /api/demo` (`src/lib/demo.ts`), qui enchaîne
   `load_demo_data` (droits de l'utilisateur), puis en service role `_demo_links`,
   `demo_tracking_seed_part` (par client et par tranche de 20 jours, sous le délai de 8 s de l'API),
-  `_demo_creatives`, `_demo_intel`, `_demo_onboarding`, `_demo_booking` et `_demo_portal`. Chaque module a son `clear_demo_*`.
+  `_demo_creatives`, `_demo_intel`, `_demo_analytics`, `_demo_onboarding`, `_demo_booking` et `_demo_portal`. Chaque module a son `clear_demo_*`.
 - Modules activables (`src/lib/modules.ts`, colonne `workspaces.modules`, null = tous) : tout nouvel
   écran, menu, action ou outil MCP propre à un module se conditionne avec `useWorkspace().has("<module>")`
   et déclare ses routes dans `MODULES[].routes` (le `ModuleGate` de l'AppShell affiche alors la page

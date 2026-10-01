@@ -14,29 +14,43 @@ import { ago, fmtDate, initials } from "@/lib/format";
 import { useWorkspace } from "@/lib/workspace/context";
 import { rangeLabel } from "@/lib/ads/metrics";
 import type { SyncResult } from "@/lib/ads/types";
+import type { AnalyticsSyncResult } from "@/lib/analytics/types";
 
-/** Lance /api/reporting/sync (un compte ou tout l'espace) puis rafraîchit la page. */
+type AnyResult = SyncResult | AnalyticsSyncResult;
+const skippedOf = (r: AnyResult) => ("skipped" in r ? r.skipped : undefined);
+
+/**
+ * Lance /api/reporting/sync puis rafraîchit la page : un compte publicitaire (accountId), une source
+ * d'analytics (opts.sourceId : propriété GA4 ou projet Clarity), ou tout l'espace.
+ */
 export function useSync() {
   const { workspace } = useWorkspace();
   const toast = useToast();
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
-  const run = async (accountId?: string, opts: { full?: boolean; quiet?: boolean } = {}) => {
-    setBusy(accountId ?? "all");
+  const run = async (accountId?: string, opts: { full?: boolean; quiet?: boolean; sourceId?: string } = {}) => {
+    setBusy(accountId ?? opts.sourceId ?? "all");
     try {
       const res = await fetch("/api/reporting/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace_id: workspace.id, account_id: accountId, full: opts.full }),
+        body: JSON.stringify({ workspace_id: workspace.id, account_id: accountId, source_id: opts.sourceId, full: opts.full }),
       });
-      const json = (await res.json().catch(() => ({}))) as { results?: SyncResult[]; error?: string };
+      const json = (await res.json().catch(() => ({}))) as { results?: AnyResult[]; error?: string };
       if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
       const results = json.results ?? [];
       const failed = results.filter((r) => !r.ok);
+      // Clarity déjà à jour : aucune requête dépensée, ce n'est ni une erreur ni une synchro
+      const skipped = results.filter(skippedOf);
+      const done = results.length - failed.length - skipped.length;
+      // « compte » tant qu'il n'y a que de la publicité, « source » dès qu'il y a de l'analytics
+      const word = results.some((r) => "kind" in r) ? "source" : "compte";
       if (!results.length) {
-        if (!opts.quiet) toast("Aucun compte connecté à synchroniser");
-      } else if (failed.length) toast(`${failed.length} compte${failed.length > 1 ? "s" : ""} en erreur : ${failed[0].error}`, { error: true });
-      else if (!opts.quiet) toast(`${results.length} compte${results.length > 1 ? "s" : ""} synchronisé${results.length > 1 ? "s" : ""}`);
+        if (!opts.quiet) toast("Aucune source connectée à synchroniser");
+      } else if (failed.length) toast(`${failed.length} ${word}${failed.length > 1 ? "s" : ""} en erreur : ${failed[0].error}`, { error: true });
+      else if (!done && skipped.length) {
+        if (!opts.quiet) toast(skippedOf(skipped[0])!);
+      } else if (!opts.quiet) toast(`${done} ${word}${done > 1 ? "s" : ""} synchronisé${word === "source" ? "e" : ""}${done > 1 ? "s" : ""}${skipped.length ? " · Clarity déjà à jour" : ""}`);
       router.refresh();
       return results;
     } catch (e) {

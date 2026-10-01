@@ -16,6 +16,8 @@ export const ROLLING_SYNC_DAYS = 7;
 export interface IntegrationStatus {
   meta: { configured: boolean; missing: string[] };
   google: { configured: boolean; missing: string[] };
+  /** Google Analytics 4 : même client OAuth que Google Ads, sans jeton développeur */
+  ga4: { configured: boolean; missing: string[] };
   appUrl: string | null;
   cron: boolean;
 }
@@ -25,9 +27,11 @@ const missing = (keys: string[]) => keys.filter((k) => !process.env[k]);
 export function integrationStatus(): IntegrationStatus {
   const meta = missing(["META_APP_ID", "META_APP_SECRET"]);
   const google = missing(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_ADS_DEVELOPER_TOKEN"]);
+  const ga4 = missing(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
   return {
     meta: { configured: !meta.length, missing: meta },
     google: { configured: !google.length, missing: google },
+    ga4: { configured: !ga4.length, missing: ga4 },
     appUrl: process.env.NEXT_PUBLIC_APP_URL || null,
     cron: !!process.env.CRON_SECRET,
   };
@@ -41,7 +45,7 @@ export function appUrl(req?: Request) {
   return "http://localhost:3000";
 }
 
-export const redirectUri = (platform: "meta" | "google", req?: Request) => `${appUrl(req)}/api/integrations/${platform}/callback`;
+export const redirectUri = (platform: "meta" | "google" | "ga4", req?: Request) => `${appUrl(req)}/api/integrations/${platform}/callback`;
 
 /** Erreur lisible par l'utilisateur (message en français, sans secret). */
 export class AdsError extends Error {

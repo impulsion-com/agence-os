@@ -26,6 +26,7 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
     period_end: r.period_end,
     commentary: r.commentary,
     next_steps: r.next_steps,
+    sections: r.sections ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -36,7 +37,8 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
     form.period_start !== r.period_start ||
     form.period_end !== r.period_end ||
     form.commentary !== r.commentary ||
-    form.next_steps !== r.next_steps;
+    form.next_steps !== r.next_steps ||
+    [...form.sections].sort().join() !== [...(r.sections ?? [])].sort().join();
   const periodChanged = form.period_start !== r.period_start || form.period_end !== r.period_end;
   const validPeriod = !!form.period_start && !!form.period_end && form.period_start <= form.period_end;
   const link = publicUrl;
@@ -85,7 +87,12 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
     toast("Lien copié dans le presse-papiers");
   };
 
-  const preview: ReportData = { ...data, report: { ...r, title: form.title, commentary: form.commentary, next_steps: form.next_steps } };
+  const preview: ReportData = { ...data, report: { ...r, title: form.title, commentary: form.commentary, next_steps: form.next_steps, sections: form.sections } };
+  const toggleSection = (id: string) => setForm((f) => ({ ...f, sections: f.sections.includes(id) ? f.sections.filter((s) => s !== id) : [...f.sections, id] }));
+  const optional = [
+    { id: "site", name: "Trafic du site", desc: "Sessions, canaux, pages d'arrivée et taux de conversion (Google Analytics 4)", on: !!data.analytics?.ga4, missing: "Aucune propriété GA4 reliée à ce client" },
+    { id: "behavior", name: "Comportement sur le site", desc: "Clics de rage, clics morts et pages à améliorer (Microsoft Clarity)", on: !!data.analytics?.clarity, missing: "Aucun projet Clarity relié à ce client" },
+  ];
   const company = ws.company(r.company_id);
 
   return (
@@ -137,6 +144,20 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
               onChange={(e) => setForm({ ...form, next_steps: e.target.value })}
             />
           </label>
+          <div className="field">
+            <span className="label">Sections facultatives</span>
+            <div className="rp-checks">
+              {optional.map((o) => (
+                <label key={o.id} className={o.on ? undefined : "off"}>
+                  <input type="checkbox" className="check" checked={form.sections.includes(o.id)} disabled={ro || (!o.on && !form.sections.includes(o.id))} onChange={() => toggleSection(o.id)} />
+                  <span>
+                    {o.name}
+                    <small>{o.on ? o.desc : o.missing}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
           {!ro && (
             <button className="btn btn-primary" onClick={save} disabled={!dirty || saving || !validPeriod || !form.title.trim()}>
               {saving ? "Enregistrement…" : dirty ? "Enregistrer" : "Enregistré"}
@@ -200,7 +221,7 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
               </a>
             )}
           </div>
-          <ReportView data={preview} embedded />
+          <ReportView data={preview} embedded editing />
         </section>
       </div>
 

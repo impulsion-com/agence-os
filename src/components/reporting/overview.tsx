@@ -25,6 +25,8 @@ import {
 } from "@/lib/ads/metrics";
 import { byDay, splitTotals } from "@/lib/ads/series";
 import type { TrackedAccount } from "@/lib/ads/types";
+import { fmtInt, fmtPct, rate } from "@/lib/analytics/calc";
+import type { SiteOverviewRow } from "@/lib/analytics/load";
 import type { KpiMetric } from "@/lib/types";
 import { Sparkline } from "./charts";
 import { CompanyMark, ReportsTable, SortTh, SyncButton, useSort, type ReportItem } from "./common";
@@ -40,9 +42,11 @@ interface Props {
   targets: { company_id: string; metric: string; target: number }[];
   reports: ReportItem[];
   connections: number;
+  /** Sessions et évènements clés GA4 de la période, par client (vide si aucune propriété n'est suivie) */
+  site: SiteOverviewRow[];
 }
 
-type Col = "name" | "spend" | "dspend" | "conversions" | "cpa" | "value" | "roas" | "ctr" | "cpc" | "state";
+type Col = "name" | "spend" | "dspend" | "conversions" | "cpa" | "value" | "roas" | "ctr" | "cpc" | "state" | "sessions" | "siteconv";
 
 interface Line {
   id: string;
@@ -56,9 +60,12 @@ interface Line {
   stateDetail: string;
   synced: string | null;
   errors: number;
+  /** GA4 : sessions et taux de conversion du site (null sans propriété GA4) */
+  sessions: number | null;
+  siteConv: number | null;
 }
 
-export function ReportingOverview({ period, tab, accounts, rows, targets, reports, connections }: Props) {
+export function ReportingOverview({ period, tab, accounts, rows, targets, reports, connections, site }: Props) {
   const ws = useWorkspace();
   const router = useRouter();
   const currency = ws.workspace.currency || "EUR";
@@ -68,6 +75,9 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
     const accCompany = new Map(accounts.map((a) => [a.id, a.company_id]));
     const byCompany = new Map<string, TrackedAccount[]>();
     for (const a of accounts) if (a.company_id) byCompany.set(a.company_id, [...(byCompany.get(a.company_id) ?? []), a]);
+    // Un client suivi seulement dans GA4 (sans compte publicitaire) apparaît aussi
+    const siteBy = new Map(site.map((x) => [x.company_id, x]));
+    for (const x of site) if (!byCompany.has(x.company_id)) byCompany.set(x.company_id, []);
     const lines: Line[] = [];
     for (const [cid, accs] of byCompany) {
       const c = ws.company(cid);
@@ -92,6 +102,8 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
           .join(" · "),
         synced,
         errors: accs.filter((a) => a.sync_error).length,
+        sessions: siteBy.get(cid)?.sessions ?? null,
+        siteConv: siteBy.has(cid) ? rate(siteBy.get(cid)!.key_events, siteBy.get(cid)!.sessions) : null,
       });
     }
     const { cur: total, prev: prevTotal } = splitTotals(
@@ -99,18 +111,22 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
       period,
     );
     return { lines, total, prevTotal, unassigned: accounts.filter((a) => !a.company_id) };
-  }, [accounts, rows, targets, period, ws]);
+  }, [accounts, rows, targets, period, ws, site]);
+  const hasSite = site.length > 0;
+  const siteTotal = site.reduce((s, x) => ({ sessions: s.sessions + x.sessions, key_events: s.key_events + x.key_events }), { sessions: 0, key_events: 0 });
 
   const { sort, toggle, apply } = useSort<Col>("spend");
   const sorted = apply(lines, (l, k) => {
     if (k === "name") return l.name;
     if (k === "dspend") return l.prev.spend ? (l.cur.spend - l.prev.spend) / l.prev.spend : null;
     if (k === "state") return l.state === "good" ? 3 : l.state === "near" ? 2 : l.state === "far" ? 1 : null;
+    if (k === "sessions") return l.sessions;
+    if (k === "siteconv") return l.siteConv;
     return kpi(l.cur, k as Kpi);
   });
 
   const setTab = (t: string) => router.push(`${ws.base}/reporting?${q}${t === "reports" ? "&tab=reports" : ""}`, { scroll: false });
-  const hasAccounts = accounts.length > 0;
+  const hasAccounts = accounts.length > 0 || hasSite;
   const errors = accounts.filter((a) => a.sync_error).length;
 
   return (
@@ -119,7 +135,7 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
         <Link href={`${ws.base}/settings/integrations`} className="btn">
           <Plug size={14} /> Connexions
         </Link>
-        {accounts.some((a) => a.connection_id) && <SyncButton label="Tout synchroniser" />}
+        {(accounts.some((a) => a.connection_id) || hasSite) && <SyncButton label="Tout synchroniser" />}
       </PageHeader>
 
       <div className="rp-tabs-row">
@@ -189,11 +205,11 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
             <div className="card-h">
               <h2>Clients</h2>
               <span className="faint" style={{ fontSize: 12 }}>
-                {lines.length} client{lines.length > 1 ? "s" : ""} avec des comptes publicitaires
+                {lines.length} client{lines.length > 1 ? "s" : ""} suivi{lines.length > 1 ? "s" : ""}{hasSite ? " · sessions et conversion du site mesurées par GA4" : ""}
               </span>
             </div>
             <div className="rp-scroll">
-              <table className="tbl rp-tbl" style={{ minWidth: 980 }}>
+              <table className={`tbl rp-tbl${hasSite ? " tight" : ""}`} style={{ minWidth: hasSite ? 1040 : 980 }}>
                 <thead>
                   <tr>
                     <SortTh k="name" sort={sort} onSort={toggle}>Client</SortTh>
@@ -206,6 +222,8 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
                     <SortTh k="roas" sort={sort} onSort={toggle} right>ROAS</SortTh>
                     <SortTh k="ctr" sort={sort} onSort={toggle} right>CTR</SortTh>
                     <SortTh k="cpc" sort={sort} onSort={toggle} right>CPC</SortTh>
+                    {hasSite && <SortTh k="sessions" sort={sort} onSort={toggle} right>Sessions</SortTh>}
+                    {hasSite && <SortTh k="siteconv" sort={sort} onSort={toggle} right>Conv. site</SortTh>}
                     <SortTh k="state" sort={sort} onSort={toggle}>Objectifs</SortTh>
                     <th aria-label="Ouvrir" />
                   </tr>
@@ -234,7 +252,7 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
                         </td>
                         <td className="r" style={{ fontWeight: 500 }}>{fmtKpi("spend", l.cur.spend, currency)}</td>
                         <td className="r"><Delta metric="spend" cur={l.cur.spend} prev={l.prev.spend} /></td>
-                        <td><Sparkline values={l.spark} label={`Dépense quotidienne de ${l.name}`} /></td>
+                        <td><Sparkline values={l.spark} width={hasSite ? 76 : 96} label={`Dépense quotidienne de ${l.name}`} /></td>
                         <td className="r">
                           {fmtKpi("conversions", l.cur.conversions, currency)}
                           <div><Delta metric="conversions" cur={l.cur.conversions} prev={l.prev.conversions} /></div>
@@ -244,6 +262,8 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
                         <td className="r">{fmtKpi("roas", kpi(l.cur, "roas"), currency)}</td>
                         <td className="r">{fmtKpi("ctr", kpi(l.cur, "ctr"), currency)}</td>
                         <td className="r">{fmtKpi("cpc", kpi(l.cur, "cpc"), currency)}</td>
+                        {hasSite && <td className="r">{l.sessions === null ? <span className="fainter">–</span> : fmtInt(l.sessions)}</td>}
+                        {hasSite && <td className="r" title="Évènements clés GA4 pour 100 sessions">{l.siteConv === null ? <span className="fainter">–</span> : fmtPct(l.siteConv, 2)}</td>}
                         <td>{l.state ? <StateBadge state={l.state} short title={l.stateDetail} /> : <span className="fainter" style={{ fontSize: 12 }}>Aucun objectif</span>}</td>
                         <td className="r"><ChevronRight size={14} className="fainter" /></td>
                       </tr>
@@ -263,6 +283,8 @@ export function ReportingOverview({ period, tab, accounts, rows, targets, report
                       <td className="r">{fmtKpi("roas", kpi(total, "roas"), currency)}</td>
                       <td className="r">{fmtKpi("ctr", kpi(total, "ctr"), currency)}</td>
                       <td className="r">{fmtKpi("cpc", kpi(total, "cpc"), currency)}</td>
+                      {hasSite && <td className="r">{fmtInt(siteTotal.sessions)}</td>}
+                      {hasSite && <td className="r">{fmtPct(rate(siteTotal.key_events, siteTotal.sessions), 2)}</td>}
                       <td colSpan={2} />
                     </tr>
                   </tfoot>
@@ -327,7 +349,7 @@ function NoAccounts({ connections }: { connections: number }) {
           <div className="st">
             <span className="n">2</span>
             <h4>Connecte tes comptes</h4>
-            <p>Dans Réglages &gt; Connexions publicitaires, autorise l&apos;accès en lecture à tes comptes Meta et Google Ads.</p>
+            <p>Dans Réglages &gt; Connexions, autorise l&apos;accès en lecture à tes comptes Meta et Google Ads.</p>
           </div>
           <div className="st">
             <span className="n">3</span>
