@@ -14,7 +14,12 @@ export default async function Root() {
     .order("joined_at", { ascending: false })
     .limit(1);
   const slug = (data?.[0]?.workspace as unknown as { slug: string } | null)?.slug;
-  if (!slug) redirect("/onboarding");
+  if (!slug) {
+    // Pas d'espace : un client invité va sur son portail, les autres créent leur espace
+    const { data: portals } = await sb.rpc("portal_me");
+    const first = (portals as { slug: string }[] | null)?.[0];
+    redirect(first ? `/c/${first.slug}` : "/onboarding");
+  }
   // Page d'accueil choisie dans Réglages > Préférences (chemin relatif à l'espace)
   const { data: me } = await sb.from("profiles").select("prefs").eq("id", auth.user.id).single();
   const home = (me?.prefs as { home?: string } | null)?.home?.replace(/^\/+/, "") ?? "";

@@ -465,6 +465,7 @@ export type Database = {
       }
       attachments: {
         Row: {
+          client_visible: boolean
           created_at: string
           id: string
           mime: string
@@ -477,6 +478,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          client_visible?: boolean
           created_at?: string
           id?: string
           mime?: string
@@ -489,6 +491,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          client_visible?: boolean
           created_at?: string
           id?: string
           mime?: string
@@ -976,6 +979,177 @@ export type Database = {
           },
         ]
       }
+      client_invitations: {
+        Row: {
+          accepted_at: string | null
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          email: string
+          features: string[] | null
+          id: string
+          invited_by: string | null
+          revoked_at: string | null
+          token: string
+          workspace_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          email: string
+          features?: string[] | null
+          id?: string
+          invited_by?: string | null
+          revoked_at?: string | null
+          token?: string
+          workspace_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          email?: string
+          features?: string[] | null
+          id?: string
+          invited_by?: string | null
+          revoked_at?: string | null
+          token?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_invitations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invitations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_portals: {
+        Row: {
+          company_id: string
+          enabled: boolean
+          features: string[]
+          updated_at: string
+          welcome: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id: string
+          enabled?: boolean
+          features?: string[]
+          updated_at?: string
+          welcome?: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string
+          enabled?: boolean
+          features?: string[]
+          updated_at?: string
+          welcome?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_users: {
+        Row: {
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          features: string[] | null
+          id: string
+          invited_by: string | null
+          last_seen_at: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          features?: string[] | null
+          id?: string
+          invited_by?: string | null
+          last_seen_at?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          features?: string[] | null
+          id?: string
+          invited_by?: string | null
+          last_seen_at?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_users_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_users_profile_fk"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_users_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           author_id: string | null
@@ -984,6 +1158,7 @@ export type Database = {
           edited_at: string | null
           id: string
           task_id: string
+          visibility: string
           workspace_id: string
         }
         Insert: {
@@ -993,6 +1168,7 @@ export type Database = {
           edited_at?: string | null
           id?: string
           task_id: string
+          visibility?: string
           workspace_id: string
         }
         Update: {
@@ -1002,6 +1178,7 @@ export type Database = {
           edited_at?: string | null
           id?: string
           task_id?: string
+          visibility?: string
           workspace_id?: string
         }
         Relationships: [
@@ -1430,6 +1607,10 @@ export type Database = {
           angle: string
           awareness: string | null
           brief: Json
+          client_feedback: string
+          client_review: string | null
+          client_reviewed_at: string | null
+          client_reviewed_by: string | null
           company_id: string | null
           cover_path: string | null
           created_at: string
@@ -1460,6 +1641,10 @@ export type Database = {
           angle?: string
           awareness?: string | null
           brief?: Json
+          client_feedback?: string
+          client_review?: string | null
+          client_reviewed_at?: string | null
+          client_reviewed_by?: string | null
           company_id?: string | null
           cover_path?: string | null
           created_at?: string
@@ -1490,6 +1675,10 @@ export type Database = {
           angle?: string
           awareness?: string | null
           brief?: Json
+          client_feedback?: string
+          client_review?: string | null
+          client_reviewed_at?: string | null
+          client_reviewed_by?: string | null
           company_id?: string | null
           cover_path?: string | null
           created_at?: string
@@ -2623,6 +2812,7 @@ export type Database = {
           monthly_budget: number | null
           name: string
           platforms: string[]
+          portal_mode: string
           seq: number
           start_date: string | null
           status: string
@@ -2643,6 +2833,7 @@ export type Database = {
           monthly_budget?: number | null
           name: string
           platforms?: string[]
+          portal_mode?: string
           seq?: number
           start_date?: string | null
           status?: string
@@ -2663,6 +2854,7 @@ export type Database = {
           monthly_budget?: number | null
           name?: string
           platforms?: string[]
+          portal_mode?: string
           seq?: number
           start_date?: string | null
           status?: string
@@ -3332,6 +3524,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           assignee_id: string | null
+          client_visible: boolean
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -3353,6 +3546,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           assignee_id?: string | null
+          client_visible?: boolean
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -3374,6 +3568,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           assignee_id?: string | null
+          client_visible?: boolean
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -3968,6 +4163,7 @@ export type Database = {
       _demo_intel: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }
       _demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      accept_client_invitation: { Args: { p_token: string }; Returns: Json }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
         Args: {
@@ -4023,6 +4219,7 @@ export type Database = {
       clear_demo_links: { Args: { ws: string }; Returns: undefined }
       clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       clear_demo_tracking: { Args: { ws: string }; Returns: undefined }
+      client_invitation_info: { Args: { p_token: string }; Returns: Json }
       create_api_token: {
         Args: {
           p_expires_at?: string
@@ -4200,6 +4397,23 @@ export type Database = {
           sections: Json
         }[]
       }
+      portal_all_features: { Args: never; Returns: string[] }
+      portal_can: {
+        Args: { p_company: string; p_feature: string }
+        Returns: boolean
+      }
+      portal_features: { Args: { p_company: string }; Returns: string[] }
+      portal_is_preview: { Args: { p_company: string }; Returns: boolean }
+      portal_me: { Args: never; Returns: Json }
+      portal_require: {
+        Args: { p_company: string; p_feature: string }
+        Returns: undefined
+      }
+      portal_task_visible: {
+        Args: { p_company: string; p_task: string }
+        Returns: boolean
+      }
+      portal_touch: { Args: { p_company: string }; Returns: undefined }
       project_ws: { Args: { p: string }; Returns: string }
       proposal_ws: { Args: { p: string }; Returns: string }
       public_proposal: { Args: { p_token: string }; Returns: Json }

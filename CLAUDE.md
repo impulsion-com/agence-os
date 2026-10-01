@@ -63,6 +63,12 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   écran, menu, action ou outil MCP propre à un module se conditionne avec `useWorkspace().has("<module>")`
   et déclare ses routes dans `MODULES[].routes` (le `ModuleGate` de l'AppShell affiche alors la page
   « module désactivé »). C'est de l'ergonomie, pas de la sécurité : la RLS ne change pas.
+- Portail client (`/c/<slug>`, migration `0090_client_portal.sql`) : un client n'est PAS membre de
+  l'espace (table `client_users`, une entreprise par ligne). Il ne lit aucune table en direct : tout
+  passe par des fonctions `portal_*` (security definer) qui commencent par
+  `perform portal_require(<company_id>, '<fonctionnalité>')` et ne renvoient que les colonnes destinées
+  au client. Ne jamais ajouter de policy RLS « client » sur une table métier. Après tout changement :
+  `node --env-file=.env.local scripts/test-portal-security.mjs` doit passer.
 - Emails : `src/lib/email.ts` (Resend, facultatif). Toute fonctionnalité doit marcher sans email.
 - Pages publiques (proposition `/p/`, onboarding `/f/`, rendez-vous `/b/`, rapport `/r/`, liens `/l/`) :
   lecture et écriture uniquement via routes serveur en service role ou RPC `security definer`.

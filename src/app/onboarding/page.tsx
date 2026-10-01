@@ -15,6 +15,9 @@ export default async function Onboarding({ searchParams }: PageProps<"/onboardin
     const { data } = await sb.from("workspace_members").select("workspace:workspaces(slug)").eq("user_id", auth.user.id).limit(1);
     const slug = (data?.[0]?.workspace as unknown as { slug: string } | null)?.slug;
     if (slug) redirect(`/w/${slug}`);
+    const { data: portals } = await sb.rpc("portal_me");
+    const first = (portals as { slug: string }[] | null)?.[0];
+    if (first) redirect(`/c/${first.slug}`);
   }
   return (
     <AuthShell title="Crée ton espace agence" sub="Un espace = une agence. Tu pourras inviter ton équipe ensuite.">
