@@ -1,6 +1,6 @@
 import {
   Activity, Archive, ArrowUpDown, BadgeEuro, Bell, Briefcase, Building2, Calendar, ChartColumn, ChartGantt, Check,
-  ChevronDown, ChevronRight, Circle, CircleCheck, Clapperboard, Code, Contact, Ellipsis, Euro, Eye, FileSignature,
+  ChevronDown, ChevronRight, Circle, CircleCheck, Clapperboard, Code, Contact, DoorOpen, Ellipsis, Euro, Eye, FileSignature,
   FileText, Filter, Folder, FolderKanban, Globe, Handshake, Heart, House, Inbox, Kanban, Layers, LayoutDashboard,
   LayoutGrid, Link, List, ListChecks, LogOut, Megaphone, MessageSquare, Monitor, Moon, MousePointerClick, Palette,
   PanelLeft, Paperclip, PenTool, Plug, Plus, Receipt, Repeat, Rocket, Search, Settings, Share2, ShoppingBag, Smartphone,
@@ -12,7 +12,7 @@ export const ICONS: Record<string, LucideIcon> = {
   activity: Activity, archive: Archive, "arrow-up-down": ArrowUpDown, "badge-euro": BadgeEuro, bell: Bell,
   briefcase: Briefcase, "building-2": Building2, calendar: Calendar, "chart-column": ChartColumn, "chart-gantt": ChartGantt,
   check: Check, "chevron-down": ChevronDown, "chevron-right": ChevronRight, circle: Circle, "circle-check": CircleCheck,
-  clapperboard: Clapperboard, code: Code, contact: Contact, ellipsis: Ellipsis, euro: Euro, eye: Eye,
+  clapperboard: Clapperboard, code: Code, contact: Contact, "door-open": DoorOpen, ellipsis: Ellipsis, euro: Euro, eye: Eye,
   "file-signature": FileSignature, "file-text": FileText, filter: Filter, folder: Folder, "folder-kanban": FolderKanban,
   globe: Globe, handshake: Handshake, heart: Heart, house: House, inbox: Inbox, kanban: Kanban, layers: Layers,
   "layout-dashboard": LayoutDashboard, "layout-grid": LayoutGrid, link: Link, list: List, "list-checks": ListChecks,

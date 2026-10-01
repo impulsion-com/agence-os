@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { removeDemoPortalFiles, seedDemoPortalFiles } from "@/lib/portal-admin/demo";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 
 // Le jeu de démo complet (dont ~24 000 visiteurs de tracking) dépasse le délai de 8 s
@@ -33,8 +34,13 @@ export async function POST(request: NextRequest) {
           () => admin.rpc("_demo_intel", { ws }),
           () => admin.rpc("_demo_onboarding", { ws }),
           () => admin.rpc("_demo_booking", { ws, uid: user.id }),
+          // Portail client : après les créas (trois sont envoyées en validation), puis les fichiers partagés
+          () => admin.rpc("_demo_portal", { ws }),
+          () => seedDemoPortalFiles(admin, ws, user.id),
         ]
       : [
+          () => removeDemoPortalFiles(admin, ws),
+          () => sb.rpc("clear_demo_portal", { ws }),
           () => sb.rpc("clear_demo_booking", { ws }),
           () => sb.rpc("clear_demo_onboarding", { ws }),
           () => sb.rpc("clear_demo_intel", { ws }),

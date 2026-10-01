@@ -8,6 +8,8 @@ import { ArrowLeft, Copy, Ellipsis, FileText, Info, Sparkles, Trash2 } from "luc
 import "@/styles/reporting.css";
 import "@/styles/creatives.css";
 import { CompanyPicker, ProjectPicker } from "@/components/pickers";
+import { ReviewBadge } from "@/components/portal-admin/bits";
+import { ClientReviewCard } from "@/components/portal-admin/client-review";
 import { DailyChart } from "@/components/reporting/charts";
 import { CompanyMark, Crumbs } from "@/components/reporting/common";
 import { PeriodPicker } from "@/components/reporting/period-picker";
@@ -133,7 +135,10 @@ export function ConceptPage({ data, period }: { data: ConceptData; period: Perio
       const row = must(
         await sb
           .from("creative_concepts")
-          .insert({ ...rest, title: `${c.title} (copie)`, status: "idea", verdict: "", launched_at: null, cover_path: null, position: Date.now() / 1000 } as never)
+          .insert({
+            ...rest, title: `${c.title} (copie)`, status: "idea", verdict: "", launched_at: null, cover_path: null, position: Date.now() / 1000,
+            client_review: null, client_feedback: "", client_reviewed_at: null, client_reviewed_by: null,
+          } as never)
           .select("id")
           .single(),
       ) as { id: string };
@@ -204,6 +209,7 @@ export function ConceptPage({ data, period }: { data: ConceptData; period: Perio
               </Link>
             )}
             <FatigueBadge f={perf.worst} />
+            {ws.has("portal") && <ReviewBadge review={c.client_review} />}
           </div>
           <div className="actions">
             <PeriodPicker period={period} />
@@ -302,6 +308,7 @@ export function ConceptPage({ data, period }: { data: ConceptData; period: Perio
         </div>
 
         <aside className="crv-side">
+          <ClientReviewCard concept={c} onChange={(patch) => setC((x) => ({ ...x, ...patch }))} />
           <section className="card" aria-labelledby="crv-verdict-h">
             <div className="card-h">
               <h3 id="crv-verdict-h">Verdict du test</h3>

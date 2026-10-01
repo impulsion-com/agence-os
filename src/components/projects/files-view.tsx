@@ -5,9 +5,10 @@ import "@/styles/files.css";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  ChevronLeft, ChevronRight, CloudUpload, Download, Ellipsis, Eye, LayoutGrid, Link2, List, Pencil, Play, Search, SearchX, Trash2, X,
+  ChevronLeft, ChevronRight, CloudUpload, Download, Ellipsis, Eye, EyeOff, LayoutGrid, Link2, List, Pencil, Play, Search, SearchX, Trash2, X,
 } from "lucide-react";
 
+import { ClientPill, SharedPill } from "@/components/portal-admin/bits";
 import { useOpenTask, usePref } from "@/components/tasks/calendar-utils";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/misc";
@@ -46,12 +47,16 @@ export function FilesView({ projectId }: { projectId: string }) {
   const mutate = useMutate();
   const openTask = useOpenTask();
   const project = ws.project(projectId);
+  // Partage avec le client : module Portail activé, projet rattaché à un client et non masqué (mode « Aucune tâche »)
+  const canShare = ws.has("portal") && !!project?.company_id && project.portal_mode !== "none";
+  const client = canShare ? ws.company(project?.company_id) : undefined;
   const [files, setFiles] = useState<FileRow[] | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [view, setView] = usePref("files-view", ["grid", "list"] as const, "grid");
   const [sort, setSort] = usePref<Sort>("files-sort", ["date", "name", "size"] as const, "date");
   const [kind, setKind] = useState<FileKind | "all">("all");
+  const [sharedOnly, setSharedOnly] = useState(false);
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<FileRow | null>(null);
@@ -116,9 +121,15 @@ export function FilesView({ projectId }: { projectId: string }) {
   }, [files]);
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const out = (files ?? []).filter((f) => (kind === "all" || kindOf(f.name, f.mime) === kind) && (!needle || f.name.toLowerCase().includes(needle) || f.task?.title.toLowerCase().includes(needle)));
+    const out = (files ?? []).filter(
+      (f) =>
+        (kind === "all" || kindOf(f.name, f.mime) === kind) &&
+        (!sharedOnly || f.client_visible) &&
+        (!needle || f.name.toLowerCase().includes(needle) || f.task?.title.toLowerCase().includes(needle)),
+    );
     return out.sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name, "fr") : sort === "size" ? b.size - a.size : b.created_at.localeCompare(a.created_at)));
-  }, [files, kind, q, sort]);
+  }, [files, kind, q, sort, sharedOnly]);
+  const sharedCount = (files ?? []).filter((f) => f.client_visible).length;
 
   // ----- Envoi -----
   const upload = useCallback(
@@ -197,6 +208,14 @@ export function FilesView({ projectId }: { projectId: string }) {
     const ok = await mutate(async (sb) => must(await sb.from("attachments").update({ name }).eq("id", f.id).select("id")), { success: "Fichier renommé", refresh: false });
     if (!ok) setFiles((fs) => fs?.map((x) => (x.id === f.id ? { ...x, name: prev } : x)) ?? null);
   };
+  const share = async (f: FileRow, client_visible: boolean) => {
+    setFiles((fs) => fs?.map((x) => (x.id === f.id ? { ...x, client_visible } : x)) ?? null);
+    const ok = await mutate(async (sb) => must(await sb.from("attachments").update({ client_visible }).eq("id", f.id).select("id")), {
+      success: client_visible ? `Partagé avec ${client?.name ?? "le client"}` : "Retiré du portail client",
+      refresh: false,
+    });
+    if (!ok) setFiles((fs) => fs?.map((x) => (x.id === f.id ? { ...x, client_visible: !client_visible } : x)) ?? null);
+  };
   const remove = async (f: FileRow) => {
     const before = files;
     setFiles((fs) => fs?.filter((x) => x.id !== f.id) ?? null);
@@ -222,6 +241,14 @@ export function FilesView({ projectId }: { projectId: string }) {
         ...(f.task ? [{ label: "Ouvrir la tâche", icon: <Link2 size={14} />, onSelect: () => openTask(f.task!.id) }] : []),
         ...(ws.canWrite
           ? [
+              ...(canShare
+                ? [
+                    { label: "", separator: true },
+                    f.client_visible
+                      ? { label: "Ne plus partager avec le client", icon: <EyeOff size={14} />, onSelect: () => void share(f, false) }
+                      : { label: "Partager avec le client", icon: <Eye size={14} />, onSelect: () => void share(f, true) },
+                  ]
+                : []),
               { label: "", separator: true },
               { label: "Renommer", icon: <Pencil size={14} />, onSelect: () => setRenaming(f) },
               { label: "Supprimer", icon: <Trash2 size={14} />, danger: true, onSelect: () => setDeleting(f) },
@@ -274,6 +301,12 @@ export function FilesView({ projectId }: { projectId: string }) {
               </button>
             ))}
           </div>
+        )}
+        {canShare && (sharedCount > 0 || sharedOnly) && (
+          <button type="button" className={`files-fk${sharedOnly ? " on" : ""}`} aria-pressed={sharedOnly} onClick={() => setSharedOnly((v) => !v)} title="Fichiers visibles sur le portail du client">
+            <Eye size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
+            Partagés avec le client <span className="n">{sharedCount}</span>
+          </button>
         )}
         <span className="sp" />
         <Menu
@@ -391,6 +424,7 @@ export function FilesView({ projectId }: { projectId: string }) {
               onClick={() => {
                 setQ("");
                 setKind("all");
+                setSharedOnly(false);
               }}
             >
               Réinitialiser
@@ -411,6 +445,7 @@ export function FilesView({ projectId }: { projectId: string }) {
                   <th>Type</th>
                   <th className="r">Taille</th>
                   <th>Ajouté par</th>
+                  {canShare && <th title="Visible sur le portail du client">Partagé avec le client</th>}
                   <th>Date</th>
                   <th className="act" aria-label="Actions" />
                 </tr>
@@ -419,7 +454,7 @@ export function FilesView({ projectId }: { projectId: string }) {
                 {shown.map((f) => {
                   const k = kindOf(f.name, f.mime);
                   const K = KINDS[k];
-                  const m = ws.member(f.uploaded_by);
+                  const m = ws.person(f.uploaded_by);
                   return (
                     <tr key={f.id} onClick={() => setPreview(f.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setPreview(f.id)}>
                       <td style={{ paddingLeft: 14, maxWidth: 420 }}>
@@ -442,8 +477,22 @@ export function FilesView({ projectId }: { projectId: string }) {
                         <span className="who muted">
                           <Avatar profile={m?.profile ?? null} size={18} title={false} />
                           <span className="trunc">{m?.profile.full_name ?? "Ancien membre"}</span>
+                          <ClientPill person={m} company={false} />
                         </span>
                       </td>
+                      {canShare && (
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="toggle"
+                            checked={f.client_visible}
+                            disabled={!ws.canWrite}
+                            onChange={(e) => void share(f, e.target.checked)}
+                            aria-label={`Partager ${f.name} avec le client`}
+                            style={{ verticalAlign: "middle" }}
+                          />
+                        </td>
+                      )}
                       <td className="muted" title={fmtDate(f.created_at.slice(0, 10), true)}>{ago(f.created_at)}</td>
                       <td className="act" onClick={(e) => e.stopPropagation()}>
                         {menu(f, (open, isOpen) => (
@@ -513,8 +562,9 @@ const FileCard = memo(function FileCard({
   const ws = useWorkspace();
   const k = kindOf(f.name, f.mime);
   const K = KINDS[k];
-  const m = ws.member(f.uploaded_by);
+  const m = ws.person(f.uploaded_by);
   const thumb = hasThumb(k, f.name);
+  const portal = ws.has("portal");
   return (
     <div className="files-card" role="button" tabIndex={0} onClick={() => onOpen(f.id)} onKeyDown={(e) => e.key === "Enter" && onOpen(f.id)} aria-label={`Aperçu de ${f.name}`}>
       <div className="files-prev" style={{ ["--c" as string]: K.color }}>
@@ -538,6 +588,12 @@ const FileCard = memo(function FileCard({
           </span>
         )}
         {extOf(f.name) && <span className="ext">{extOf(f.name)}</span>}
+        {portal && (f.client_visible || m?.isClient) && (
+          <span className="pa-badges">
+            {m?.isClient && <span className="pa-pill" title={`Déposé par ${m.profile.full_name}`}>Déposé par le client</span>}
+            {f.client_visible && !m?.isClient && <SharedPill label="Partagé" />}
+          </span>
+        )}
       </div>
       {taskLink}
       <div className="fi">
@@ -572,7 +628,7 @@ function Lightbox({
   const ws = useWorkspace();
   const k = kindOf(f.name, f.mime);
   const K = KINDS[k];
-  const m = ws.member(f.uploaded_by);
+  const m = ws.person(f.uploaded_by);
   const previewable = canPreview(k, f.name);
   const [signed, setSigned] = useState<{ path: string; url: string } | null>(null);
   const url = thumbUrl ?? (signed?.path === f.path ? signed.url : undefined);
@@ -613,7 +669,7 @@ function Lightbox({
           <div className="t">
             <b className="trunc">{f.name}</b>
             <span>
-              {K.name} · {fileSize(f.size)} · {m?.profile.full_name ?? "Ancien membre"} · {fmtDate(f.created_at.slice(0, 10), true)}
+              {K.name} · {fileSize(f.size)} · {m?.profile.full_name ?? "Ancien membre"}{m?.isClient ? " (client)" : ""} · {fmtDate(f.created_at.slice(0, 10), true)}
               {total > 1 && ` · ${index + 1} sur ${total}`}
             </span>
           </div>

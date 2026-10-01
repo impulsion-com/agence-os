@@ -13,7 +13,8 @@ import { useToast } from "@/components/ui/toast";
 import { COLORS, PLATFORMS, PROJECT_ICONS, PROJECT_STATUS, PROJECT_TEMPLATES, colorOf } from "@/lib/constants";
 import { addDays, iso, parseDay, today } from "@/lib/format";
 import type { TablesInsert } from "@/lib/database.types";
-import type { Project, ProjectStatus } from "@/lib/types";
+import { PORTAL_MODE, PORTAL_MODES } from "@/lib/portal-admin/features";
+import type { PortalMode, Project, ProjectStatus } from "@/lib/types";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 
 import "@/styles/projects.css";
@@ -81,6 +82,7 @@ export function ProjectCreateModal({ onClose, project, memberIds = [], defaults 
   const [due, setDue] = useState<string | null>(project?.due_date ?? null);
   const [description, setDescription] = useState(project?.description ?? "");
   const [template, setTemplate] = useState(defaults.template ?? "blank");
+  const [portalMode, setPortalMode] = useState<PortalMode>(project?.portal_mode ?? "selected");
   const [busy, setBusy] = useState(false);
 
   const keyErr = !key ? "" : !/^[A-Z0-9]{2,6}$/.test(key) ? "2 à 6 lettres ou chiffres" : taken.includes(key) ? "Cette clé est déjà prise par un autre projet" : "";
@@ -97,6 +99,7 @@ export function ProjectCreateModal({ onClose, project, memberIds = [], defaults 
     const fields = {
       name: name.trim(), key, company_id: company, icon, color, status, lead_id: lead, platforms,
       monthly_budget: budget ? Number(budget.replace(",", ".")) || null : null, start_date: start, due_date: due, description,
+      portal_mode: portalMode,
     };
     if (editing) {
       const ok = await mutate(
@@ -320,6 +323,20 @@ export function ProjectCreateModal({ onClose, project, memberIds = [], defaults 
             </div>
           </div>
         </div>
+
+        {ws.has("portal") && company && (
+          <div className="field">
+            <span className="label">Portail client : ce que voit {ws.company(company)?.name}</span>
+            <div className="seg" role="radiogroup" aria-label="Tâches visibles par le client" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+              {PORTAL_MODES.map((m) => (
+                <button key={m.id} type="button" role="radio" aria-checked={portalMode === m.id} className={portalMode === m.id ? "on" : ""} onClick={() => setPortalMode(m.id)}>
+                  {m.name}
+                </button>
+              ))}
+            </div>
+            <span className="hint">{PORTAL_MODE[portalMode].desc}. Le client ne voit rien tant que son portail n&apos;est pas activé.</span>
+          </div>
+        )}
 
         <div className="field">
           <label htmlFor="pj-desc">Description</label>

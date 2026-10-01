@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Archive, Calendar, ChevronLeft, ChevronRight, CircleDot, Copy, ExternalLink, Link2, SignalHigh, Tag, Trash2, UserRound } from "lucide-react";
+import { Archive, Calendar, ChevronLeft, ChevronRight, CircleDot, Copy, ExternalLink, Eye, EyeOff, Link2, SignalHigh, Tag, Trash2, UserRound } from "lucide-react";
 
 import { MiniCalendar } from "@/components/pickers";
 import { Avatar } from "@/components/ui/avatar";
@@ -62,6 +62,9 @@ export function TaskContextMenu({
 
   let body: React.ReactNode;
   if (mode === "root") {
+    // Partage avec le client : proposé si au moins une tâche appartient à un projet client
+    const shareable = ws.has("portal") && tasks.some((x) => ws.project(x.project_id)?.company_id);
+    const allVisible = tasks.every((x) => x.client_visible);
     const items: MenuItem[] = [
       ...(many ? [{ label: `${tasks.length} tâches sélectionnées`, heading: true } as MenuItem] : []),
       { label: "Statut", icon: <CircleDot size={14} />, sub: arrow, onSelect: go("status") },
@@ -69,6 +72,19 @@ export function TaskContextMenu({
       { label: "Responsable", icon: <UserRound size={14} />, sub: arrow, onSelect: go("assignee") },
       { label: "Échéance", icon: <Calendar size={14} />, sub: arrow, onSelect: go("due") },
       { label: "Étiquettes", icon: <Tag size={14} />, sub: arrow, onSelect: go("labels") },
+      ...(shareable
+        ? [
+            {
+              label: allVisible ? "Masquer au client" : "Rendre visible par le client",
+              icon: allVisible ? <EyeOff size={14} /> : <Eye size={14} />,
+              onSelect: () =>
+                void actions.update(tasks, { client_visible: !allVisible }, {
+                  toast: allVisible ? (many ? "Tâches masquées au client" : "Tâche masquée au client") : many ? "Tâches visibles par le client" : "Tâche visible par le client",
+                  undo: true,
+                }),
+            } as MenuItem,
+          ]
+        : []),
       { label: "", separator: true },
       ...(!many
         ? [

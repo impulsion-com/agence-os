@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Ellipsis, Plus } from "lucide-react";
 
 import { DueText } from "@/components/pickers";
+import { ClientEye } from "@/components/portal-admin/bits";
 import { useUI } from "@/components/shell/ui-context";
 import { PriorityIcon, StatusIcon } from "@/components/ui/status";
 import { STATUSES } from "@/lib/constants";
@@ -72,6 +73,7 @@ function Card({ t, dragging, onDragStart, onDragEnd, showProject }: { t: Task; d
         {t.priority !== "none" && <PriorityIcon priority={t.priority} size={13} />}
         {t.due_date && <DueText date={t.due_date} done={done} />}
         <TaskCounts t={{ ...t, subtasks: [] }} />
+        <ClientEye t={t} />
         <span style={{ marginLeft: "auto" }}>
           <AssigneeAvatar id={t.assignee_id} size={20} />
         </span>

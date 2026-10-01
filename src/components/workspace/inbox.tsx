@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CalendarClock, CheckCheck, CircleDot, ClipboardCheck, FileSignature, Handshake, Mail, MailOpen, MessageSquare, Palette, UserPlus } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, AtSign, Bell, CalendarClock, CheckCheck, CircleDot, ClipboardCheck, Eye, FileSignature, Handshake, Mail, MailOpen, MessageSquare, Palette, Paperclip, UserPlus } from "lucide-react";
 
 import "@/styles/workspace.css";
+import { ClientPill, ReviewBadge } from "@/components/portal-admin/bits";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, EmptyState, ObjIcon } from "@/components/ui/misc";
 import { PriorityIcon, StatusIcon } from "@/components/ui/status";
@@ -14,7 +15,7 @@ import { PRIORITY, STATUS, colorOf } from "@/lib/constants";
 import { ago, dayBucket, fmtDate, money } from "@/lib/format";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
-import type { Notification, Priority, ProposalStatus, TaskStatus } from "@/lib/types";
+import type { ClientReview, Notification, Priority, ProposalStatus, TaskStatus } from "@/lib/types";
 import { useOpenTask } from "./hooks";
 
 export interface InboxItem extends Notification {
@@ -24,15 +25,19 @@ export interface InboxItem extends Notification {
   } | null;
   deal: { id: string; title: string; value: number; billing: string; stage_id: string | null; company_id: string | null; expected_close: string | null } | null;
   proposal?: { id: string; title: string; number: number; status: string; company_id: string | null; valid_until: string | null; sent_at: string | null } | null;
+  // Créa concernée (réponse d'un client à une demande de validation)
+  concept?: { id: string; title: string; company_id: string | null; client_review: ClientReview | null; client_feedback: string } | null;
 }
 
-type Filter = "all" | "unread" | "assigned" | "comments" | "sales" | "archived";
+type Filter = "all" | "unread" | "assigned" | "comments" | "sales" | "clients" | "archived";
 const FILTERS: { id: Filter; name: string }[] = [
   { id: "all", name: "Tout" },
   { id: "unread", name: "Non lues" },
   { id: "assigned", name: "Assignations" },
   { id: "comments", name: "Commentaires" },
   { id: "sales", name: "Commercial" },
+  // actions faites par un client depuis son portail (affiché si le module Portail est activé)
+  { id: "clients", name: "Clients" },
 ];
 
 export const PROPOSAL_STATUS: Record<ProposalStatus, { name: string; color: string }> = {
@@ -44,9 +49,10 @@ export const PROPOSAL_STATUS: Record<ProposalStatus, { name: string; color: stri
   expired: { name: "Expirée", color: "var(--amber)" },
 };
 
-const match = (n: InboxItem, f: Filter) => {
+const match = (n: InboxItem, f: Filter, fromClient: (n: InboxItem) => boolean) => {
   if (f === "archived") return !!n.archived_at;
   if (n.archived_at) return false;
+  if (f === "clients") return fromClient(n);
   if (f === "unread") return !n.read_at;
   if (f === "assigned") return n.kind === "assigned" || n.kind === "mentioned";
   if (f === "comments") return n.kind === "commented" || n.kind === "mentioned";
@@ -66,6 +72,8 @@ const KIND_ICON: Record<Notification["kind"], ReactNode> = {
   onboarding: <ClipboardCheck size={11} />,
   booking: <CalendarClock size={11} />,
   creative: <Palette size={11} />,
+  portal: <Eye size={11} />,
+  file: <Paperclip size={11} />,
 };
 
 const typing = (e: KeyboardEvent) => {
@@ -84,8 +92,11 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
   const [over, setOver] = useState<Record<string, Partial<Pick<Notification, "read_at" | "archived_at">>>>({});
 
   const all = useMemo(() => items.map((n) => (over[n.id] ? { ...n, ...over[n.id] } : n)), [items, over]);
-  const shown = useMemo(() => all.filter((n) => match(n, filter)), [all, filter]);
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, all.filter((n) => match(n, f.id) && !n.read_at).length])), [all]);
+  const person = ws.person;
+  const fromClient = useCallback((n: InboxItem) => !!person(n.actor_id)?.isClient, [person]);
+  const filters = FILTERS.filter((f) => f.id !== "clients" || ws.has("portal"));
+  const shown = useMemo(() => all.filter((n) => match(n, filter, fromClient)), [all, filter, fromClient]);
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, all.filter((n) => match(n, f.id, fromClient) && !n.read_at).length])), [all, fromClient]);
   const unread = all.filter((n) => !n.read_at && !n.archived_at).length;
   const current = all.find((n) => n.id === sel) ?? null;
 
@@ -146,9 +157,11 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
       if (n.task) openTask(n.task.id);
       else if (n.deal) router.push(`${ws.base}/crm/deals/${n.deal.id}`);
       else if (n.proposal_id) router.push(`${ws.base}/proposals/${n.proposal_id}`);
+      else if (n.concept_id) router.push(`${ws.base}/creatives/${n.concept_id}`);
+      else if (n.kind === "file" && ws.project(n.project_id)) router.push(`${ws.base}/projects/${ws.project(n.project_id)!.key}/files`);
       else if (n.kind === "creative") router.push(`${ws.base}/creatives?view=intel&new=1`);
     },
-    [openTask, router, ws.base],
+    [openTask, router, ws],
   );
 
   // Navigation clavier : J/K (ou flèches), Entrée ouvre, U lu/non lu, E archive
@@ -214,7 +227,7 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
             </button>
           </div>
           <div className="tabs" role="tablist" aria-label="Filtrer les notifications">
-            {FILTERS.map((f) => (
+            {filters.map((f) => (
               <button
                 key={f.id}
                 role="tab"
@@ -226,7 +239,7 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
                 }}
               >
                 {f.name}
-                {f.id === "unread" && counts[f.id] > 0 && <span className="count accent">{counts[f.id]}</span>}
+                {(f.id === "unread" || f.id === "clients") && counts[f.id] > 0 && <span className="count accent">{counts[f.id]}</span>}
               </button>
             ))}
           </div>
@@ -278,8 +291,15 @@ export function InboxView({ items, stages }: { items: InboxItem[]; stages: { id:
 function useSentence() {
   const ws = useWorkspace();
   return (n: InboxItem): { line: ReactNode; detail: string } => {
-    const actor = n.actor_id ? ws.member(n.actor_id)?.profile.full_name ?? "Un ancien membre" : null;
-    const A = actor ? <b>{actor}</b> : null;
+    // L'acteur peut être une personne d'un client (commentaire, validation ou demande depuis le portail)
+    const who = ws.person(n.actor_id);
+    const actor = n.actor_id ? who?.profile.full_name ?? "Un ancien membre" : null;
+    const A = actor ? (
+      <>
+        <b>{actor}</b>
+        {who?.isClient && <> <ClientPill person={who} company={false} /></>}
+      </>
+    ) : null;
     const task = <b>{n.task?.title ?? "une tâche supprimée"}</b>;
     const [prefix, rest] = n.body.includes(" : ") ? [n.body.split(" : ")[0], n.body.split(" : ").slice(1).join(" : ")] : ["", n.body];
     switch (n.kind) {
@@ -303,6 +323,19 @@ function useSentence() {
       }
       case "proposal":
         return { line: <>{prefix || "Proposition"} : <b>{n.proposal?.title ?? rest}</b></>, detail: n.proposal ? `Proposition n° ${n.proposal.number}` : "" };
+      case "file":
+        // Fichier déposé par un client depuis son portail
+        return { line: <>{A ?? "Le client"} a déposé un fichier</>, detail: rest };
+      case "creative": {
+        // Réponse d'un client à une créa envoyée en validation (le corps commence par le verdict)
+        if (!n.concept_id) return { line: n.body, detail: "" };
+        const title = <b>{n.concept?.title ?? rest}</b>;
+        const approved = prefix.startsWith("Créa approuvée");
+        return {
+          line: approved ? <>{A ?? "Le client"} a approuvé la créa {title}</> : <>{A ?? "Le client"} demande des modifications sur la créa {title}</>,
+          detail: n.concept?.client_feedback ?? "",
+        };
+      }
       default:
         return { line: n.body, detail: "" };
     }
@@ -313,9 +346,9 @@ function NotifRow({ n, on, onSelect, onRead, onArchive }: { n: InboxItem; on: bo
   const ws = useWorkspace();
   const sentence = useSentence();
   const { line, detail } = sentence(n);
-  const actor = ws.member(n.actor_id);
+  const actor = ws.person(n.actor_id);
   const project = ws.project(n.project_id ?? n.task?.project_id);
-  const company = ws.company(n.deal?.company_id ?? n.proposal?.company_id);
+  const company = ws.company(n.deal?.company_id ?? n.proposal?.company_id ?? n.concept?.company_id ?? (actor?.isClient ? actor.company?.id : null));
   return (
     <div
       className={`nt${on ? " on" : ""}${n.read_at ? " read" : ""}`}
@@ -329,7 +362,7 @@ function NotifRow({ n, on, onSelect, onRead, onArchive }: { n: InboxItem; on: bo
       {actor ? (
         <Avatar profile={actor.profile} size={26} />
       ) : (
-        <span className="nt-ic">{n.kind === "proposal" ? <FileSignature size={13} /> : n.kind === "deal" ? <Handshake size={13} /> : <Bell size={13} />}</span>
+        <span className="nt-ic">{n.kind === "proposal" ? <FileSignature size={13} /> : n.kind === "deal" ? <Handshake size={13} /> : n.concept_id ? <Palette size={13} /> : <Bell size={13} />}</span>
       )}
       <div className="nt-b">
         <div className="nt-l1">{line}</div>
@@ -340,6 +373,7 @@ function NotifRow({ n, on, onSelect, onRead, onArchive }: { n: InboxItem; on: bo
             <>
               <i style={{ background: colorOf(project.color) }} />
               <span className="trunc" style={{ maxWidth: 170 }}>{project.name}</span>
+              {actor?.isClient && company && <span className="trunc" style={{ maxWidth: 120 }}>· {company.name}</span>}
             </>
           ) : company ? (
             <span className="trunc" style={{ maxWidth: 170 }}>{company.name}</span>
@@ -389,15 +423,16 @@ function Preview({
   const ws = useWorkspace();
   const sentence = useSentence();
   const { line } = sentence(n);
-  const actor = ws.member(n.actor_id);
+  const actor = ws.person(n.actor_id);
   const project = ws.project(n.project_id ?? n.task?.project_id);
   const t = n.task;
   const deal = n.deal;
   const prop = n.proposal;
+  const concept = n.concept_id ? (n.concept ?? null) : null;
   const stage = stages.find((s) => s.id === deal?.stage_id);
-  const company = ws.company(deal?.company_id ?? prop?.company_id);
+  const company = ws.company(deal?.company_id ?? prop?.company_id ?? concept?.company_id);
   const assignee = ws.member(t?.assignee_id);
-  const quote = n.kind === "commented" || n.kind === "mentioned" ? n.body : "";
+  const quote = n.kind === "commented" || n.kind === "mentioned" ? n.body : concept?.client_feedback ?? "";
 
   return (
     <article className="pv" aria-live="polite">
@@ -418,6 +453,12 @@ function Preview({
               <span>{deal ? "Pipeline" : "Propositions"}</span>
               {company && <span className="trunc">· {company.name}</span>}
             </>
+          ) : n.concept_id ? (
+            <>
+              <Palette size={14} />
+              <span>Bibliothèque créa</span>
+              {company && <span className="trunc">· {company.name}</span>}
+            </>
           ) : null}
         </div>
         <button className="btn btn-ghost btn-sm btn-icon" onClick={onRead} aria-label={n.read_at ? "Marquer comme non lue" : "Marquer comme lue"} title={n.read_at ? "Marquer comme non lue (U)" : "Marquer comme lue (U)"}>
@@ -428,7 +469,7 @@ function Preview({
         </button>
       </div>
 
-      <h2>{t?.title ?? deal?.title ?? prop?.title ?? "Notification"}</h2>
+      <h2>{t?.title ?? deal?.title ?? prop?.title ?? concept?.title ?? (n.kind === "file" ? n.body.split(" : ").slice(1).join(" : ") || "Fichier déposé" : "Notification")}</h2>
 
       <div className="pv-event">
         {actor ? <Avatar profile={actor.profile} size={22} /> : <span className="nt-ic" style={{ width: 22, height: 22 }}>{KIND_ICON[n.kind]}</span>}
@@ -454,6 +495,15 @@ function Preview({
         </dl>
       )}
       {t?.description && <div className="pv-desc">{t.description.length > 600 ? t.description.slice(0, 600) + "…" : t.description}</div>}
+
+      {concept && (
+        <dl className="pv-props">
+          <dt>Client</dt>
+          <dd>{company?.name ?? <span className="faint">Aucun</span>}</dd>
+          <dt>Validation</dt>
+          <dd>{concept.client_review ? <ReviewBadge review={concept.client_review} /> : <span className="faint">Non envoyée</span>}</dd>
+        </dl>
+      )}
 
       {deal && (
         <dl className="pv-props">
@@ -484,9 +534,9 @@ function Preview({
       )}
 
       <div className="pv-actions">
-        {(t || deal || n.proposal_id || n.kind === "creative") && (
+        {(t || deal || n.proposal_id || n.kind === "creative" || (n.kind === "file" && project)) && (
           <button className="btn btn-primary" onClick={onOpen}>
-            {t ? "Ouvrir la tâche" : deal ? "Ouvrir le deal" : n.proposal_id ? "Ouvrir la proposition" : "Ouvrir la veille"}
+            {t ? "Ouvrir la tâche" : deal ? "Ouvrir le deal" : n.proposal_id ? "Ouvrir la proposition" : n.concept_id ? "Ouvrir la créa" : n.kind === "file" ? "Ouvrir les fichiers" : "Ouvrir la veille"}
             <kbd style={{ background: "transparent", color: "inherit", borderColor: "color-mix(in srgb, currentColor 35%, transparent)" }}>↵</kbd>
           </button>
         )}
@@ -495,7 +545,7 @@ function Preview({
             Voir le projet
           </Link>
         )}
-        {!t && !deal && !n.proposal_id && n.kind !== "creative" && <span className="faint">L&apos;objet lié à cette notification a été supprimé.</span>}
+        {!t && !deal && !n.proposal_id && n.kind !== "creative" && !(n.kind === "file" && project) && <span className="faint">L&apos;objet lié à cette notification a été supprimé.</span>}
       </div>
     </article>
   );

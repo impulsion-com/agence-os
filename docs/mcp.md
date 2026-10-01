@@ -51,6 +51,8 @@ Révocation immédiate. Les admins voient et révoquent tous les jetons de l'esp
 - **Reporting** : get_performance, get_campaigns
 - **Attribution** : get_attribution
 - **Liens** : create_tracked_link, list_links
+- **Bibliothèque créa** : list_competitor_ads, list_creative_concepts, get_creative_recommendations, create_creative_concept
+- **Portail client** : list_client_portals, set_task_client_visibility
 
 Les références acceptent un identifiant, une clé (ACME-12), une clé de projet ou un nom ; « me » désigne l'utilisateur du jeton.
 Dates : AAAA-MM-JJ, « aujourd'hui », « demain », « +7 ».

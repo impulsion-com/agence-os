@@ -3,6 +3,7 @@
 import { Ellipsis } from "lucide-react";
 
 import { AssigneePicker, DatePicker, PriorityPicker, StatusPicker } from "@/components/pickers";
+import { ClientEye } from "@/components/portal-admin/bits";
 import { ObjIcon } from "@/components/ui/misc";
 import { PriorityIcon, StatusIcon } from "@/components/ui/status";
 import { isOverdue } from "@/lib/tasks";
@@ -67,6 +68,7 @@ export function TaskRow({ t, showProject }: { t: Task; showProject?: boolean }) 
       )}
       <span className={`tk-row-title trunc${done ? " tk-done" : ""}`}>{t.title}</span>
       <span className="tk-row-counts">
+        <ClientEye t={t} />
         <TaskCounts t={t} />
       </span>
       <span className="tk-row-labels">

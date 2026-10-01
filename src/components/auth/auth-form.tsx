@@ -4,17 +4,38 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import "@/styles/portal.css";
 import { Logo } from "@/components/shell/sidebar";
 import { APP_NAME } from "@/lib/constants";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-export function AuthShell({ title, sub, children, foot }: { title: string; sub?: ReactNode; children: ReactNode; foot?: ReactNode }) {
+/**
+ * Invitation d'un client au portail (next = /invite/c/<token>) : les pages de connexion et d'inscription
+ * prennent les couleurs de l'agence, vouvoient, et l'email est celui de l'invitation (verrouillé).
+ */
+export interface ClientInvite {
+  email: string;
+  workspace: string;
+  accent: string;
+  company: string;
+}
+
+export function AuthShell({ title, sub, children, foot, brand }: { title: string; sub?: ReactNode; children: ReactNode; foot?: ReactNode; brand?: { name: string; accent?: string } }) {
   return (
-    <div className="auth">
+    <div className="auth" data-ptl-accent={brand ? brand.accent || "indigo" : undefined}>
       <div className="auth-card">
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-          <Logo size={26} />
-          {APP_NAME}
+          {brand ? (
+            <>
+              <span className="ptl-mark" aria-hidden>{brand.name.slice(0, 1).toUpperCase()}</span>
+              {brand.name}
+            </>
+          ) : (
+            <>
+              <Logo size={26} />
+              {APP_NAME}
+            </>
+          )}
         </div>
         <div>
           <h1>{title}</h1>
@@ -27,12 +48,14 @@ export function AuthShell({ title, sub, children, foot }: { title: string; sub?:
   );
 }
 
-const msg = (e: string) =>
+const msg = (e: string, vous = false) =>
   ({
     "Invalid login credentials": "Email ou mot de passe incorrect.",
-    "User already registered": "Un compte existe déjà avec cet email.",
-    "Email not confirmed": "Confirme d'abord ton adresse email (lien reçu par mail).",
+    "User already registered": vous ? "Un compte existe déjà avec cet email : connectez-vous." : "Un compte existe déjà avec cet email.",
+    "Email not confirmed": vous ? "Confirmez d'abord votre adresse email (lien reçu par mail)." : "Confirme d'abord ton adresse email (lien reçu par mail).",
   })[e] ?? e;
+
+const LOCKED_HINT = "L'invitation est liée à cette adresse.";
 
 export function strength(pw: string) {
   let s = 0;
@@ -60,10 +83,10 @@ function Strength({ pw }: { pw: string }) {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ invite, vous = !!invite }: { invite?: ClientInvite; vous?: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invite?.email ?? "");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -76,21 +99,22 @@ export function LoginForm() {
         setErr("");
         const { error } = await supabaseBrowser().auth.signInWithPassword({ email, password });
         setBusy(false);
-        if (error) return setErr(msg(error.message));
+        if (error) return setErr(msg(error.message, vous));
         router.push(params.get("next") || "/");
         router.refresh();
       }}
     >
       <div className="field">
         <label htmlFor="email">Email</label>
-        <input id="email" className="input lg" type="email" autoComplete="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input id="email" className="input lg" type="email" autoComplete="email" required autoFocus={!invite} readOnly={!!invite} value={email} onChange={(e) => setEmail(e.target.value)} />
+        {invite && <span className="hint">{LOCKED_HINT}</span>}
       </div>
       <div className="field">
         <label htmlFor="password" style={{ display: "flex", justifyContent: "space-between" }}>
           Mot de passe
           <Link href="/forgot" className="faint" style={{ fontWeight: 400 }}>Oublié ?</Link>
         </label>
-        <input id="password" className="input lg" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        <input id="password" className="input lg" type="password" autoComplete="current-password" required autoFocus={!!invite} value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       {err && <p className="err" style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }} role="alert">{err}</p>}
       <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? "Connexion…" : "Se connecter"}</button>
@@ -98,11 +122,11 @@ export function LoginForm() {
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ invite }: { invite?: ClientInvite }) {
   const router = useRouter();
   const params = useSearchParams();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invite?.email ?? "");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
@@ -111,8 +135,12 @@ export function SignupForm() {
   if (sent)
     return (
       <div className="card" style={{ padding: 16 }}>
-        <b>Vérifie ta boîte mail</b>
-        <p className="muted" style={{ marginTop: 6 }}>Un lien de confirmation a été envoyé à {email}. Clique dessus pour activer ton compte.</p>
+        <b>{invite ? "Vérifiez votre boîte mail" : "Vérifie ta boîte mail"}</b>
+        <p className="muted" style={{ marginTop: 6 }}>
+          {invite
+            ? `Un lien de confirmation a été envoyé à ${email}. Cliquez dessus pour ouvrir votre espace client.`
+            : `Un lien de confirmation a été envoyé à ${email}. Clique dessus pour activer ton compte.`}
+        </p>
       </div>
     );
   return (
@@ -120,7 +148,7 @@ export function SignupForm() {
       style={{ display: "flex", flexDirection: "column", gap: 14 }}
       onSubmit={async (e) => {
         e.preventDefault();
-        if (strength(password) < 2) return setErr("Choisis un mot de passe plus solide (8 caractères minimum).");
+        if (strength(password) < 2) return setErr(invite ? "Choisissez un mot de passe plus solide (8 caractères minimum)." : "Choisis un mot de passe plus solide (8 caractères minimum).");
         setBusy(true);
         setErr("");
         const { data, error } = await supabaseBrowser().auth.signUp({
@@ -129,7 +157,7 @@ export function SignupForm() {
           options: { data: { full_name: name }, emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
         });
         setBusy(false);
-        if (error) return setErr(msg(error.message));
+        if (error) return setErr(msg(error.message, !!invite));
         if (data.session) {
           router.push(next);
           router.refresh();
@@ -141,8 +169,9 @@ export function SignupForm() {
         <input id="name" className="input lg" autoComplete="name" required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Camille Martin" />
       </div>
       <div className="field">
-        <label htmlFor="email">Email professionnel</label>
-        <input id="email" className="input lg" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="camille@agence.fr" />
+        <label htmlFor="email">{invite ? "Email" : "Email professionnel"}</label>
+        <input id="email" className="input lg" type="email" autoComplete="email" required readOnly={!!invite} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="camille@agence.fr" />
+        {invite && <span className="hint">{LOCKED_HINT}</span>}
       </div>
       <div className="field">
         <label htmlFor="password">Mot de passe</label>
@@ -150,7 +179,7 @@ export function SignupForm() {
         <Strength pw={password} />
       </div>
       {err && <p style={{ color: "var(--red)", fontSize: "var(--fs-sm)" }} role="alert">{err}</p>}
-      <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? "Création…" : "Créer mon compte"}</button>
+      <button className="btn btn-primary btn-lg btn-block" disabled={busy}>{busy ? "Création…" : invite ? "Créer mon accès" : "Créer mon compte"}</button>
     </form>
   );
 }

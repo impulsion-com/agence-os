@@ -63,6 +63,16 @@ export function ActivityView({ items, hasMore, limit }: { items: ActivityRow[]; 
               {m.user_id === ws.me.id ? " (moi)" : ""}
             </option>
           ))}
+          {ws.clients.length > 0 && (
+            <optgroup label="Clients (portail)">
+              {[...new Map(ws.clients.map((c) => [c.user_id, c])).values()].map((c) => (
+                <option key={c.user_id} value={c.user_id}>
+                  {c.profile.full_name || c.profile.email}
+                  {ws.company(c.company_id) ? ` · ${ws.company(c.company_id)!.name}` : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
 

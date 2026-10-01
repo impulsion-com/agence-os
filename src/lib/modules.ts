@@ -8,6 +8,7 @@ export type ModuleId =
   | "proposals"
   | "onboarding"
   | "booking"
+  | "portal"
   | "reporting"
   | "tracking"
   | "links"
@@ -84,6 +85,15 @@ export const MODULES: ModuleDef[] = [
     routes: ["/booking"],
   },
   {
+    id: "portal",
+    name: "Portail client",
+    icon: "door-open",
+    group: "Commercial",
+    desc: "Un espace à ton nom où chaque client suit ses tâches, valide ses créas et retrouve ses rapports.",
+    includes: ["Accès par invitation, client par client", "Tâches, commentaires et fichiers partagés", "Validation des créas et des livrables"],
+    routes: ["/portal"],
+  },
+  {
     id: "reporting",
     name: "Reporting",
     icon: "chart-column",
@@ -123,7 +133,7 @@ export const PRESETS: { id: string; name: string; desc: string; icon: string; mo
     name: "Media buyer freelance",
     desc: "Trouver des clients, livrer, prouver les résultats",
     icon: "target",
-    modules: ["projects", "crm", "proposals", "onboarding", "booking", "reporting", "links"],
+    modules: ["projects", "crm", "proposals", "onboarding", "booking", "portal", "reporting", "links"],
   },
   { id: "crm", name: "CRM seul", desc: "Pipeline, contacts, propositions et rendez-vous", icon: "handshake", modules: ["crm", "proposals", "booking"] },
   { id: "projects", name: "Gestion de projet seule", desc: "Projets, tâches, calendrier et timeline", icon: "folder-kanban", modules: ["projects"] },

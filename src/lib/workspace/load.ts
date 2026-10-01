@@ -4,13 +4,15 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Company, Label, Member, Profile, Project, Role, Team, Workspace } from "@/lib/types";
+import type { ClientUser, Company, Label, Member, Profile, Project, Role, Team, Workspace } from "@/lib/types";
 
 export interface WorkspaceData {
   workspace: Workspace;
   me: Profile;
   role: Role;
   members: Member[];
+  // Personnes des clients ayant accès au portail (auteurs de commentaires, acteurs du journal)
+  clients: ClientUser[];
   teams: Team[];
   labels: Label[];
   projects: Project[];
@@ -31,7 +33,7 @@ export const loadWorkspace = cache(async (slug: string): Promise<WorkspaceData> 
   const { data: workspace } = await sb.from("workspaces").select("*").eq("slug", slug).maybeSingle();
   if (!workspace) notFound();
 
-  const [me, members, teams, labels, projects, companies, favorites, unread, myOpen, mine] = await Promise.all([
+  const [me, members, teams, labels, projects, companies, favorites, unread, myOpen, mine, clients] = await Promise.all([
     sb.from("profiles").select("*").eq("id", uid).single(),
     sb.from("workspace_members").select("user_id, role, team_id, title, joined_at, profile:profiles(*)").eq("workspace_id", workspace.id),
     sb.from("teams").select("*").eq("workspace_id", workspace.id).order("name"),
@@ -42,6 +44,11 @@ export const loadWorkspace = cache(async (slug: string): Promise<WorkspaceData> 
     sb.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", uid).eq("workspace_id", workspace.id).is("read_at", null).is("archived_at", null),
     sb.from("tasks").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id).eq("assignee_id", uid).neq("status", "done").is("archived_at", null),
     sb.from("workspace_members").select("workspace:workspaces(id, name, slug)").eq("user_id", uid),
+    sb
+      .from("client_users")
+      .select("id, user_id, company_id, features, contact_id, created_at, last_seen_at, profile:profiles(id, email, full_name, title, color)")
+      .eq("workspace_id", workspace.id)
+      .order("created_at"),
   ]);
 
   const memberRows = (members.data ?? []) as unknown as Member[];
@@ -53,6 +60,7 @@ export const loadWorkspace = cache(async (slug: string): Promise<WorkspaceData> 
     me: me.data as Profile,
     role,
     members: memberRows.sort((a, b) => a.profile.full_name.localeCompare(b.profile.full_name, "fr")),
+    clients: ((clients.data ?? []) as unknown as ClientUser[]).filter((c) => c.profile),
     teams: (teams.data ?? []) as Team[],
     labels: (labels.data ?? []) as Label[],
     projects: (projects.data ?? []) as Project[],

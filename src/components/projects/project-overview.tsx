@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Diamond } from "lucide-react";
+import { Diamond, Eye, EyeOff } from "lucide-react";
 
 import { DueText } from "@/components/pickers";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
@@ -10,12 +10,16 @@ import { useTaskKey } from "@/components/tasks/bits";
 import { openTask } from "@/components/tasks/view-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge, Progress } from "@/components/ui/misc";
+import { Menu } from "@/components/ui/overlay";
 import { StatusIcon } from "@/components/ui/status";
 import { PLATFORMS, PROJECT_STATUS, STATUSES } from "@/lib/constants";
 import { diffDays, fmtDate, money, parseDay, today } from "@/lib/format";
+import { PORTAL_MODE, PORTAL_MODES, taskVisibleToClient } from "@/lib/portal-admin/features";
 import { isOverdue, projectProgress } from "@/lib/tasks";
-import type { ActivityItem, Project, Task } from "@/lib/types";
+import type { ActivityItem, PortalMode, Project, Task } from "@/lib/types";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
+
+import "@/styles/portal-admin.css";
 
 function TaskLine({ t }: { t: Task }) {
   const key = useTaskKey();
@@ -54,6 +58,12 @@ export function ProjectOverview({ project, tasks, memberIds, activity }: { proje
     .map((id) => ws.member(id))
     .filter(Boolean) as NonNullable<ReturnType<typeof ws.member>>[];
   const left = project.due_date ? diffDays(parseDay(project.due_date)!, today()) : null;
+
+  // Rappel du partage avec le client (portail)
+  const mode: PortalMode = project.portal_mode ?? "selected";
+  const shared = tasks.filter((t) => taskVisibleToClient(t, project)).length;
+  const setMode = (portal_mode: PortalMode) =>
+    mutate(async (sb) => must(await sb.from("projects").update({ portal_mode }).eq("id", project.id)), { success: `Portail client : ${PORTAL_MODE[portal_mode].name.toLowerCase()}` });
 
   const saveDesc = () => {
     if (desc === project.description) return;
@@ -159,6 +169,33 @@ export function ProjectOverview({ project, tasks, memberIds, activity }: { proje
                 <span className="faint">Projet interne</span>
               )}
             </dd>
+            {ws.has("portal") && company && (
+              <>
+                <dt>Portail client</dt>
+                <dd>
+                  {ws.canWrite ? (
+                    <Menu
+                      width={250}
+                      trigger={(open) => (
+                        <button type="button" className={`pa-mode ${mode}`} onClick={open} title={PORTAL_MODE[mode].desc}>
+                          {mode === "none" ? <EyeOff size={12} /> : <Eye size={12} />}
+                          {PORTAL_MODE[mode].name}
+                        </button>
+                      )}
+                      items={PORTAL_MODES.map((m) => ({ label: m.name, checked: m.id === mode, onSelect: () => m.id !== mode && void setMode(m.id) }))}
+                    />
+                  ) : (
+                    <span className={`pa-mode ${mode}`}>{PORTAL_MODE[mode].name}</span>
+                  )}
+                  <div className="faint" style={{ fontSize: "var(--fs-xs)", marginTop: 4 }}>
+                    {mode === "none"
+                      ? "Le client ne voit pas ce projet"
+                      : `${shared} tâche${shared > 1 ? "s" : ""} visible${shared > 1 ? "s" : ""} par ${company.name}`}
+                    {mode === "selected" && shared === 0 ? " : coche « Visible par le client » dans une tâche" : ""}
+                  </div>
+                </dd>
+              </>
+            )}
             <dt>Responsable</dt>
             <dd>
               {lead ? (

@@ -11,6 +11,7 @@ import { attributionTools } from "./attribution";
 import { creativeTools } from "./creatives";
 import { crmTools } from "./crm";
 import { linkTools } from "./links";
+import { portalTools } from "./portal";
 import { projectTools } from "./projects";
 import { proposalTools } from "./proposals";
 import { reportingTools } from "./reporting";
@@ -28,6 +29,7 @@ export const DOMAINS: { label: string; tools: AnyTool[]; module?: ModuleId }[] =
   { label: "Attribution", tools: attributionTools, module: "tracking" },
   { label: "Liens trackés", tools: linkTools, module: "links" },
   { label: "Bibliothèque créa", tools: creativeTools, module: "creatives" },
+  { label: "Portail client", tools: portalTools, module: "portal" },
 ];
 
 export const TOOL_MODULE = new Map<string, ModuleId | undefined>(DOMAINS.flatMap((d) => d.tools.map((t) => [t.name, d.module] as const)));

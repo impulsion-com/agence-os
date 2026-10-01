@@ -5,12 +5,13 @@ import { useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  Archive, ArrowDown, ArrowUp, Calendar, CalendarClock, CircleCheck, CircleDot, Copy, Diamond, Download, Ellipsis, FileText,
-  FolderKanban, GitBranch, GripVertical, Link2, Paperclip, Pencil, Plus, Repeat, SignalHigh, Tag, Trash2, Upload, UserRound, X,
+  Archive, ArrowDown, ArrowUp, Calendar, CalendarClock, CircleCheck, CircleDot, Copy, Diamond, Download, Ellipsis, Eye, EyeOff, FileText,
+  FolderKanban, GitBranch, GripVertical, Link2, Lock, Paperclip, Pencil, Plus, Repeat, SignalHigh, Tag, Trash2, Upload, UserRound, X,
 } from "lucide-react";
 
 import { CreativeTaskLink, isCreativeTask } from "@/components/creatives/task-link";
 import { AssigneePicker, DatePicker, LabelsPicker, PriorityPicker, StatusPicker } from "@/components/pickers";
+import { ClientPill, SharedPill } from "@/components/portal-admin/bits";
 import { Avatar } from "@/components/ui/avatar";
 import { ObjIcon } from "@/components/ui/misc";
 import { ConfirmModal, Menu, Popover } from "@/components/ui/overlay";
@@ -18,6 +19,7 @@ import { StatusIcon } from "@/components/ui/status";
 import { useToast } from "@/components/ui/toast";
 import { STATUSES } from "@/lib/constants";
 import { ago, diffDays, fileSize, fmtDate, parseDay, today } from "@/lib/format";
+import { taskVisibleToClient } from "@/lib/portal-admin/features";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TASK_SELECT, between, isOverdue, normalizeTask } from "@/lib/tasks";
 import type { ActivityItem, Attachment, Comment, Subtask, Task, TaskStatus } from "@/lib/types";
@@ -404,7 +406,12 @@ function TaskBody(props: BodyProps) {
   const up = (patch: Parameters<typeof actions.update>[1]) => void actions.update([task], patch);
   const over = isOverdue(task);
   const late = over ? -diffDays(parseDay(task.due_date)!, today()) : 0;
-  const creator = ws.member(task.created_by);
+  const creator = ws.person(task.created_by);
+  // Partage avec le client : seulement si le projet est rattaché à un client (dont le portail existe ou peut exister)
+  const project = ws.project(task.project_id);
+  const client = ws.has("portal") ? ws.company(project?.company_id) : undefined;
+  const mode = project?.portal_mode ?? "selected";
+  const visible = !!client && taskVisibleToClient(task, project);
 
   return (
     <div className="td">
@@ -497,6 +504,32 @@ function TaskBody(props: BodyProps) {
         <Prop icon={<FolderKanban size={14} />} label="Projet">
           <span className="pill" style={{ cursor: "default" }}>{ws.project(task.project_id)?.name}</span>
         </Prop>
+        {client && (
+          <Prop icon={<Eye size={14} />} label="Portail client">
+            <label
+              className="td-toggle"
+              title={
+                mode === "all"
+                  ? "Ce projet partage toutes ses tâches avec le client (réglage du projet)"
+                  : mode === "none"
+                    ? "Ce projet ne partage aucune tâche avec le client (réglage du projet)"
+                    : `${client.name} voit le titre, la description, le statut, l'échéance et les commentaires partagés`
+              }
+            >
+              <input
+                type="checkbox"
+                className="toggle"
+                disabled={ro || mode !== "selected"}
+                checked={visible}
+                onChange={(e) => void actions.update([task], { client_visible: e.target.checked }, { toast: e.target.checked ? `Tâche visible par ${client.name}` : "Tâche masquée au client" })}
+                aria-label="Visible par le client"
+              />
+              <span className={visible ? "" : "faint"}>
+                {mode === "all" ? "Visible : tout le projet est partagé" : mode === "none" ? "Masquée : projet non partagé" : visible ? "Visible par le client" : "Masquée au client"}
+              </span>
+            </label>
+          </Prop>
+        )}
       </dl>
       {task.recurrence && <p className="faint td-note">À la fin de cette tâche, la prochaine occurrence sera créée automatiquement.</p>}
 
@@ -520,7 +553,7 @@ function TaskBody(props: BodyProps) {
         {props.tab === "comments" ? <Comments {...props} ro={ro} /> : <ActivityFeed items={props.acts} inTask empty="Aucun changement enregistré." />}
       </section>
       <p className="fainter td-created">
-        Créée {creator ? `par ${creator.profile.full_name} ` : ""}le {fmtDate(task.created_at.slice(0, 10), true)} · mise à jour {ago(task.updated_at)}
+        Créée {creator ? `par ${creator.profile.full_name}${creator.isClient ? " (client)" : ""} ` : ""}le {fmtDate(task.created_at.slice(0, 10), true)} · mise à jour {ago(task.updated_at)}
       </p>
     </div>
   );
@@ -854,6 +887,18 @@ function Files({ task, files, setFiles, setTask, mutate, ro }: BodyProps & { ro:
     window.open(data.signedUrl, "_blank", "noopener");
   };
 
+  // Partage d'un fichier avec le client (projets rattachés à un client)
+  const proj = ws.project(task.project_id);
+  const canShare = ws.has("portal") && !!proj?.company_id && proj.portal_mode !== "none";
+  const share = (a: Attachment) => {
+    const client_visible = !a.client_visible;
+    setFiles((l) => l.map((x) => (x.id === a.id ? { ...x, client_visible } : x)));
+    void mutate(async (sb) => must(await sb.from("attachments").update({ client_visible }).eq("id", a.id)), {
+      success: client_visible ? "Fichier partagé avec le client" : "Fichier retiré du portail",
+      refresh: false,
+    });
+  };
+
   const remove = (a: Attachment) => {
     setFiles((l) => l.filter((x) => x.id !== a.id));
     setTask((t) => (t ? { ...t, attachment_count: Math.max(0, t.attachment_count - 1) } : t));
@@ -901,7 +946,7 @@ function Files({ task, files, setFiles, setTask, mutate, ro }: BodyProps & { ro:
         </div>
       ))}
       {files.map((a) => {
-        const who = ws.member(a.uploaded_by);
+        const who = ws.person(a.uploaded_by);
         const img = a.mime.startsWith("image/");
         return (
           <div key={a.id} className="td-file">
@@ -915,6 +960,20 @@ function Files({ task, files, setFiles, setTask, mutate, ro }: BodyProps & { ro:
               {fileSize(a.size)}
               {who ? ` · ${who.profile.full_name.split(" ")[0]}` : ""} · {ago(a.created_at)}
             </span>
+            <ClientPill person={who} company={false} />
+            {canShare && (
+              <button
+                type="button"
+                className={`btn btn-ghost btn-sm btn-icon td-file-share${a.client_visible ? " on" : ""}`}
+                disabled={ro}
+                aria-pressed={a.client_visible}
+                aria-label={a.client_visible ? "Ne plus partager avec le client" : "Partager avec le client"}
+                title={a.client_visible ? "Partagé avec le client (cliquer pour retirer)" : "Partager avec le client"}
+                onClick={() => share(a)}
+              >
+                {a.client_visible ? <Eye size={13} /> : <EyeOff size={13} />}
+              </button>
+            )}
             <button type="button" className="btn btn-ghost btn-sm btn-icon" aria-label="Télécharger" onClick={() => void openFile(a, true)}>
               <Download size={13} />
             </button>
@@ -944,20 +1003,27 @@ function Comments({ task, comments, setComments, setTask, mutate, ro }: BodyProp
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [mention, setMention] = useState<string | null>(null);
+  const [vis, setVis] = useState<"internal" | "client">("internal");
   const ta = useRef<HTMLTextAreaElement>(null);
+  // Commentaire partagé : possible seulement si le client voit la tâche (interne par défaut)
+  const project = ws.project(task.project_id);
+  const client = ws.has("portal") ? ws.company(project?.company_id) : undefined;
+  const visible = !!client && taskVisibleToClient(task, project);
+  const shared = vis === "client" && visible;
 
   const post = async () => {
     const v = body.trim();
     if (!v || busy) return;
     setBusy(true);
+    const visibility = shared ? "client" : "internal";
     const row = await mutate(async (sb) => {
-      const c = must(await sb.from("comments").insert({ workspace_id: ws.workspace.id, task_id: task.id, body: v }).select("*").single());
+      const c = must(await sb.from("comments").insert({ workspace_id: ws.workspace.id, task_id: task.id, body: v, visibility }).select("*").single());
       await sb.from("activity").insert({
         workspace_id: ws.workspace.id, project_id: task.project_id, task_id: task.id, verb: "task.commented",
-        meta: { title: task.title, key: `${ws.project(task.project_id)?.key}-${task.number}`, excerpt: v.slice(0, 140) },
+        meta: { title: task.title, key: `${ws.project(task.project_id)?.key}-${task.number}`, excerpt: v.slice(0, 140), visibility },
       });
       return c;
-    });
+    }, { success: shared ? "Commentaire partagé avec le client" : undefined });
     setBusy(false);
     if (row) {
       setComments((l) => [...l, row as Comment]);
@@ -991,14 +1057,17 @@ function Comments({ task, comments, setComments, setTask, mutate, ro }: BodyProp
     <div className="td-comments">
       {!comments.length && <p className="faint" style={{ fontSize: "var(--fs-sm)", margin: "8px 0 4px" }}>Aucun commentaire. Lance la discussion avec l&apos;équipe.</p>}
       {comments.map((c) => {
-        const who = ws.member(c.author_id);
+        const who = ws.person(c.author_id);
         const mine = c.author_id === ws.me.id;
+        const isShared = c.visibility === "client";
         return (
-          <div key={c.id} className="td-cmt">
+          <div key={c.id} className={`td-cmt${who?.isClient ? " from-client" : isShared && client ? " shared" : ""}`}>
             <Avatar profile={who?.profile ?? null} size={26} />
             <div className="td-cmt-b">
               <div className="td-cmt-h">
                 <b>{who?.profile.full_name ?? "Ancien membre"}</b>
+                <ClientPill person={who} />
+                {isShared && client && !who?.isClient && <SharedPill />}
                 <time className="faint" dateTime={c.created_at}>{ago(c.created_at)}</time>
                 {c.edited_at && <span className="fainter">(modifié)</span>}
                 {mine && !ro && editing !== c.id && (
@@ -1048,11 +1117,11 @@ function Comments({ task, comments, setComments, setTask, mutate, ro }: BodyProp
       {!ro && (
         <div className="td-cmt td-compose">
           <Avatar profile={ws.me} size={26} />
-          <div className="td-cbox" style={{ position: "relative" }}>
+          <div className={`td-cbox${shared ? " shared" : ""}`} style={{ position: "relative" }}>
             <textarea
               ref={ta}
               rows={2}
-              placeholder="Écris un commentaire… (@ pour mentionner)"
+              placeholder={shared ? `Écris à ${client?.name} : ce commentaire sera visible sur son portail` : "Écris un commentaire… (@ pour mentionner)"}
               value={body}
               onChange={(e) => {
                 setBody(e.target.value);
@@ -1089,10 +1158,31 @@ function Comments({ task, comments, setComments, setTask, mutate, ro }: BodyProp
               </div>
             )}
             <div className="td-cbox-f">
-              <span className="faint" style={{ fontSize: 11 }}>⌘ + Entrée pour envoyer</span>
+              {client ? (
+                <span className="pa-vis" role="group" aria-label="Visibilité du commentaire">
+                  <button type="button" className={shared ? "" : "on"} aria-pressed={!shared} onClick={() => setVis("internal")} title="Réservé à l'équipe : le client ne le voit jamais">
+                    <Lock size={11} /> Interne
+                  </button>
+                  <button
+                    type="button"
+                    className={shared ? "on client" : ""}
+                    aria-pressed={shared}
+                    disabled={!visible}
+                    onClick={() => setVis("client")}
+                    title={visible ? `${client.name} verra ce commentaire sur son portail` : "Rends d'abord la tâche visible par le client"}
+                  >
+                    <Eye size={11} />
+                    <span>
+                      Partagé<span className="lg"> avec le</span> client
+                    </span>
+                  </button>
+                </span>
+              ) : (
+                <span className="faint" style={{ fontSize: 11 }}>⌘ + Entrée pour envoyer</span>
+              )}
               <span style={{ flex: 1 }} />
-              <button type="button" className="btn btn-primary btn-sm" disabled={!body.trim() || busy} onClick={() => void post()}>
-                Commenter
+              <button type="button" className="btn btn-primary btn-sm" disabled={!body.trim() || busy} onClick={() => void post()} title="⌘ + Entrée">
+                {shared ? "Envoyer au client" : "Commenter"}
               </button>
             </div>
           </div>

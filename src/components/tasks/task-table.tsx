@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { AssigneePicker, DatePicker, LabelsPicker, PriorityPicker, StatusPicker } from "@/components/pickers";
+import { ClientEye } from "@/components/portal-admin/bits";
 import { ObjIcon } from "@/components/ui/misc";
 import { PRIORITY, STATUSES } from "@/lib/constants";
 import { fmtDate } from "@/lib/format";
@@ -111,6 +112,7 @@ export function TaskTable({ tasks, sort, showProject }: { tasks: Task[]; sort: S
                     {t.title}
                   </button>
                   <span className="tk-row-counts">
+                    <ClientEye t={t} />
                     <TaskCounts t={t} />
                   </span>
                 </td>

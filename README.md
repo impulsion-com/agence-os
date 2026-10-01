@@ -60,6 +60,13 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 - Serveur MCP : Claude Code, Claude Desktop ou Cowork lisent et pilotent tâches, CRM, propositions,
   reporting et attribution avec un jeton personnel.
 
+**Portail client**
+- Un espace à ton nom pour chaque client : performance et rapports, tâches à valider, créas à
+  approuver, fichiers, propositions à signer, onboarding, rendez-vous.
+- Tu choisis les fonctionnalités ouvertes par client et par personne, et ce qui est visible (tâches
+  cochées, commentaires partagés, fichiers). Le client ne voit jamais tes autres clients, ton CRM ni
+  tes notes internes : le cloisonnement est fait dans la base et couvert par des tests.
+
 **Modules à la carte**
 - À la création de l'espace, un profil type (media buyer freelance, CRM seul, gestion de projet seule,
   agence complète, pilotage de la performance) ou un choix module par module ; modifiable à tout
@@ -73,7 +80,7 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 ## Démarrer
 
 Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase + Vercel, gratuit,
-environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md).
+environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md), [portail client](docs/portail-client.md).
 
 ## Stack technique
 

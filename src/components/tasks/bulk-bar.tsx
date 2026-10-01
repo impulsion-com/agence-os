@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Calendar, CircleDot, SignalHigh, Tag, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Calendar, CircleDot, Eye, EyeOff, SignalHigh, Tag, Trash2, UserRound, X } from "lucide-react";
 
 import { AssigneePicker, DatePicker, PriorityPicker, StatusPicker } from "@/components/pickers";
 import { Popover } from "@/components/ui/overlay";
@@ -54,6 +54,37 @@ export function BulkBar() {
           </div>
         )}
       </Popover>
+      {ws.has("portal") && list.some((t) => ws.project(t.project_id)?.company_id) && (
+        <Popover trigger={btn(<Eye size={14} />, "Client")}>
+          {(close) => (
+            <div>
+              <div className="mi-h">Portail client</div>
+              <button
+                type="button"
+                className="mi"
+                onClick={() => {
+                  void kit.actions.update(list, { client_visible: true }, { ...opts, toast: n > 1 ? `${n} tâches visibles par le client` : "Tâche visible par le client" });
+                  close();
+                }}
+              >
+                <Eye size={14} />
+                Rendre visible par le client
+              </button>
+              <button
+                type="button"
+                className="mi"
+                onClick={() => {
+                  void kit.actions.update(list, { client_visible: false }, { ...opts, toast: n > 1 ? `${n} tâches masquées au client` : "Tâche masquée au client" });
+                  close();
+                }}
+              >
+                <EyeOff size={14} />
+                Masquer au client
+              </button>
+            </div>
+          )}
+        </Popover>
+      )}
       <button
         type="button"
         className="btn btn-ghost btn-sm"

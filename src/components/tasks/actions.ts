@@ -4,6 +4,8 @@ import { useCallback, useMemo } from "react";
 
 import { useToast } from "@/components/ui/toast";
 import { addDays, iso, parseDay, today } from "@/lib/format";
+import { taskVisibleToClient } from "@/lib/portal-admin/features";
+import { emailClient } from "@/lib/portal-admin/notify";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { TASK_SELECT, normalizeTask } from "@/lib/tasks";
 import type { Json, TablesInsert } from "@/lib/database.types";
@@ -11,7 +13,7 @@ import type { Priority, Task, TaskStatus } from "@/lib/types";
 import { must, useMutate, useWorkspace, type DB } from "@/lib/workspace/context";
 
 export type TaskPatch = Partial<
-  Pick<Task, "status" | "priority" | "assignee_id" | "due_date" | "start_date" | "title" | "description" | "milestone" | "recurrence" | "position" | "archived_at">
+  Pick<Task, "status" | "priority" | "assignee_id" | "due_date" | "start_date" | "title" | "description" | "milestone" | "recurrence" | "position" | "archived_at" | "client_visible">
 >;
 export type LocalUpdate = (fn: (ts: Task[]) => Task[]) => void;
 
@@ -131,11 +133,21 @@ export function useTaskActions(local?: LocalUpdate) {
       const keys = Object.keys(patch) as (keyof TaskPatch)[];
       const prev = list.map((t) => ({ id: t.id, vals: Object.fromEntries(keys.map((k) => [k, t[k]])) as TaskPatch }));
       const recurring = patch.status === "done" ? list.filter((t) => t.recurrence && t.status !== "done") : [];
-      await mutate(
+      // Tâches qui deviennent « à valider » pour le client (la notification du portail est créée par la base)
+      const toValidate =
+        ws.has("portal") && (patch.status === "review" || patch.client_visible === true)
+          ? list.filter((t) => {
+              const p = ws.project(t.project_id);
+              const was = t.status === "review" && taskVisibleToClient(t, p);
+              return !was && (patch.status ?? t.status) === "review" && taskVisibleToClient({ ...t, client_visible: patch.client_visible ?? t.client_visible }, p);
+            })
+          : [];
+      const ok = await mutate(
         async (sb) => {
           must(await sb.from("tasks").update(patch).in("id", ids));
           await log(sb, list, patch);
           if (recurring.length) await spawnNext(sb, recurring);
+          return true;
         },
         {
           success: opt.toast,
@@ -149,8 +161,9 @@ export function useTaskActions(local?: LocalUpdate) {
               : undefined,
         },
       );
+      if (ok && toValidate.length) emailClient("task", toValidate.map((t) => t.id));
     },
-    [apply, mutate, log, spawnNext],
+    [apply, mutate, log, spawnNext, ws],
   );
 
   const setLabels = useCallback(

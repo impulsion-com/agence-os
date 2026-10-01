@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { ClientPill } from "@/components/portal-admin/bits";
 import { Avatar } from "@/components/ui/avatar";
 import { PROJECT_STATUS, STATUS } from "@/lib/constants";
 import { ago, fmtDate } from "@/lib/format";
@@ -19,8 +20,13 @@ export function ActivityFeed({ items, inTask, empty = "Aucune activité pour l'i
     <ol className="pj-feed">
       {items.map((a) => {
         const m = (a.meta ?? {}) as Record<string, unknown>;
-        const who = ws.member(a.actor_id);
-        const A = <b>{who?.profile.full_name ?? "Quelqu'un"}</b>;
+        const who = ws.person(a.actor_id);
+        const A = (
+          <>
+            <b>{who?.profile.full_name ?? "Quelqu'un"}</b>
+            {who?.isClient && <> <ClientPill person={who} company={false} /></>}
+          </>
+        );
         const title = s(m.title) ?? "une tâche";
         const T: ReactNode = inTask ? "cette tâche" : a.task_id ? (
           <button type="button" className="pj-feed-obj" onClick={() => openTask(a.task_id!)}>
@@ -52,6 +58,16 @@ export function ActivityFeed({ items, inTask, empty = "Aucune activité pour l'i
             break;
           case "project.created":
             text = <>{A} a créé le projet</>;
+            break;
+          // Portail client : créa envoyée en validation, réponse du client, fichier déposé
+          case "creative.submitted":
+            text = <>{A} a envoyé la créa <b>{s(m.title) ?? "sans titre"}</b> en validation client</>;
+            break;
+          case "creative.reviewed":
+            text = m.decision === "approved" ? <>{A} a approuvé la créa <b>{s(m.title) ?? "sans titre"}</b></> : <>{A} a demandé des modifications sur la créa <b>{s(m.title) ?? "sans titre"}</b></>;
+            break;
+          case "file.uploaded":
+            text = <>{A} a déposé le fichier <b>{s(m.name) ?? "sans nom"}</b></>;
             break;
           case "project.status":
             text = to && to in PROJECT_STATUS ? <>{A} a passé le projet en <b>{PROJECT_STATUS[to as ProjectStatus].name}</b></> : <>{A} a changé le statut du projet</>;

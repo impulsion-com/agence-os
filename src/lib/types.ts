@@ -149,6 +149,26 @@ export interface Project {
   due_date: string | null;
   archived_at: string | null;
   created_at: string;
+  // Portail client : none = aucune tâche, selected = tâches cochées, all = toutes les tâches
+  portal_mode: PortalMode;
+}
+
+export type PortalMode = "none" | "selected" | "all";
+// Fonctionnalités ouvrables à un client (voir portal_all_features en base)
+export type PortalFeature = "reporting" | "tasks" | "creatives" | "files" | "documents" | "onboarding" | "booking";
+export type ClientReview = "pending" | "approved" | "changes";
+
+// Personne d'un client ayant accès au portail (elle n'est pas membre de l'espace)
+export interface ClientUser {
+  id: string;
+  user_id: string;
+  company_id: string;
+  // null = toutes les fonctionnalités ouvertes au niveau du portail
+  features: PortalFeature[] | null;
+  contact_id: string | null;
+  created_at: string;
+  last_seen_at: string | null;
+  profile: Pick<Profile, "id" | "email" | "full_name" | "title" | "color">;
 }
 
 export interface Subtask {
@@ -180,6 +200,8 @@ export interface Task {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Cochée « visible par le client » (compte quand le projet est en mode « Tâches cochées »)
+  client_visible: boolean;
   // Relations chargées avec la requête TASK_SELECT
   label_ids: string[];
   subtasks: Subtask[];
@@ -195,6 +217,8 @@ export interface Comment {
   body: string;
   edited_at: string | null;
   created_at: string;
+  // internal = réservé à l'équipe, client = partagé sur le portail
+  visibility: "internal" | "client";
 }
 
 export interface Attachment {
@@ -207,6 +231,7 @@ export interface Attachment {
   mime: string;
   uploaded_by: string | null;
   created_at: string;
+  client_visible: boolean;
 }
 
 export interface ActivityItem {
@@ -224,11 +249,14 @@ export interface Notification {
   id: string;
   user_id: string;
   actor_id: string | null;
-  kind: "assigned" | "mentioned" | "commented" | "status" | "due" | "invited" | "deal" | "proposal" | "onboarding" | "booking" | "creative";
+  // « portal » : destinée à un client (portal_link = chemin relatif au portail) ; « file » : fichier déposé par un client
+  kind: "assigned" | "mentioned" | "commented" | "status" | "due" | "invited" | "deal" | "proposal" | "onboarding" | "booking" | "creative" | "portal" | "file";
   task_id: string | null;
   project_id: string | null;
   deal_id: string | null;
   proposal_id: string | null;
+  concept_id: string | null;
+  portal_link: string | null;
   body: string;
   read_at: string | null;
   archived_at: string | null;

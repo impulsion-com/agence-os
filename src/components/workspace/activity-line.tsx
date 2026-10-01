@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ClientPill } from "@/components/portal-admin/bits";
 import { Avatar } from "@/components/ui/avatar";
 import { PROJECT_STATUS, STATUS } from "@/lib/constants";
 import { ago, money } from "@/lib/format";
@@ -31,7 +32,9 @@ export function useActivitySentence() {
   const sentence = (a: ActivityRow): ReactNode => {
     const m = a.meta ?? {};
     const project = ws.project(a.project_id ?? a.task?.project_id);
-    const actor = ws.member(a.actor_id)?.profile.full_name ?? "Quelqu'un";
+    // L'acteur peut être une personne d'un client (commentaire ou validation depuis le portail)
+    const person = ws.person(a.actor_id);
+    const actor = person?.profile.full_name ?? "Quelqu'un";
     const taskTitle = a.task?.title ?? str(m.title) ?? "une tâche supprimée";
     const tp = ws.project(a.task?.project_id);
     const task = a.task ? (
@@ -64,7 +67,12 @@ export function useActivitySentence() {
     ) : (
       <b className="al-obj">{proposalTitle}</b>
     );
-    const A = <b>{actor}</b>;
+    const A = (
+      <>
+        <b>{actor}</b>
+        {person?.isClient && <> <ClientPill person={person} /></>}
+      </>
+    );
 
     switch (a.verb) {
       case "task.created":
@@ -109,6 +117,16 @@ export function useActivitySentence() {
         return <>La proposition {proposal} a été acceptée{str(m.name) ? <> par <b>{str(m.name)}</b></> : null}</>;
       case "proposal.declined":
         return <>La proposition {proposal} a été refusée</>;
+      // Portail client : envoi d'une créa en validation, réponse du client, dépôt d'un fichier
+      case "creative.submitted":
+      case "creative.reviewed": {
+        const title = str(m.title) ?? "une créa";
+        const concept = str(m.concept_id) ? <Link className="al-obj" href={`${ws.base}/creatives/${m.concept_id}`}>{title}</Link> : <b className="al-obj">{title}</b>;
+        if (a.verb === "creative.submitted") return <>{A} a envoyé la créa {concept} en validation client</>;
+        return m.decision === "approved" ? <>{A} a approuvé la créa {concept}</> : <>{A} a demandé des modifications sur la créa {concept}</>;
+      }
+      case "file.uploaded":
+        return <>{A} a déposé le fichier <b className="al-obj">{str(m.name) ?? "sans nom"}</b>{project ? <> dans {proj}</> : null}</>;
       default:
         return <>{A} · {a.verb}</>;
     }
@@ -123,7 +141,7 @@ export function ActivityList({ items, empty }: { items: ActivityRow[]; empty?: R
   return (
     <ul className="al">
       {items.map((a) => {
-        const actor = ws.member(a.actor_id);
+        const actor = ws.person(a.actor_id);
         return (
           <li key={a.id} className="al-item">
             <span className="al-av">

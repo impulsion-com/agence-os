@@ -11,7 +11,7 @@ export default async function Inbox({ params }: PageProps<"/w/[slug]/inbox">) {
   const { data } = await sb
     .from("notifications")
     .select(
-      "*, task:tasks(id, title, number, status, priority, due_date, project_id, description, assignee_id), deal:deals(id, title, value, billing, stage_id, company_id, expected_close)",
+      "*, task:tasks(id, title, number, status, priority, due_date, project_id, description, assignee_id), deal:deals(id, title, value, billing, stage_id, company_id, expected_close), concept:creative_concepts(id, title, company_id, client_review, client_feedback)",
     )
     .eq("workspace_id", ws.workspace.id)
     .eq("user_id", ws.me.id)

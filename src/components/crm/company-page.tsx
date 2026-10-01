@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ChartColumn, Ellipsis, ExternalLink, FolderKanban, Handshake, Mail, Pencil, Phone, Plus, Trash2, Users } from "lucide-react";
 
@@ -15,6 +15,7 @@ import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import type { Company, Contact, CrmActivity, Deal, PipelineStage } from "@/lib/types";
 import { ActivityFeed } from "./activity-feed";
 import { SendOnboardingButton } from "@/components/onboarding/send-modal";
+import { CompanyPortal } from "@/components/portal-admin/company-portal";
 import { CompanyFormModal } from "./company-form-modal";
 import { ContactFormModal } from "./contact-form-modal";
 import { ProposalList, type ProposalRow } from "./deal-page";
@@ -93,7 +94,8 @@ export function ContactRows({ contacts, empty }: { contacts: Contact[]; empty: s
   );
 }
 
-type Tab = "overview" | "contacts" | "deals" | "projects" | "proposals" | "activity";
+type Tab = "overview" | "contacts" | "deals" | "projects" | "proposals" | "activity" | "portal";
+const TAB_IDS: Tab[] = ["overview", "contacts", "deals", "projects", "proposals", "activity", "portal"];
 
 export function CompanyPage({
   company: initial,
@@ -116,7 +118,9 @@ export function CompanyPage({
   const mutate = useMutate();
   const cur = ws.workspace.currency;
   const [c, setC] = useSynced(initial);
-  const [tab, setTab] = useState<Tab>("overview");
+  // ?tab=portal ouvre directement un onglet (liens depuis la page Portail client)
+  const asked = useSearchParams().get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(asked && TAB_IDS.includes(asked) && (asked !== "portal" || ws.has("portal")) ? asked : "overview");
   const [editing, setEditing] = useState(false);
   const [addContact, setAddContact] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -144,7 +148,7 @@ export function CompanyPage({
   };
 
   // Onglets selon les modules activés de l'espace
-  const commercial = ws.has("crm") || ws.has("proposals") || ws.has("onboarding") || ws.has("booking");
+  const commercial = ws.has("crm") || ws.has("proposals") || ws.has("onboarding") || ws.has("booking") || ws.has("portal");
   const tabs = (
     [
       { id: "overview", label: "Vue d'ensemble" },
@@ -153,6 +157,7 @@ export function CompanyPage({
       ws.has("projects") && { id: "projects", label: "Projets", n: projects.length },
       ws.has("proposals") && { id: "proposals", label: "Propositions", n: proposals.length },
       ws.has("crm") && { id: "activity", label: "Activités", n: activities.length },
+      ws.has("portal") && { id: "portal", label: "Portail", n: ws.clients.filter((u) => u.company_id === c.id).length || undefined },
     ] as ({ id: Tab; label: string; n?: number } | false)[]
   ).filter((t): t is { id: Tab; label: string; n?: number } => !!t);
 
@@ -394,6 +399,8 @@ export function CompanyPage({
           />
         </div>
       )}
+
+      {tab === "portal" && ws.has("portal") && <CompanyPortal company={c} contacts={contacts} />}
 
       {editing && <CompanyFormModal company={c} onClose={() => setEditing(false)} onSaved={() => {}} />}
       {addContact && <ContactFormModal companyId={c.id} onClose={() => setAddContact(false)} />}

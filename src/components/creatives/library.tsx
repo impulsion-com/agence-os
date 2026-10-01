@@ -7,10 +7,12 @@ import { ArrowDown, ArrowUp, ChartNoAxesCombined, Kanban, LayoutGrid, Plus, Rada
 
 import "@/styles/reporting.css";
 import "@/styles/creatives.css";
+import { ReviewBadge } from "@/components/portal-admin/bits";
 import { CompanyMark, Crumbs } from "@/components/reporting/common";
 import { PeriodPicker } from "@/components/reporting/period-picker";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { Menu, type MenuItem } from "@/components/ui/overlay";
+import { CLIENT_REVIEWS } from "@/lib/portal-admin/features";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import { fmtKpi, type Period } from "@/lib/ads/metrics";
 import { AWARE, AWARENESS, CREATIVE_PLATFORMS, FORMAT, FORMATS, STATUS, STATUSES, type ConceptStatus } from "@/lib/creatives/constants";
@@ -44,8 +46,10 @@ interface Filters {
   persona: string[];
   status: string[];
   platform: string[];
+  // validation client : pending, approved, changes ou « none » (non envoyée)
+  review: string[];
 }
-const NO_FILTERS: Filters = { q: "", company: [], angle: [], format: [], awareness: [], persona: [], status: [], platform: [] };
+const NO_FILTERS: Filters = { q: "", company: [], angle: [], format: [], awareness: [], persona: [], status: [], platform: [], review: [] };
 
 export function CreativeLibrary({
   data,
@@ -98,6 +102,7 @@ export function CreativeLibrary({
         has(f.awareness, c.awareness) &&
         has(f.persona, c.persona.trim()) &&
         has(f.status, c.status) &&
+        has(f.review, c.client_review ?? "none") &&
         (!f.platform.length || c.platforms.some((p) => f.platform.includes(p))) &&
         (!needle || [c.title, c.hook, c.angle, c.persona, ...c.tags].some((s) => s.toLowerCase().includes(needle))),
     );
@@ -179,6 +184,7 @@ export function CreativeLibrary({
             {filterMenu("persona", "Persona", personas.map((p) => ({ id: p, name: p })))}
             {view !== "board" && filterMenu("status", "Statut", STATUSES.map((s) => ({ id: s.id, name: s.name })))}
             {filterMenu("platform", "Plateforme", CREATIVE_PLATFORMS.filter((p) => concepts.some((c) => c.platforms.includes(p.id))))}
+            {ws.has("portal") && filterMenu("review", "Validation client", [...CLIENT_REVIEWS.map((r) => ({ id: r.id, name: r.name })), { id: "none", name: "Non envoyée" }])}
             {active && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setF(NO_FILTERS)}>
                 <X size={13} /> Réinitialiser
@@ -233,6 +239,7 @@ function useCovers(concepts: Concept[], model: Model) {
 // ---------------------------------------------------------------------
 function Gallery({ concepts, model, currency }: { concepts: Concept[]; model: Model; currency: string }) {
   const ws = useWorkspace();
+  const portal = ws.has("portal");
   const cover = useCovers(concepts, model);
   return (
     <div className="crv-grid">
@@ -244,6 +251,11 @@ function Gallery({ concepts, model, currency }: { concepts: Concept[]; model: Mo
               <span className="st">
                 <StatusBadge status={c.status} />
               </span>
+              {portal && c.client_review && (
+                <span className="pa-rv">
+                  <ReviewBadge review={c.client_review} short />
+                </span>
+              )}
             </Cover>
             <div className="body">
               <div className="t">{c.title}</div>
@@ -354,7 +366,12 @@ function ConceptTable({ concepts, model, data, currency }: { concepts: Concept[]
                     </span>
                   </Link>
                 </td>
-                <td><StatusBadge status={c.status} /></td>
+                <td>
+                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <StatusBadge status={c.status} />
+                    {ws.has("portal") && <ReviewBadge review={c.client_review} short />}
+                  </span>
+                </td>
                 <td className="muted trunc" style={{ maxWidth: 170 }}>{c.angle || <span className="fainter">–</span>}</td>
                 <td>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }} className="muted">
@@ -468,6 +485,7 @@ function Board({ concepts, model, currency, onMove }: { concepts: Concept[]; mod
                           <FormatIcon format={c.format} size={12} /> {FORMAT[c.format].name}
                         </span>
                         {c.task_id && <span title="Lié à une tâche">Tâche</span>}
+                        {ws.has("portal") && <ReviewBadge review={c.client_review} short />}
                         <FatigueBadge f={model.conceptFatigue.get(c.id)} />
                       </div>
                     </article>

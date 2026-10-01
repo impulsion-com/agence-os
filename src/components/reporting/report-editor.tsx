@@ -7,6 +7,7 @@ import { Check, Copy, ExternalLink, Link2, Link2Off, Trash2 } from "lucide-react
 import "@/styles/reporting.css";
 import { ConfirmModal } from "@/components/ui/overlay";
 import { useToast } from "@/components/ui/toast";
+import { emailClient } from "@/lib/portal-admin/notify";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import { rangeLabel } from "@/lib/ads/metrics";
 import type { ReportData } from "@/lib/ads/load";
@@ -56,10 +57,17 @@ export function ReportEditor({ data, publicUrl }: { data: ReportData; publicUrl:
     setSaving(false);
   };
 
-  const setShared = (shared: boolean) =>
-    mutate(async (sb) => must(await sb.from("reports").update({ shared }).eq("id", r.id)), {
-      success: shared ? "Partage activé : le lien est public" : "Partage désactivé : le lien ne fonctionne plus",
-    });
+  const setShared = async (shared: boolean) => {
+    const ok = await mutate(
+      async (sb) => {
+        must(await sb.from("reports").update({ shared }).eq("id", r.id));
+        return true;
+      },
+      { success: shared ? "Partage activé : le lien est public" : "Partage désactivé : le lien ne fonctionne plus" },
+    );
+    // Rapport publié : le client est prévenu sur son portail (trigger en base) et par email si l'envoi est configuré
+    if (ok && shared && ws.has("portal")) emailClient("report", [r.id]);
+  };
 
   const copy = async () => {
     try {

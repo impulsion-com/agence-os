@@ -2334,10 +2334,12 @@ export type Database = {
           actor_id: string | null
           archived_at: string | null
           body: string
+          concept_id: string | null
           created_at: string
           deal_id: string | null
           id: string
           kind: string
+          portal_link: string | null
           project_id: string | null
           proposal_id: string | null
           read_at: string | null
@@ -2349,10 +2351,12 @@ export type Database = {
           actor_id?: string | null
           archived_at?: string | null
           body?: string
+          concept_id?: string | null
           created_at?: string
           deal_id?: string | null
           id?: string
           kind: string
+          portal_link?: string | null
           project_id?: string | null
           proposal_id?: string | null
           read_at?: string | null
@@ -2364,10 +2368,12 @@ export type Database = {
           actor_id?: string | null
           archived_at?: string | null
           body?: string
+          concept_id?: string | null
           created_at?: string
           deal_id?: string | null
           id?: string
           kind?: string
+          portal_link?: string | null
           project_id?: string | null
           proposal_id?: string | null
           read_at?: string | null
@@ -2376,6 +2382,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "creative_concepts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_deal_id_fkey"
             columns: ["deal_id"]
@@ -4157,12 +4170,15 @@ export type Database = {
       _clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
       _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_portal: { Args: { ws: string }; Returns: undefined }
       _demo_bk_day: { Args: { n: number }; Returns: string }
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
       _demo_creatives: { Args: { ws: string }; Returns: number }
       _demo_intel: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }
       _demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      _demo_portal: { Args: { ws: string }; Returns: number }
+      _demo_portal_texts: { Args: never; Returns: string[] }
       accept_client_invitation: { Args: { p_token: string }; Returns: Json }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
@@ -4218,6 +4234,7 @@ export type Database = {
       clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       clear_demo_links: { Args: { ws: string }; Returns: undefined }
       clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      clear_demo_portal: { Args: { ws: string }; Returns: undefined }
       clear_demo_tracking: { Args: { ws: string }; Returns: undefined }
       client_invitation_info: { Args: { p_token: string }; Returns: Json }
       create_api_token: {
@@ -4362,6 +4379,7 @@ export type Database = {
       load_demo_intel: { Args: { ws: string }; Returns: number }
       load_demo_links: { Args: { ws: string }; Returns: undefined }
       load_demo_onboarding: { Args: { ws: string }; Returns: undefined }
+      load_demo_portal: { Args: { ws: string }; Returns: number }
       load_demo_tracking: { Args: { ws: string }; Returns: undefined }
       mcp_act_as: { Args: { p_user: string; p_ws: string }; Returns: undefined }
       mcp_tracking_conversions: {
@@ -4386,6 +4404,19 @@ export type Database = {
         }
         Returns: Json
       }
+      notify_portal_clients: {
+        Args: {
+          p_body: string
+          p_company: string
+          p_concept?: string
+          p_dedupe?: string
+          p_feature: string
+          p_link: string
+          p_project?: string
+          p_task?: string
+        }
+        Returns: number
+      }
       onboarding_default_templates: {
         Args: never
         Returns: {
@@ -4398,22 +4429,171 @@ export type Database = {
         }[]
       }
       portal_all_features: { Args: never; Returns: string[] }
+      portal_asset_path: {
+        Args: { p_asset: string; p_company: string }
+        Returns: Json
+      }
+      portal_booking: { Args: { p_company: string }; Returns: Json }
       portal_can: {
         Args: { p_company: string; p_feature: string }
         Returns: boolean
       }
+      portal_company_files: {
+        Args: { p_company: string }
+        Returns: {
+          client_visible: boolean
+          created_at: string
+          id: string
+          mime: string
+          name: string
+          path: string
+          project_id: string | null
+          size: number
+          task_id: string | null
+          uploaded_by: string | null
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "attachments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      portal_company_tasks: {
+        Args: { p_company: string }
+        Returns: {
+          archived_at: string | null
+          assignee_id: string | null
+          client_visible: boolean
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          due_date: string | null
+          id: string
+          milestone: boolean
+          number: number
+          position: number
+          priority: string
+          project_id: string
+          recurrence: string | null
+          start_date: string | null
+          status: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      portal_context: { Args: { p_slug: string }; Returns: Json }
+      portal_creative: {
+        Args: { p_company: string; p_concept: string }
+        Returns: Json
+      }
+      portal_creative_review: {
+        Args: {
+          p_approve: boolean
+          p_company: string
+          p_concept: string
+          p_feedback?: string
+        }
+        Returns: Json
+      }
+      portal_creatives: { Args: { p_company: string }; Returns: Json }
+      portal_documents: { Args: { p_company: string }; Returns: Json }
+      portal_effective_features: {
+        Args: { p_company: string }
+        Returns: string[]
+      }
+      portal_feature_module: { Args: { p_feature: string }; Returns: string }
       portal_features: { Args: { p_company: string }; Returns: string[] }
+      portal_file_add: {
+        Args: {
+          p_company: string
+          p_mime?: string
+          p_name: string
+          p_path: string
+          p_project: string
+        }
+        Returns: Json
+      }
+      portal_file_path: {
+        Args: { p_company: string; p_file: string }
+        Returns: Json
+      }
+      portal_file_remove: {
+        Args: { p_company: string; p_file: string }
+        Returns: Json
+      }
+      portal_files: { Args: { p_company: string }; Returns: Json }
+      portal_has_access: { Args: { p_company: string }; Returns: boolean }
+      portal_home: { Args: { p_company: string }; Returns: Json }
       portal_is_preview: { Args: { p_company: string }; Returns: boolean }
       portal_me: { Args: never; Returns: Json }
+      portal_module_require: {
+        Args: { p_company: string; p_feature: string }
+        Returns: undefined
+      }
+      portal_onboarding: { Args: { p_company: string }; Returns: Json }
+      portal_person: {
+        Args: { p_company: string; p_user: string }
+        Returns: Json
+      }
+      portal_report: {
+        Args: { p_company: string; p_report: string }
+        Returns: Json
+      }
+      portal_reporting: {
+        Args: {
+          p_company: string
+          p_end: string
+          p_prev_start?: string
+          p_start: string
+        }
+        Returns: Json
+      }
       portal_require: {
         Args: { p_company: string; p_feature: string }
         Returns: undefined
+      }
+      portal_require_write: { Args: { p_company: string }; Returns: undefined }
+      portal_task: {
+        Args: { p_company: string; p_task: string }
+        Returns: Json
+      }
+      portal_task_comment: {
+        Args: { p_body: string; p_company: string; p_task: string }
+        Returns: Json
+      }
+      portal_task_file_path: {
+        Args: { p_company: string; p_file: string; p_task: string }
+        Returns: Json
+      }
+      portal_task_review: {
+        Args: {
+          p_approve: boolean
+          p_comment?: string
+          p_company: string
+          p_task: string
+        }
+        Returns: Json
       }
       portal_task_visible: {
         Args: { p_company: string; p_task: string }
         Returns: boolean
       }
+      portal_tasks: { Args: { p_company: string }; Returns: Json }
       portal_touch: { Args: { p_company: string }; Returns: undefined }
+      portal_upload_target: {
+        Args: { p_company: string; p_project: string }
+        Returns: Json
+      }
       project_ws: { Args: { p: string }; Returns: string }
       proposal_ws: { Args: { p: string }; Returns: string }
       public_proposal: { Args: { p_token: string }; Returns: Json }

@@ -507,7 +507,7 @@ function PerformanceCard({ sp, currency }: { sp: HomeData["spend"]; currency: st
 function ModuleShortcuts() {
   const ws = useWorkspace();
   const links: [ModuleId, string][] = [
-    ["crm", "/crm"], ["proposals", "/proposals"], ["onboarding", "/onboarding"], ["booking", "/booking"],
+    ["crm", "/crm"], ["proposals", "/proposals"], ["onboarding", "/onboarding"], ["booking", "/booking"], ["portal", "/portal"],
     ["creatives", "/creatives"], ["reporting", "/reporting"], ["tracking", "/tracking"], ["links", "/links"],
   ];
   const on = links.filter(([m]) => ws.has(m));

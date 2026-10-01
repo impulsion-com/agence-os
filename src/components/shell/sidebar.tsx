@@ -150,14 +150,15 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         )}
 
         {/* La liste des clients reste visible dès qu'un module s'en sert, même sans CRM */}
-        {(has("crm") || has("proposals") || has("onboarding") || has("booking") || needsCompanies(ws.modules)) && (
-          <Section id="com" title={has("crm") || has("proposals") || has("onboarding") || has("booking") ? "Commercial" : "Clients"}>
+        {(has("crm") || has("proposals") || has("onboarding") || has("booking") || has("portal") || needsCompanies(ws.modules)) && (
+          <Section id="com" title={has("crm") || has("proposals") || has("onboarding") || has("booking") || has("portal") ? "Commercial" : "Clients"}>
             {has("crm") && <Item href={`${b}/crm`} icon="handshake" label="Pipeline" exact />}
             {needsCompanies(ws.modules) && <Item href={`${b}/crm/companies`} icon="building-2" label={has("crm") ? "Clients & prospects" : "Clients"} />}
             {has("crm") && <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />}
             {has("proposals") && <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />}
             {has("onboarding") && <Item href={`${b}/onboarding`} icon="list-checks" label="Onboarding clients" />}
             {has("booking") && <Item href={`${b}/booking`} icon="calendar" label="Rendez-vous" />}
+            {has("portal") && <Item href={`${b}/portal`} icon="door-open" label="Portail client" />}
           </Section>
         )}
 

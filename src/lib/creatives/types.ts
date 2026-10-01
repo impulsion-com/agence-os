@@ -1,4 +1,5 @@
 import type { Awareness, Brief, ConceptFormat, ConceptStatus } from "./constants";
+import type { ClientReview } from "@/lib/types";
 import type { IntelTags } from "./intel-core";
 
 /** Origine d'un concept créé depuis la veille ou une recommandation IA. */
@@ -30,6 +31,11 @@ export interface Concept {
   is_demo: boolean;
   source: ConceptSource | null;
   ai_tags: IntelTags | null;
+  // Validation par le client sur son portail : null = non envoyée
+  client_review: ClientReview | null;
+  client_feedback: string;
+  client_reviewed_at: string | null;
+  client_reviewed_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -104,4 +110,4 @@ export interface AdDay {
 export type Attribution = Record<string, { sales: number; revenue: number }>;
 
 export const CONCEPT_COLS =
-  "id, workspace_id, company_id, project_id, task_id, title, angle, hook, persona, awareness, format, platforms, status, brief, tags, verdict, launched_at, owner_id, cover_path, position, is_demo, source, ai_tags, created_at, updated_at";
+  "id, workspace_id, company_id, project_id, task_id, title, angle, hook, persona, awareness, format, platforms, status, brief, tags, verdict, launched_at, owner_id, cover_path, position, is_demo, source, ai_tags, client_review, client_feedback, client_reviewed_at, client_reviewed_by, created_at, updated_at";
