@@ -77,9 +77,12 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 - Pages publiques (proposition `/p/`, onboarding `/f/`, rendez-vous `/b/`, rapport `/r/`, liens `/l/`) :
   lecture et écriture uniquement via routes serveur en service role ou RPC `security definer`.
 - MCP : `/api/mcp`, outils dans `src/lib/mcp/tools/` (un fichier par domaine, voir `docs/mcp.md`).
-- Tracking : `tracking_sites.secret_key` n'est pas lisible directement (privilège par colonne) ;
-  passer par la RPC `tracking_site_secret`. Tests du moteur :
-  `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs`.
+- Tracking (« Tracking OS », plan dans `docs/plan-tracking.md`) : les clés d'envoi sont dans `tracking_keys`
+  (hash SHA-256 seulement, colonne `key_hash` illisible côté client) et se créent ou se révoquent par les RPC
+  `create_tracking_key` / `revoke_tracking_key`. L'entonnoir d'un site est dans `tracking_stages` ; un
+  déclencheur le pose à la création du site depuis `settings.template`. Tests :
+  `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs` (moteur) et
+  `node scripts/test-tracking-os.mjs` (parcours réel, serveur de dev lancé).
 
 ## Développement
 

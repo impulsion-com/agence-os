@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Lock, RefreshCw } from "lucide-react";
+import { KeyRound, Lock, Plus } from "lucide-react";
 
 import { ConfirmModal } from "@/components/ui/overlay";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
-import type { SiteRow } from "@/lib/tracking/load";
+import { ago } from "@/lib/format";
+import type { SiteKey, SiteRow } from "@/lib/tracking/load";
 import { Code, CopyButton } from "./shared";
 
 type Ex = "curl" | "zapier" | "stripe" | "shopify" | "woo" | "crm";
@@ -18,22 +19,31 @@ const EXAMPLES: { id: Ex; name: string }[] = [
   { id: "crm", name: "Deals du CRM" },
 ];
 
-function newSecret() {
-  const b = new Uint8Array(24);
-  crypto.getRandomValues(b);
-  return `sk_${Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")}`;
-}
-
-export function ApiTab({ site, secret, appUrl }: { site: SiteRow; secret: string | null; appUrl: string }) {
+export function ApiTab({ site, keys, appUrl }: { site: SiteRow; keys: SiteKey[]; appUrl: string }) {
   const ws = useWorkspace();
   const mutate = useMutate();
-  const [show, setShow] = useState(false);
-  const [confirm, setConfirm] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  // La clé complète n'existe qu'ici, juste après sa création : la base n'en garde que l'empreinte
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [revoke, setRevoke] = useState<SiteKey | null>(null);
   const [ex, setEx] = useState<Ex>("curl");
-  const key = secret ?? "sk_…";
-  const masked = secret ? `${secret.slice(0, 7)}${"•".repeat(20)}${secret.slice(-4)}` : "";
-  const shownKey = show ? key : "sk_VOTRE_CLE_SECRETE";
+  const shownKey = fresh ?? "sk_VOTRE_CLE";
   const endpoint = `${appUrl}/api/t/conversion`;
+  const active = keys.filter((k) => !k.revoked_at);
+  const revoked = keys.filter((k) => k.revoked_at);
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    const res = await mutate(async (sb) => must(await sb.rpc("create_tracking_key", { p_site: site.id, p_name: name })) as { key: string }, { success: "Clé créée" });
+    setBusy(false);
+    if (res) {
+      setFresh(res.key);
+      setName("");
+    }
+  };
 
   return (
     <div className="trk-col">
@@ -41,34 +51,62 @@ export function ApiTab({ site, secret, appUrl }: { site: SiteRow; secret: string
         <div className="card-h">
           <h2>
             <KeyRound size={15} style={{ display: "inline", verticalAlign: -2, marginRight: 6 }} />
-            Clé secrète
+            Clés d&apos;envoi
           </h2>
         </div>
         <div className="card-b trk-prose">
-          {secret === null ? (
+          {!ws.canWrite ? (
             <div className="rp-note">
               <Lock size={15} />
-              <span>La clé secrète n&apos;est visible que des membres qui peuvent modifier l&apos;espace.</span>
+              <span>Les clés d&apos;envoi ne sont visibles que des membres qui peuvent modifier l&apos;espace.</span>
             </div>
           ) : (
             <>
               <p>
-                Elle authentifie les conversions envoyées depuis un serveur (Stripe, CRM, Zapier). Ne la mets jamais dans le code du site : la clé publique{" "}
-                <code>{site.public_key}</code> suffit au script.
+                Une clé authentifie les conversions envoyées depuis un serveur (Stripe, CRM, Zapier). Crée-en une par outil : tu pourras en révoquer une sans couper les
+                autres. Ne la mets jamais dans le code du site : la clé publique <code>{site.public_key}</code> suffit au script.
               </p>
-              <div className="trk-key">
-                <input className="input mono" readOnly value={show ? secret : masked} aria-label="Clé secrète" onFocus={(e) => show && e.currentTarget.select()} />
-                <button type="button" className="btn btn-sm" onClick={() => setShow((s) => !s)} aria-pressed={show}>
-                  {show ? <EyeOff size={12} /> : <Eye size={12} />}
-                  {show ? "Masquer" : "Afficher"}
+              {fresh && (
+                <div className="rp-note warn" role="status">
+                  <KeyRound size={15} />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
+                    <b>Copie cette clé maintenant, elle ne sera plus affichée.</b>
+                    <span className="trk-key">
+                      <input className="input mono" readOnly value={fresh} aria-label="Nouvelle clé d'envoi" onFocus={(e) => e.currentTarget.select()} />
+                      <CopyButton text={fresh} />
+                    </span>
+                    <span>Les exemples ci-dessous l&apos;utilisent tant que tu restes sur cette page.</span>
+                  </span>
+                </div>
+              )}
+              {keys.length > 0 && (
+                <ul className="trk-keys" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {[...active, ...revoked].map((k) => (
+                    <li key={k.id}>
+                      <span style={{ fontWeight: 500, color: "var(--text)" }}>{k.name}</span>
+                      <code>{k.prefix}…</code>
+                      <span className="meta">
+                        {k.revoked_at ? `Révoquée ${ago(k.revoked_at)}` : k.last_used_at ? `Utilisée ${ago(k.last_used_at)}` : "Jamais utilisée"}
+                      </span>
+                      <span style={{ marginLeft: "auto" }}>
+                        {k.revoked_at ? (
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => mutate(async (sb) => must(await sb.from("tracking_keys").delete().eq("id", k.id)))}>
+                            Retirer de la liste
+                          </button>
+                        ) : (
+                          <button type="button" className="btn btn-sm" onClick={() => setRevoke(k)}>Révoquer</button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <form className="trk-key" onSubmit={create}>
+                <input className="input" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Nom de la clé, par exemple Stripe" aria-label="Nom de la nouvelle clé" />
+                <button className="btn btn-primary btn-sm" disabled={busy || !name.trim()}>
+                  <Plus size={12} /> Créer une clé
                 </button>
-                <CopyButton text={secret} />
-                {ws.canWrite && (
-                  <button type="button" className="btn btn-sm" onClick={() => setConfirm(true)}>
-                    <RefreshCw size={12} /> Régénérer
-                  </button>
-                )}
-              </div>
+              </form>
             </>
           )}
         </div>
@@ -95,7 +133,7 @@ export function ApiTab({ site, secret, appUrl }: { site: SiteRow; secret: string
               </button>
             ))}
           </div>
-          {!show && secret && <p className="faint" style={{ fontSize: 12 }}>Les exemples affichent un faux jeton. « Afficher » y insère ta vraie clé.</p>}
+          {!fresh && <p className="faint" style={{ fontSize: 12 }}>Les exemples affichent une fausse clé : remplace-la par l&apos;une des tiennes.</p>}
 
           {ex === "curl" && (
             <Code lang="Terminal">{`curl -X POST ${endpoint} \\
@@ -192,16 +230,14 @@ export function ApiTab({ site, secret, appUrl }: { site: SiteRow; secret: string
         </div>
       </section>
 
-      {confirm && (
+      {revoke && (
         <ConfirmModal
-          title="Régénérer la clé secrète ?"
-          text="L'ancienne clé cesse de fonctionner immédiatement : Stripe, Zapier ou ton serveur devront utiliser la nouvelle. Le script du site n'est pas concerné."
-          confirmLabel="Régénérer"
-          onClose={() => setConfirm(false)}
+          title={`Révoquer la clé « ${revoke.name} » ?`}
+          text="Elle cesse de fonctionner immédiatement : l'outil qui l'utilise devra en recevoir une nouvelle. Les autres clés et le script du site ne sont pas concernés."
+          confirmLabel="Révoquer"
+          onClose={() => setRevoke(null)}
           onConfirm={async () => {
-            const next = newSecret();
-            await mutate(async (sb) => must(await sb.from("tracking_sites").update({ secret_key: next }).eq("id", site.id)), { success: "Nouvelle clé générée" });
-            setShow(true);
+            await mutate(async (sb) => must(await sb.rpc("revoke_tracking_key", { p_id: revoke.id })), { success: "Clé révoquée" });
           }}
         />
       )}

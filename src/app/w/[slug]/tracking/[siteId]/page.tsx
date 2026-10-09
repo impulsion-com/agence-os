@@ -6,13 +6,13 @@ import { SiteDashboard, type Tab } from "@/components/tracking/site-dashboard";
 import { resolvePeriod } from "@/lib/ads/metrics";
 import { addDays, today } from "@/lib/format";
 import { MODEL_IDS, WINDOWS, type ModelId } from "@/lib/tracking/attribution";
-import { loadOverview, loadPeople, loadSecret, loadSites, type Goal } from "@/lib/tracking/load";
+import { loadFunnel, loadKeys, loadOverview, loadPeople, loadSites, type Goal } from "@/lib/tracking/load";
 import { loadWorkspace } from "@/lib/workspace/load";
 
 export const metadata: Metadata = { title: "Attribution" };
 
 const UUID = /^[0-9a-f-]{36}$/i;
-const TABS: Tab[] = ["overview", "journeys", "people", "install", "api"];
+const TABS: Tab[] = ["overview", "funnel", "journeys", "people", "install", "api"];
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
 /** URL publique de l'application (snippet d'installation, exemples d'API). */
@@ -45,10 +45,11 @@ export default async function TrackingSitePage({ params, searchParams }: PagePro
   const goal: Goal = one(sp.goal) === "leads" ? "leads" : "sales";
   const q = (one(sp.q) ?? "").trim();
 
-  const [overview, people, secret, url] = await Promise.all([
+  const [overview, funnel, people, keys, url] = await Promise.all([
     tab === "overview" || tab === "journeys" ? loadOverview(site, workspace.id, period, { model, window, goal }) : null,
+    tab === "funnel" ? loadFunnel(site.id, period) : null,
     tab === "people" ? loadPeople(site.id, q) : null,
-    tab === "api" && role !== "guest" ? loadSecret(site.id) : null,
+    tab === "api" && role !== "guest" ? loadKeys(site.id) : [],
     appUrl(),
   ]);
 
@@ -64,7 +65,8 @@ export default async function TrackingSitePage({ params, searchParams }: PagePro
       overview={overview}
       people={people}
       q={q}
-      secret={secret}
+      funnel={funnel}
+      keys={keys}
       appUrl={url}
     />
   );

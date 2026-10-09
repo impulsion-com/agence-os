@@ -8,8 +8,8 @@ Il compare ensuite ce ROAS réel au ROAS déclaré par Meta, Google…
 ## 1. Créer un site suivi
 
 Attribution > Nouveau site suivi : nom, client (ou aucun pour le site de l'agence), domaines
-(un par ligne, sous-domaines inclus), modèle d'attribution par défaut, fenêtre, consentement,
-capture des formulaires. Seuls les domaines déclarés peuvent envoyer des données (vide = tous).
+(un par ligne, sous-domaines inclus), entonnoir de départ, modèle d'attribution par défaut, fenêtre,
+consentement, capture des formulaires. Seuls les domaines déclarés peuvent envoyer des données (vide = tous).
 
 ## 2. Installer le script
 
@@ -113,7 +113,33 @@ Objectif « Prospects » : première conversion lead/booking par personne sur la
 Moteur : `src/lib/tracking/attribution.ts`. Tests :
 `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs`.
 
-## 8. API serveur
+## 8. Entonnoir
+
+Chaque site a son entonnoir : la liste ordonnée des étapes que tu veux suivre (onglet Entonnoir). Trois
+gabarits à la création, modifiables ensuite :
+
+| Gabarit | Étapes (clé de l'évènement) |
+| --- | --- |
+| Génération de leads | Prospects (`lead`, `booking`), Prospects qualifiés (`qualified`), Ventes (`purchase`, `deal_won`) |
+| Vente par appel | Prospects (`lead`), Rendez-vous pris (`booking`), Rendez-vous honorés (`show`), Prospects qualifiés (`qualified`), Ventes (`purchase`, `deal_won`) |
+| E-commerce | Ajouts au panier (`add_to_cart`), Paiements initiés (`begin_checkout`), Achats (`purchase`) |
+
+Une étape compte les évènements qui portent sa clé ou l'un de ses autres noms, qu'ils viennent du script
+(`aos('track', 'show')`) ou de l'API (`"type": "show"`). C'est ce qui rend le suivi indépendant du CRM : ton
+outil, quel qu'il soit, envoie un évènement quand une personne franchit une étape.
+
+L'onglet affiche par étape les personnes distinctes, le taux depuis l'étape précédente, le nombre
+d'évènements et la valeur. Chaque étape est comptée **à sa date** : une vente de la période peut venir d'un
+prospect d'une période précédente, et un taux peut dépasser 100 %. Les évènements reçus qui ne correspondent
+à aucune étape sont listés à part.
+
+Moteur : `src/lib/tracking/funnel.ts`, RPC `tracking_funnel`.
+
+## 9. API serveur
+
+L'onglet API crée des **clés d'envoi** (`sk_…`), une par outil branché (Stripe, CRM, Zapier). Une clé n'est
+affichée qu'une fois, à sa création : seule son empreinte SHA-256 est conservée (`tracking_keys`). Tu peux en
+révoquer une sans couper les autres.
 
 ```http
 POST /api/t/conversion
@@ -135,7 +161,7 @@ Réponses : 201 créée, 200 `{ "duplicate": true }`, 400, 401, 413, 429.
   d'un visiteur compte comme conversion `deal_won` de la valeur du deal. Pour ce site seulement, les
   visiteurs identifiés sont reliés à un contact CRM (réglage « Créer les contacts CRM »).
 
-## 9. Sécurité
+## 10. Sécurité
 
 Collecte publique (`/t.js`, `/api/t/*` hors proxy de session), CORS ouvert, validation zod, corps
 limité à 16 Ko, filtre des robots par user-agent, contrôle de l'origine face aux domaines déclarés,
@@ -143,5 +169,4 @@ limite de débit en mémoire (300 requêtes par minute par clé et IP), travail 
 (`after()`), écriture par le service role uniquement. Lecture via les RPC `tracking_conversions`,
 `tracking_stats`, `tracking_people` (security definer, appartenance à l'espace vérifiée).
 
-Limites connues : la clé secrète est lisible en base par un invité de l'espace (l'interface la lui
-masque) ; la limite de débit est par instance serveur ; les montants ne sont pas convertis entre devises.
+Limites connues : la limite de débit est par instance serveur ; les montants ne sont pas convertis entre devises.
