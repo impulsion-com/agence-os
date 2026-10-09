@@ -4,12 +4,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { syncAllWorkspaces } from "@/lib/ads/sync";
 import { syncAllAnalytics } from "@/lib/analytics/sync";
+import { supabaseAdmin } from "@/lib/supabase/server";
 
 export const maxDuration = 300;
 
 /**
  * GET /api/cron/sync : synchro quotidienne de tous les espaces (comptes publicitaires, puis
- * propriétés GA4 et projets Clarity : un instantané Clarity par jour, 3 requêtes par projet).
+ * propriétés GA4 et projets Clarity : un instantané Clarity par jour, 3 requêtes par projet),
+ * puis effacement des adresses IP du tracking de plus de 30 jours.
  * Vercel Cron envoie automatiquement « Authorization: Bearer <CRON_SECRET> ».
  */
 export async function GET(req: NextRequest) {
@@ -22,6 +24,8 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   const out = await syncAllWorkspaces();
   const site = await syncAllAnalytics();
+  const purge = await supabaseAdmin().rpc("tracking_purge_signals");
+  if (purge.error) console.error("[tracking] purge des IP", purge.error.message);
   const all = out.flatMap((w) => w.results);
   const sources = site.flatMap((w) => w.results);
   return NextResponse.json({
@@ -35,6 +39,7 @@ export async function GET(req: NextRequest) {
       skipped: sources.filter((r) => r.skipped).length,
       errors: sources.filter((r) => !r.ok).map((r) => ({ source: r.name, kind: r.kind, error: r.error })),
     },
+    tracking: { ips_purged: purge.data ?? 0 },
     ms: Date.now() - started,
   });
 }

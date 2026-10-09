@@ -43,11 +43,15 @@ window.aos.id           // identifiant du visiteur (à passer à Stripe en clien
 
 `order_id` rend une conversion idempotente (index unique site + type + order_id).
 
-## 4. Fonctionnement du script (`/t.js`, 5,4 Ko, ES5)
+## 4. Fonctionnement du script (`/t.js`, 5,7 Ko, ES5)
 
 - Lit sa clé (`data-key` ou `?k=`) puis `GET /api/t/config?k=` (domaines, consentement, formulaires).
 - Identifiant : cookie `_aos_id` (1 an, domaine racine) + localStorage en secours.
   Session : cookie `_aos_s` (30 min, prolongé à chaque envoi).
+  Sous Safari, un cookie posé par un script est plafonné à 7 jours : au-delà, seuls l'email, le téléphone et
+  les identifiants de clic relient encore une visite à une vente.
+- Après consentement (mode « Après consentement » seulement), la page vue emporte les cookies `_fbp`, `_fbc`
+  et `_ga` s'ils existent. Sans `_fbc`, il est reconstruit depuis le `fbclid` de l'URL.
 - Un **point de contact** est créé à chaque arrivée avec source (UTM, gclid, gbraid, wbraid, fbclid,
   ttclid, msclkid, li_fat_id, sccid, epik, aos_lid, référent externe) ou à chaque nouvelle session.
   Chaque page vue est enregistrée.
@@ -77,11 +81,39 @@ window.addEventListener('CookiebotOnConsentReady', function () {
 
 Consent Mode Google : balise GTM `aos('consent', true)` conditionnée à `analytics_storage`.
 
-Aucune IP n'est stockée (pays seulement, via `x-vercel-ip-country`). Les emails ne sont visibles que
-des membres. Onglet « Visiteurs identifiés » : suppression d'une personne (tous ses visiteurs, points
-de contact et évènements).
+### Ce qui est conservé selon le mode
 
-## 6. Canaux
+| | Suivi immédiat | Après consentement |
+| --- | --- | --- |
+| Pays (`x-vercel-ip-country`) | oui | oui |
+| Cookies des régies (`_fbp`, `_fbc`, `_ga`) | non | oui |
+| Adresse IP et navigateur de la visite | non | oui, IP effacée après 30 jours |
+
+Ces signaux servent au renvoi des conversions vers Meta et Google : ce sont eux qui permettent à la régie
+de rapprocher une vente d'un clic. Un site en « suivi immédiat » se déclare exempté de consentement, ce qui
+exclut tout identifiant publicitaire : il ne pourra donc renvoyer que l'email et le téléphone hachés.
+Ils vivent dans `visitor_signals`, sans aucune policy : aucun membre ne peut les lire, seul le serveur.
+L'effacement des IP passe par le cron quotidien (`/api/cron/sync`).
+
+Les emails ne sont visibles que des membres. Onglet « Visiteurs identifiés » : suppression d'une personne
+(tous ses visiteurs, points de contact, évènements et signaux).
+
+## 6. Identité
+
+Une **personne** regroupe tous les visiteurs (appareils, navigateurs) reliés par un même email **ou** un même
+téléphone. Elle se construit à chaque identification : formulaire, `aos('identify')`, conversion envoyée par
+l'API. Si un envoi porte l'email d'une personne et le téléphone d'une autre, les deux fusionnent.
+
+- Le téléphone est normalisé au format international (`06 12 34 56 78`, `+33 6 12…` et `0033612…` désignent
+  le même numéro). Un numéro écrit sans indicatif est lu dans le pays du visiteur, ou comme français si le
+  pays est inconnu (cas d'une conversion envoyée par un serveur) : préfère le format `+33…` dans l'API.
+- Une conversion peut arriver avec un téléphone seul : c'est ce qui permet de brancher un CRM ou un outil
+  d'appels qui ne connaît pas l'email.
+- Limite : deux personnes qui partagent un téléphone ou un email (un couple, un standard) sont vues comme une seule.
+
+Code : `tracking_link_person` (migration `0101`), `src/lib/tracking/phone.ts`.
+
+## 7. Canaux
 
 UTM d'abord (medium payant : cpc, ppc, paid_social, display… ; email, newsletter ; social, bio ; organic),
 puis identifiants de clic (gclid/gbraid/wbraid → Google Ads, ttclid → TikTok, li_fat_id → LinkedIn,
@@ -94,10 +126,10 @@ Clés : `campaign_key` = `utm_id` (ou `utm_campaign` numérique), `adset_key` = 
 La dépense est rapprochée par `campaign_key` = `ad_metrics_daily.campaign_id` (comptes du même client),
 sinon par nom (`utm_campaign` = nom de campagne). La dépense n'est connue qu'au niveau campagne.
 
-## 7. Modèles d'attribution
+## 8. Modèles d'attribution
 
-Pour chaque conversion, les points de contact de la **personne** (tous ses visiteurs fusionnés par email,
-tous appareils) dans la fenêtre (1 à 90 jours) :
+Pour chaque conversion, les points de contact de la **personne** (tous ses visiteurs reliés par email ou
+téléphone, tous appareils) dans la fenêtre (1 à 90 jours) :
 
 | Modèle | Crédit |
 | --- | --- |
@@ -113,7 +145,7 @@ Objectif « Prospects » : première conversion lead/booking par personne sur la
 Moteur : `src/lib/tracking/attribution.ts`. Tests :
 `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs`.
 
-## 8. Entonnoir
+## 9. Entonnoir
 
 Chaque site a son entonnoir : la liste ordonnée des étapes que tu veux suivre (onglet Entonnoir). Trois
 gabarits à la création, modifiables ensuite :
@@ -135,7 +167,7 @@ prospect d'une période précédente, et un taux peut dépasser 100 %. Les évè
 
 Moteur : `src/lib/tracking/funnel.ts`, RPC `tracking_funnel`.
 
-## 9. API serveur
+## 10. API serveur
 
 L'onglet API crée des **clés d'envoi** (`sk_…`), une par outil branché (Stripe, CRM, Zapier). Une clé n'est
 affichée qu'une fois, à sa création : seule son empreinte SHA-256 est conservée (`tracking_keys`). Tu peux en
@@ -145,7 +177,7 @@ révoquer une sans couper les autres.
 POST /api/t/conversion
 Authorization: Bearer sk_…
 
-{ "email": "…" | "anon_id": "…", "type": "purchase", "value": 189.9, "currency": "EUR",
+{ "email": "…" | "phone": "+33…" | "anon_id": "…", "type": "purchase", "value": 189.9, "currency": "EUR",
   "order_id": "CMD-1042", "ts": "2026-09-25T10:00:00Z", "name": "…", "phone": "…", "props": {} }
 ```
 
@@ -161,7 +193,7 @@ Réponses : 201 créée, 200 `{ "duplicate": true }`, 400, 401, 413, 429.
   d'un visiteur compte comme conversion `deal_won` de la valeur du deal. Pour ce site seulement, les
   visiteurs identifiés sont reliés à un contact CRM (réglage « Créer les contacts CRM »).
 
-## 10. Sécurité
+## 11. Sécurité
 
 Collecte publique (`/t.js`, `/api/t/*` hors proxy de session), CORS ouvert, validation zod, corps
 limité à 16 Ko, filtre des robots par user-agent, contrôle de l'origine face aux domaines déclarés,

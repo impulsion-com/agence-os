@@ -80,9 +80,13 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 - Tracking (« Tracking OS », plan dans `docs/plan-tracking.md`) : les clés d'envoi sont dans `tracking_keys`
   (hash SHA-256 seulement, colonne `key_hash` illisible côté client) et se créent ou se révoquent par les RPC
   `create_tracking_key` / `revoke_tracking_key`. L'entonnoir d'un site est dans `tracking_stages` ; un
-  déclencheur le pose à la création du site depuis `settings.template`. Tests :
+  déclencheur le pose à la création du site depuis `settings.template`. Une personne = les visiteurs de même
+  `visitors.person_id` (email ou téléphone, via `tracking_link_person`, service role). Les signaux pour les
+  régies (cookies, IP, navigateur) sont dans `visitor_signals`, sans policy, écrits seulement si le site
+  attend le consentement. Tests :
   `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs` (moteur) et
-  `node scripts/test-tracking-os.mjs` (parcours réel, serveur de dev lancé).
+  `node scripts/test-tracking-os.mjs` et `node --env-file=.env.local scripts/test-tracking-identity.mjs`
+  (parcours réels, serveur de dev lancé).
 
 ## Développement
 

@@ -83,12 +83,16 @@ l'étape 6 si le journal des envois le demande.
 
 ### 2. Script et identité
 
-- Le script capte ce dont le renvoi aura besoin : cookies `_fbp`, `_fbc`, `_ga`,
-  identifiants de clic conservés, adresse IP et navigateur de la visite (sous
-  consentement, IP purgée à 30 jours).
-- Identité par email **et** téléphone normalisés, fusion des visiteurs d'une personne.
-- Relais sur le site du client (extension WordPress d'abord) pour un cookie qui dure
-  sous Safari. À concevoir après mesure sur un iPhone.
+**Fait le 9 octobre 2026** (migration `0101_tracking_identity_signals.sql`), sauf le relais.
+
+- Le script joint à la page vue les cookies `_fbp`, `_fbc` (reconstruit depuis le
+  `fbclid` s'il manque) et `_ga`. Le serveur garde l'adresse IP et le navigateur de
+  la visite. Tout cela seulement sur un site qui attend le consentement, dans une
+  table qu'aucun membre ne peut lire, avec l'IP effacée à 30 jours.
+- Une personne = tous les visiteurs reliés par un même email ou un même téléphone
+  normalisé. Une conversion peut arriver avec un téléphone seul.
+- **Reste à faire** : le relais sur le site du client pour un cookie qui dure sous
+  Safari. Il attend une mesure sur un iPhone.
 
 ### 3. Sources de conversions
 

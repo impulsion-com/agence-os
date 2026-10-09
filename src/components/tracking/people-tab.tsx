@@ -49,7 +49,7 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
             <p>
               {q
                 ? "Aucune personne ne correspond à cette recherche."
-                : "Un visiteur est identifié quand il remplit un formulaire avec son email, ou quand le site appelle aos('identify', …)."}
+                : "Une personne est identifiée quand elle remplit un formulaire avec son email, quand le site appelle aos('identify', …), ou quand une conversion arrive par l'API avec son email ou son téléphone."}
             </p>
           </div>
         ) : (
@@ -59,7 +59,7 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
                 <tr>
                   <th>Personne</th>
                   <th>Téléphone</th>
-                  <th className="r" title="Nombre d'appareils ou de navigateurs reliés à cet email">Appareils</th>
+                  <th className="r" title="Nombre d'appareils ou de navigateurs reliés à cette personne, par son email ou son téléphone">Appareils</th>
                   <th>Première visite</th>
                   <th>Dernière visite</th>
                   <th className="r">Achats</th>
@@ -69,12 +69,12 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
               </thead>
               <tbody>
                 {people.map((p) => (
-                  <tr key={p.email}>
+                  <tr key={p.person_id}>
                     <td style={{ maxWidth: 300 }}>
                       <span className="client">
                         <UserRound size={14} className="faint" />
                         <span style={{ minWidth: 0 }}>
-                          <span className="trunc" style={{ display: "block", fontWeight: 500 }}>{p.email}</span>
+                          <span className="trunc" style={{ display: "block", fontWeight: 500 }}>{p.email ?? p.phone ?? "Sans email"}</span>
                           <span className="sub trunc" style={{ display: "block" }}>
                             {p.name || "Nom inconnu"}
                             {p.contact_id && (
@@ -97,7 +97,7 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
                     <td className="r">{p.revenue ? fmtKpi("value", p.revenue, currency) : <span className="fainter">–</span>}</td>
                     {ws.canWrite && (
                       <td className="r">
-                        <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setDel(p)} aria-label={`Supprimer les données de ${p.email}`} title="Supprimer ses données (RGPD)">
+                        <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setDel(p)} aria-label={`Supprimer les données de ${p.email ?? p.phone ?? "cette personne"}`} title="Supprimer ses données (RGPD)">
                           <Trash2 size={13} />
                         </button>
                       </td>
@@ -110,18 +110,18 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
         )}
       </div>
       <p className="trk-foot" style={{ padding: "12px 2px" }}>
-        Les emails ne sont visibles que des membres de l&apos;espace. Aucune adresse IP n&apos;est conservée, seulement le pays. Sur demande d&apos;une personne (droit à
+        Les emails ne sont visibles que des membres de l&apos;espace. Sur un site qui attend le consentement, l&apos;adresse IP de la visite est conservée 30 jours pour le renvoi des conversions aux régies ; sinon, seul le pays est gardé. Sur demande d&apos;une personne (droit à
         l&apos;effacement), supprime ses données ici : visiteurs, points de contact et évènements sont effacés sur tous ses appareils.
       </p>
 
       {del && (
         <ConfirmModal
           title="Supprimer les données de cette personne ?"
-          text={`Tous les visiteurs reliés à ${del.email} sur « ${site.name} » seront effacés, avec leurs points de contact, pages vues et conversions. Cette action est définitive.`}
+          text={`Tous les visiteurs reliés à ${del.email ?? del.phone ?? "cette personne"} sur « ${site.name} » seront effacés, avec leurs points de contact, pages vues et conversions. Cette action est définitive.`}
           confirmLabel="Supprimer définitivement"
           onClose={() => setDel(null)}
           onConfirm={async () => {
-            await mutate(async (sb) => must(await sb.from("visitors").delete().eq("site_id", site.id).eq("email", del.email)), { success: "Données supprimées" });
+            await mutate(async (sb) => must(await sb.from("visitors").delete().eq("site_id", site.id).eq("person_id", del.person_id)), { success: "Données supprimées" });
           }}
         />
       )}
