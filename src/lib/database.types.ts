@@ -5267,6 +5267,16 @@ export type Database = {
       }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }
+      tracking_ad_referential: {
+        Args: { p_accounts: string[] }
+        Returns: {
+          ad_account_id: string
+          external_id: string
+          level: string
+          name: string
+          parent_id: string
+        }[]
+      }
       tracking_apply_template: {
         Args: { p_site: string; p_template: string }
         Returns: undefined

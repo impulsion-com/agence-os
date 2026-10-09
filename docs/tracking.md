@@ -261,7 +261,45 @@ tu choisis l'étape pour tout le fichier.
   sert de clé.
 - Réservé aux membres qui peuvent modifier l'espace. Envoi par paquets de 100 lignes.
 
-## 14. Sécurité
+## 14. Extension Chrome
+
+L'extension [Colonnes CRM pour Ads Manager](https://github.com/impulsion-com/crm-ads-columns) affiche les
+chiffres du tracking dans Meta Ads Manager et Google Ads, à côté de ceux de la régie. Elle lit quatre routes
+en lecture seule, sous `/api/ext/v1/`.
+
+**Brancher l'extension.** Réglages > API et MCP > nouveau jeton, accès « Extension Chrome ». Ce jeton
+n'ouvre que ces quatre routes : ni le serveur MCP, ni le reste de l'application. Colle l'adresse de ton
+application et le jeton dans le popup de l'extension, puis « Tester la connexion ».
+
+**Quel site ?** L'extension envoie le compte publicitaire ouvert dans la page (`compte=act_…`). Le site
+retenu est celui du même client que ce compte, ou celui de l'agence pour un compte sans client. Le compte
+doit donc être connecté dans le Reporting. Sur un compte inconnu, l'extension se tait.
+
+| Route | Rôle |
+| --- | --- |
+| `ping` | Valide le jeton et annonce le terrain : sites, comptes suivis, modèles, périodes, et le catalogue des colonnes du site visé, dérivé de son entonnoir |
+| `metrics` | Les colonnes par entité, indexées `plateforme:niveau:externalId` (niveau : `campagne`, `adset`, `pub`). Paramètres : `niveau`, `plateforme`, `ids`, `compte` ou `site`, et les filtres `p`, `du`, `au`, `m`, `f` |
+| `prospects` | Les personnes créditées à une ligne, 30 au plus, avec un lien vers leur fiche |
+| `index` | Le référentiel nu, pour un rapprochement par nom de dernier recours, avec les noms ambigus |
+
+Trois règles du contrat décident de ce que l'extension affiche :
+
+1. Une entité **connue** sans activité sur la période apparaît avec des zéros. Une entité absente veut dire
+   « inconnue du serveur ». C'est ce qui distingue « 0 vente » de « pas synchronisée ».
+2. Un ratio indéfini vaut `null`, jamais `0` : un coût par vente sur zéro vente n'existe pas.
+3. La réponse déclare la fenêtre demandée **et** la fenêtre effective (90 jours au plus), ainsi que le modèle
+   réellement utilisé.
+
+Les colonnes : `depense`, puis une par étape (`leads` pour l'étape d'entrée, `ventes` pour les étapes de vente,
+`etape_<clé>` pour les autres), `cpl`, `caSigne`, `roas`, `cac`, `conversionsPlateforme`. Chaque colonne porte
+un `role` (`cout`, `etape`, `resultat`, `valeur`, `ratio`, `regie`).
+
+Ce contrat est aussi celui du CRM interne d'Impulsion : une seule extension parle aux deux. **Rien n'écrit
+sous `/api/ext/`** : `scripts/test-tracking-ext.mjs` échoue si une méthode d'écriture y apparaît.
+
+Code : `src/lib/tracking/ext-contract.ts` (pur, testé), `src/lib/tracking/ext.ts`, `src/app/api/ext/v1/`.
+
+## 15. Sécurité
 
 Collecte publique (`/t.js`, `/api/t/*` hors proxy de session), CORS ouvert, validation zod, corps
 limité à 16 Ko, filtre des robots par user-agent, contrôle de l'origine face aux domaines déclarés,

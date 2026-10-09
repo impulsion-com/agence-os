@@ -128,11 +128,23 @@ Le stockage redevient une question à l'étape 5 si l'API de l'extension est tro
 
 ### 5. Extension Chrome
 
-- API `/api/ext/v1` (lecture seule), même contrat que le CRM interne
-  (`crm/docs/attribution/10-api-externe.md`).
-- Extension `crm-ads-columns` rendue générique : adresse du serveur saisie dans le
-  popup, colonnes tirées de l'entonnoir du site. Dépôt rendu public après relecture de
-  son historique.
+**Côté serveur : fait le 9 octobre 2026** (migration `0103_tracking_ext_api.sql`).
+**Côté extension : écrit, pas encore vérifié dans un vrai Chrome.**
+
+- API `/api/ext/v1` (`ping`, `metrics`, `prospects`, `index`), lecture seule, même
+  contrat que le CRM interne. Jeton personnel de portée « Extension Chrome », qui
+  n'ouvre rien d'autre.
+- Le site est choisi d'après le compte publicitaire ouvert dans Ads Manager.
+- Extension `crm-ads-columns` 0.8.0 : adresse du serveur libre, compte envoyé à
+  chaque appel (PR impulsion-com/crm-ads-columns#1, non mergée).
+
+**Reste à faire** : vérifier l'extension sur le banc Chrome (permission d'hôte,
+connexion à Agence OS, affichage sur les comptes « Démo Coaching »), sonder Google
+Ads, puis merger la PR et rendre le dépôt public. Son historique a été relu : aucun
+secret, aucun email, aucune donnée de prospect.
+
+Le crédit reste calculé à la lecture : aucun cache côté serveur pour l'instant, le
+temps de calcul est rendu dans l'en-tête `X-Temps-Calcul` pour le mesurer en réel.
 
 ### 6. Renvoi des conversions
 

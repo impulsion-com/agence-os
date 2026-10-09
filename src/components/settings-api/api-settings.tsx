@@ -19,7 +19,7 @@ export interface ApiToken {
   user_id: string;
   name: string;
   prefix: string;
-  scope: "read" | "write";
+  scope: "read" | "write" | "ext";
   last_used_at: string | null;
   expires_at: string | null;
   revoked_at: string | null;
@@ -176,7 +176,7 @@ function CreateModal({ appUrl, localhost, onClose, onCreated }: { appUrl: string
   const ws = useWorkspace();
   const toast = useToast();
   const [name, setName] = useState("");
-  const [scope, setScope] = useState<"read" | "write">(ws.canWrite ? "write" : "read");
+  const [scope, setScope] = useState<"read" | "write" | "ext">(ws.canWrite ? "write" : "read");
   const [expiry, setExpiry] = useState<(typeof EXPIRY)[number]["id"]>("never");
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -218,8 +218,20 @@ function CreateModal({ appUrl, localhost, onClose, onCreated }: { appUrl: string
             <code>{token}</code>
             <CopyButton text={token} label="Copier le jeton" />
           </div>
-          <h3>Connecter Claude</h3>
-          <Instructions appUrl={appUrl} token={token} localhost={localhost} />
+          {scope === "ext" ? (
+            <>
+              <h3>Brancher l&apos;extension</h3>
+              <p>
+                Ouvre l&apos;extension « Colonnes CRM pour Ads Manager », colle l&apos;adresse <code>{appUrl}</code> et ce jeton, puis teste la connexion. Elle affichera
+                les chiffres du site rattaché au compte publicitaire ouvert dans Ads Manager.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3>Connecter Claude</h3>
+              <Instructions appUrl={appUrl} token={token} localhost={localhost} />
+            </>
+          )}
         </div>
       </Modal>
     );
@@ -267,6 +279,13 @@ function CreateModal({ appUrl, localhost, onClose, onCreated }: { appUrl: string
               <span>
                 <b>Lecture et écriture</b>
                 <small>{ws.canWrite ? "Claude peut aussi créer et modifier tâches, projets, deals, propositions et liens, en ton nom." : "Indisponible : ton rôle d'invité est en lecture seule."}</small>
+              </span>
+            </label>
+            <label className={`api-scope${scope === "ext" ? " on" : ""}`}>
+              <input type="radio" name="scope" checked={scope === "ext"} onChange={() => setScope("ext")} />
+              <span>
+                <b>Extension Chrome</b>
+                <small>Pour l&apos;extension qui affiche les chiffres du tracking dans Ads Manager. Lecture de l&apos;attribution seulement, aucun accès au serveur MCP.</small>
               </span>
             </label>
           </div>
@@ -331,7 +350,7 @@ export function ApiSettings({ tokens, appUrl, tools }: { tokens: ApiToken[]; app
                     <div className="api-name">
                       <b className="trunc">{t.name}</b>
                       {st === "active" ? (
-                        <Badge color={t.scope === "write" ? "var(--amber)" : "var(--blue)"}>{t.scope === "write" ? "Lecture et écriture" : "Lecture seule"}</Badge>
+                        <Badge color={t.scope === "write" ? "var(--amber)" : t.scope === "ext" ? "var(--teal)" : "var(--blue)"}>{t.scope === "write" ? "Lecture et écriture" : t.scope === "ext" ? "Extension Chrome" : "Lecture seule"}</Badge>
                       ) : (
                         <Badge color="var(--gray)">{st === "revoked" ? "Révoqué" : "Expiré"}</Badge>
                       )}

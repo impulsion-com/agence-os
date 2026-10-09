@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { attributeBy, attributeTree, credits, inWindow, linkCampaigns, DIMENSIONS } from "../attribution.ts";
 import { classify, hostMatches } from "../channels.ts";
 import { buildCampaignTable, ratio } from "../campaigns.ts";
+import { aplatir, catalogue, cleCompte, creditesDe, entreeSansActivite, lirePeriode, mesures } from "../ext-contract.ts";
 import { buildFunnel, stageKey } from "../funnel.ts";
 import { normalizePhone } from "../phone.ts";
 import { atPath, parseConversionsCsv, readWebhook, webhookUrl } from "../sources.ts";
@@ -334,4 +335,69 @@ test("campagnes : un évènement hors entonnoir n'entre pas dans le tableau", ()
   const t = buildCampaignTable([cv("1", "webinaire", "p1", [paid(20)])], STAGES, "last_click", 30, [], []);
   assert.equal(t.rows.length, 0);
   assert.deepEqual(t.total.stages, {});
+});
+
+// ---------------------------------------------------------------------
+// Contrat de l'API de l'extension
+// ---------------------------------------------------------------------
+const FULL = [...STAGES.slice(0, 2), { key: "show", label: "RDV honorés", kind: "step", has_value: false, aliases: [] }, STAGES[2]];
+
+test("extension : le catalogue suit l'entonnoir et garde les clés historiques du contrat", () => {
+  assert.deepEqual(catalogue(FULL).map((c) => c.cle), ["depense", "leads", "etape_booking", "etape_show", "ventes", "cpl", "caSigne", "roas", "cac", "conversionsPlateforme"]);
+  const ecom = [{ key: "add_to_cart", label: "Paniers", kind: "step", has_value: false, aliases: [] }, { key: "purchase", label: "Achats", kind: "sale", has_value: true, aliases: [] }];
+  assert.deepEqual(catalogue(ecom).map((c) => c.cle), ["depense", "etape_add_to_cart", "ventes", "caSigne", "roas", "cac", "conversionsPlateforme"]);
+  assert.equal(catalogue(FULL).find((c) => c.cle === "ventes").role, "resultat");
+  assert.deepEqual(catalogue([]).map((c) => c.cle), ["depense", "conversionsPlateforme"]);
+});
+
+test("extension : un ratio indéfini vaut null, jamais zéro", () => {
+  const m = mesures({ stages: { lead: 4, purchase: 2 }, value: 1000, spend: 200, pconv: 7 }, FULL);
+  assert.deepEqual([m.depense, m.leads, m.etape_booking, m.ventes, m.caSigne, m.roas, m.cpl, m.cac, m.conversionsPlateforme], [200, 4, 0, 2, 1000, 5, 50, 100, 7]);
+  const vide = mesures({ stages: {}, value: 0, spend: 0 }, FULL);
+  assert.deepEqual([vide.leads, vide.cpl, vide.cac, vide.roas, vide.conversionsPlateforme], [0, null, null, null, null]);
+  assert.equal(mesures({ stages: { purchase: 1 }, value: 500, spend: null }, FULL).roas, null);
+});
+
+test("extension : entités à plat, clé composite, parent et niveau de dépense", () => {
+  const t = buildCampaignTable([cv("1", "lead", "p1", [paid(20)]), cv("3", "purchase", "p1", [paid(20)], 1000)], STAGES, "last_click", 30, CAMPS, ADS);
+  const tout = aplatir(t, STAGES, ["campagne", "adset", "pub"], [], "EUR");
+  assert.deepEqual(Object.keys(tout).sort(), ["meta:adset:s1", "meta:campagne:c1", "meta:campagne:c2", "meta:pub:a1", "meta:pub:a2"]);
+  assert.deepEqual([tout["meta:pub:a1"].parentExternalId, tout["meta:adset:s1"].parentExternalId, tout["meta:campagne:c1"].parentExternalId], ["s1", "c1", null]);
+  assert.deepEqual([tout["meta:campagne:c1"].niveauDepense, tout["meta:campagne:c2"].niveauDepense, tout["meta:pub:a2"].niveauDepense], ["ad", "campaign", "ad"]);
+  assert.equal(tout["meta:pub:a1"].m.caSigne, 1000);
+  assert.equal(tout["meta:pub:a2"].m.ventes, 0);
+  assert.equal(tout["meta:campagne:c1"].canal, "paid_meta");
+  assert.deepEqual(Object.keys(aplatir(t, STAGES, ["pub"], ["google"], "EUR")), []);
+  assert.deepEqual(Object.keys(aplatir(t, STAGES, ["campagne"], ["meta"], "EUR")).sort(), ["meta:campagne:c1", "meta:campagne:c2"]);
+});
+
+test("extension : une campagne reconnue par son seul nom d'URL n'a pas de ligne dans Ads Manager", () => {
+  const t = buildCampaignTable([cv("1", "lead", "p1", [T(20, "paid_google", { campaign: "brand-fr" })])], STAGES, "last_click", 30, [], []);
+  assert.deepEqual(aplatir(t, STAGES, ["campagne"], [], "EUR"), {});
+});
+
+test("extension : entité connue sans activité, des zéros et pas une absence", () => {
+  const e = entreeSansActivite("meta", "campagne", "c9", null, "En pause", STAGES, "EUR");
+  assert.deepEqual([e.m.depense, e.m.leads, e.m.ventes, e.m.caSigne, e.m.roas, e.m.conversionsPlateforme], [0, 0, 0, 0, null, 0]);
+  assert.equal(entreeSansActivite("meta", "pub", "a9", "s1", "x", STAGES, "EUR").m.conversionsPlateforme, null);
+});
+
+test("extension : personnes créditées à une ligne, étape la plus avancée d'abord", () => {
+  const convs = [cv("1", "lead", "p1", [paid(20)], 0, 21), cv("2", "purchase", "p1", [paid(20)], 900, 28), cv("3", "lead", "p2", [paid(22, { ad_key: "a2" })], 0, 23), cv("4", "lead", "p3", [T(20, "organic_search")], 0, 22)];
+  const camp = creditesDe(convs, STAGES, "last_click", 30, "campagne", "c1");
+  assert.deepEqual(camp.map((c) => [c.personne, c.etape, c.credit]), [["p1", "Ventes", 2], ["p2", "Prospects", 1]]);
+  assert.equal(camp[0].jour, day(28).slice(0, 10));
+  assert.deepEqual(creditesDe(convs, STAGES, "last_click", 30, "pub", "a2").map((c) => c.personne), ["p2"]);
+  assert.deepEqual(creditesDe(convs, STAGES, "last_click", 30, "pub", "inconnue"), []);
+});
+
+test("extension : périodes du contrat et identifiant de compte comparable", () => {
+  const now = new Date(Date.UTC(2026, 9, 9, 15));
+  assert.deepEqual(lirePeriode("7j", null, null, now), { cle: "7j", start: "2026-10-03", end: "2026-10-09", label: "7 j" });
+  assert.deepEqual([lirePeriode("mois_dernier", null, null, now).start, lirePeriode("mois_dernier", null, null, now).end], ["2026-09-01", "2026-09-30"]);
+  assert.equal(lirePeriode("perso", "2026-09-01", "2026-09-15", now).start, "2026-09-01");
+  assert.equal(lirePeriode("perso", "2026-09-15", "2026-09-01", now).cle, "30j");
+  assert.equal(lirePeriode("nimporte", null, null, now).start, "2026-09-10");
+  assert.equal(cleCompte("act_1634338935060146"), cleCompte("1634338935060146"));
+  assert.equal(cleCompte("879-185-8341"), "8791858341");
 });
