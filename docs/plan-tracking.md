@@ -128,21 +128,25 @@ Le stockage redevient une question à l'étape 5 si l'API de l'extension est tro
 
 ### 5. Extension Chrome
 
-**Fait le 9 octobre 2026** (migration `0103_tracking_ext_api.sql`), Google Ads excepté.
+**Fait le 9 octobre 2026** (migration `0103_tracking_ext_api.sql`).
 
 - API `/api/ext/v1` (`ping`, `metrics`, `prospects`, `index`), lecture seule, même
   contrat que le CRM interne. Jeton personnel de portée « Extension Chrome », qui
   n'ouvre rien d'autre.
 - Le site est choisi d'après le compte publicitaire ouvert dans Ads Manager.
-- Extension `crm-ads-columns` 0.8.0 : adresse du serveur libre, compte envoyé à
-  chaque appel.
-- **Vérifié sur le banc Chrome** contre une instance locale, sur le compte Meta
-  « Démo Coaching » : permission d'hôte accordée à la saisie, 13 campagnes réelles
-  sur 13 identifiées, chiffres posés dans les lignes d'Ads Manager, tiroir des
-  personnes avec lien vers la fiche.
+- Extension `crm-ads-columns` 0.9.0, dépôt public : adresse du serveur libre, compte
+  envoyé à chaque appel, textes et interface repris.
+- **Vérifié sur le banc Chrome** contre une instance locale, sur les comptes « Démo
+  Coaching » :
+  - Meta : 13 campagnes réelles sur 13 identifiées par leur identifiant, chiffres
+    posés dans les lignes, tiroir des personnes avec lien vers la fiche ;
+  - Google Ads : lignes reconnues par leur **nom** (Google n'expose aucun
+    identifiant de campagne dans la page), chiffres posés sous chaque nom.
 
-**Reste à faire** : sonder Google Ads (le banc n'a pas de session Google ouverte) ;
-faire détecter à l'extension la période affichée par Meta quand l'URL n'en porte pas.
+**Limites connues** : sur Google Ads, deux campagnes du même nom restent « non
+identifiées ». Sur les deux régies, l'extension ne lit pas encore la période
+affichée quand l'adresse de la page ne la porte pas : elle interroge alors les
+30 derniers jours et l'écrit dans sa barre.
 
 Le crédit reste calculé à la lecture : aucun cache côté serveur pour l'instant, le
 temps de calcul est rendu dans l'en-tête `X-Temps-Calcul` pour le mesurer en réel.
