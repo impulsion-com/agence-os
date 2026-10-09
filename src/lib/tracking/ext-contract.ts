@@ -145,6 +145,7 @@ export interface Credite {
   personne: string;
   /** Libellé de l'étape la plus avancée de la personne sur la période. */
   etape: string;
+  /** Chiffre d'affaires attribué à cette ligne pour cette personne, en devise : l'extension l'affiche comme un montant. */
   credit: number;
   jour: string;
 }
@@ -166,10 +167,11 @@ export function creditesDe(convs: Conversion[], stages: StageDef[], model: Model
       const id = niveau === "campagne" ? touch.campaign_key || touch.campaign : niveau === "adset" ? touch.adset_key : touch.ad_key;
       if (id !== externalId) continue;
       const rang = rank.get(stage.key) ?? 0;
+      const montant = stage.kind === "sale" ? weight * c.value : 0;
       const cur = by.get(c.person);
-      if (!cur) by.set(c.person, { credit: weight, rang, etape: stage.label, jour: c.ts.slice(0, 10) });
+      if (!cur) by.set(c.person, { credit: montant, rang, etape: stage.label, jour: c.ts.slice(0, 10) });
       else {
-        cur.credit += weight;
+        cur.credit += montant;
         if (rang >= cur.rang) Object.assign(cur, { rang, etape: stage.label, jour: c.ts.slice(0, 10) });
       }
     }
