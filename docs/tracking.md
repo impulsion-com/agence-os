@@ -193,7 +193,48 @@ Réponses : 201 créée, 200 `{ "duplicate": true }`, 400, 401, 413, 429.
   d'un visiteur compte comme conversion `deal_won` de la valeur du deal. Pour ce site seulement, les
   visiteurs identifiés sont reliés à un contact CRM (réglage « Créer les contacts CRM »).
 
-## 11. Sécurité
+## 11. Webhook d'un CRM ou d'un agenda
+
+Pour un outil qui sait envoyer un webhook mais pas choisir la forme de ses données :
+
+```http
+POST /api/t/webhooks/in?key=sk_…&type=booking
+```
+
+`type` est l'étape de l'entonnoir à compter : une adresse par étape à suivre. Dans les données reçues (JSON
+ou formulaire encodé), l'email, le téléphone, le nom, le montant, l'identifiant, la date et la devise sont
+cherchés par leur nom, le champ le plus proche de la racine l'emportant. Quand l'outil envoie plusieurs
+emails, désigne le bon par son chemin :
+
+```
+…&type=booking&email=payload.attendees.0.email&id=payload.uid
+```
+
+Paramètres de chemin : `email`, `phone`, `name`, `value`, `id`, `date`, `currency`. L'identifiant évite de
+compter deux fois le même envoi. Une donnée sans email ni téléphone répond `200 {"ignored": …}` pour que
+l'outil ne la renvoie pas en boucle. L'onglet Sources construit l'adresse, avec des préréglages pour
+Cal.com et Calendly.
+
+Le préréglage Cal.com suit le format que le module Rendez-vous lit déjà. Celui de Calendly et la recherche
+par nom n'ont pas encore été confrontés aux envois réels de Calendly, HubSpot, Pipedrive ou GoHighLevel :
+vérifie le premier envoi dans l'onglet Installation (testeur en direct).
+
+Code : `src/lib/tracking/sources.ts`.
+
+## 12. Import CSV des conversions hors ligne
+
+Onglet Sources > **Importer un fichier CSV**. Colonnes reconnues, en français ou en anglais : email,
+téléphone, type, valeur, devise, date, identifiant. Il faut l'email ou le téléphone. Sans colonne « type »,
+tu choisis l'étape pour tout le fichier.
+
+- L'aperçu annonce le nombre de lignes prêtes, celles qui sont illisibles, et les types qui ne correspondent
+  à aucune étape.
+- La date du fichier est celle de la conversion : importer en octobre une vente de septembre la compte en septembre.
+- Réimporter le même fichier ne double rien : l'identifiant de la ligne, ou à défaut la ligne elle-même,
+  sert de clé.
+- Réservé aux membres qui peuvent modifier l'espace. Envoi par paquets de 100 lignes.
+
+## 13. Sécurité
 
 Collecte publique (`/t.js`, `/api/t/*` hors proxy de session), CORS ouvert, validation zod, corps
 limité à 16 Ko, filtre des robots par user-agent, contrôle de l'origine face aux domaines déclarés,

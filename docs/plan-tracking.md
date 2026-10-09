@@ -96,10 +96,19 @@ l'étape 6 si le journal des envois le demande.
 
 ### 3. Sources de conversions
 
-- Les connecteurs du tableau ci-dessus, avec une correspondance « évènement reçu →
-  étape de l'entonnoir » réglable par site.
-- Import CSV des conversions hors ligne, avec aperçu avant écriture.
-- Branchement natif du CRM et des rendez-vous d'Agence OS.
+**Fait le 9 octobre 2026** (aucune migration).
+
+- La correspondance « évènement reçu → étape » se règle par site : ce sont les
+  autres noms d'une étape (étape 1).
+- Webhook générique `POST /api/t/webhooks/in` : n'importe quel outil qui envoie du
+  JSON, avec recherche des champs par leur nom ou par un chemin donné dans l'adresse.
+  Préréglages Cal.com et Calendly.
+- Import CSV des conversions hors ligne, avec aperçu et réimport sans doublon.
+- Le CRM et les rendez-vous d'Agence OS étaient déjà branchés (deal gagné, réservation).
+
+**Reste à faire** : confronter le webhook aux envois réels de Calendly, HubSpot,
+Pipedrive et GoHighLevel, puis écrire un guide par outil. Faire remonter les
+changements d'étape du pipeline d'Agence OS autres que « gagné ».
 
 ### 4. Attribution et lecture
 

@@ -173,3 +173,10 @@ p.trk-foot { border-top: 0; display: block; }
   .trk-stage .del { grid-column: 3; }
   .trk-stage .val { grid-column: 2 / 4; }
 }
+
+/* Sources de conversions */
+.trk-hook { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; max-width: 560px; }
+.trk-import-errors { margin: 0; padding-left: 18px; color: var(--red); font-size: var(--fs-sm); display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 720px) {
+  .trk-hook { grid-template-columns: minmax(0, 1fr); }
+}
