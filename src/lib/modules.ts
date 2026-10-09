@@ -137,6 +137,7 @@ export const PRESETS: { id: string; name: string; desc: string; icon: string; mo
   },
   { id: "crm", name: "CRM seul", desc: "Pipeline, contacts, propositions et rendez-vous", icon: "handshake", modules: ["crm", "proposals", "booking"] },
   { id: "projects", name: "Gestion de projet seule", desc: "Projets, tâches, calendrier et timeline", icon: "folder-kanban", modules: ["projects"] },
+  { id: "tracking", name: "Tracking OS", desc: "Le suivi et l'attribution seuls, avec n'importe quel CRM", icon: "mouse-pointer-click", modules: ["reporting", "tracking", "links"] },
   {
     id: "performance",
     name: "Pilotage de la performance",

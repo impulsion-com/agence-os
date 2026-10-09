@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import { attributeBy, attributeTree, credits, inWindow, linkCampaigns, DIMENSIONS } from "../attribution.ts";
 import { classify, hostMatches } from "../channels.ts";
+import { buildFunnel, stageKey } from "../funnel.ts";
 
 const day = (n) => new Date(Date.UTC(2026, 8, 1 + n, 12)).toISOString();
 const conv = (touches, value = 100, at = 30) => ({ id: "c", ts: day(at), type: "purchase", value, person: "p", touches });
@@ -121,4 +122,48 @@ test("domaines déclarés et sous-domaines", () => {
   assert.ok(hostMatches("checkout.site.fr", ["site.fr"]));
   assert.ok(hostMatches("www.site.fr", ["https://site.fr/"]));
   assert.ok(!hostMatches("site.fr.evil.com", ["site.fr"]));
+});
+
+// ---------------------------------------------------------------------
+// Entonnoir
+// ---------------------------------------------------------------------
+const stage = (id, key, position, extra = {}) => ({ id, key, label: key, position, kind: "step", has_value: false, aliases: [], ...extra });
+
+test("entonnoir : étapes dans l'ordre, taux depuis l'étape précédente", () => {
+  const stages = [stage("c", "purchase", 3, { has_value: true }), stage("a", "lead", 1), stage("b", "booking", 2)];
+  const f = buildFunnel(stages, [
+    { stage_id: "a", type: null, events: 50, people: 40, value: 0 },
+    { stage_id: "b", type: null, events: 12, people: 10, value: 0 },
+    { stage_id: "c", type: null, events: 5, people: 4, value: 900 },
+  ]);
+  assert.deepEqual(f.rows.map((r) => r.stage.key), ["lead", "booking", "purchase"]);
+  assert.equal(f.rows[0].fromPrev, null);
+  near(f.rows[1].fromPrev, 25);
+  near(f.rows[2].fromPrev, 40);
+  assert.equal(f.rows[0].share, 1);
+  near(f.rows[2].share, 0.1);
+  assert.equal(f.rows[2].value, 900);
+});
+
+test("entonnoir : une étape vide ne produit ni division par zéro ni taux", () => {
+  const f = buildFunnel([stage("a", "lead", 1), stage("b", "booking", 2), stage("c", "purchase", 3)], [{ stage_id: "c", type: null, events: 2, people: 2, value: 10 }]);
+  assert.equal(f.rows[1].people, 0);
+  assert.equal(f.rows[1].fromPrev, null);
+  assert.equal(f.rows[2].fromPrev, null);
+  assert.equal(buildFunnel([stage("a", "lead", 1)], []).rows[0].share, 0);
+});
+
+test("entonnoir : les évènements sans étape sont listés à part, les plus fréquents d'abord", () => {
+  const f = buildFunnel([stage("a", "lead", 1)], [
+    { stage_id: null, type: "webinar", events: 3, people: 3, value: 0 },
+    { stage_id: null, type: "quiz", events: 9, people: 7, value: 0 },
+    { stage_id: "a", type: null, events: 1, people: 1, value: 0 },
+  ]);
+  assert.deepEqual(f.other.map((o) => o.type), ["quiz", "webinar"]);
+});
+
+test("clé d'étape : accents, espaces et chiffres en tête", () => {
+  assert.equal(stageKey(" Rendez-vous honoré "), "rendez_vous_honore");
+  assert.equal(stageKey("2e appel"), "e_appel");
+  assert.equal(stageKey("---"), "");
 });

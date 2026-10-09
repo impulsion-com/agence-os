@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
@@ -38,10 +40,16 @@ export async function siteByPublicKey(pk: string): Promise<Site | null> {
   return site;
 }
 
-/** Site par clé secrète (API serveur). Pas de cache : la régénération doit être immédiate. */
+/** Site par clé d'envoi (API serveur, webhooks). Pas de cache : une révocation doit être immédiate. */
 export async function siteBySecretKey(sk: string): Promise<Site | null> {
   if (!/^sk_[a-f0-9]{16,96}$/.test(sk)) return null;
-  const { data } = await supabaseAdmin().from("tracking_sites").select(SITE_COLS).eq("secret_key", sk).maybeSingle();
+  const sb = supabaseAdmin();
+  const { data: key } = await sb.from("tracking_keys").select("id, site_id, last_used_at").eq("key_hash", createHash("sha256").update(sk).digest("hex")).is("revoked_at", null).maybeSingle();
+  if (!key) return null;
+  // Dernier usage : une écriture par minute au plus, pas une par conversion
+  if (!key.last_used_at || Date.now() - new Date(key.last_used_at).getTime() > 60_000)
+    await sb.from("tracking_keys").update({ last_used_at: new Date().toISOString() }).eq("id", key.id);
+  const { data } = await sb.from("tracking_sites").select(SITE_COLS).eq("id", key.site_id).maybeSingle();
   return toSite(data);
 }
 

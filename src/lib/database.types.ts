@@ -4233,6 +4233,60 @@ export type Database = {
           },
         ]
       }
+      tracking_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key_hash: string
+          last_used_at: string | null
+          name: string
+          prefix: string
+          revoked_at: string | null
+          site_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash: string
+          last_used_at?: string | null
+          name: string
+          prefix: string
+          revoked_at?: string | null
+          site_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash?: string
+          last_used_at?: string | null
+          name?: string
+          prefix?: string
+          revoked_at?: string | null
+          site_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_keys_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_keys_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tracking_sites: {
         Row: {
           company_id: string | null
@@ -4242,7 +4296,6 @@ export type Database = {
           last_event_at: string | null
           name: string
           public_key: string
-          secret_key: string
           settings: Json
           workspace_id: string
         }
@@ -4254,7 +4307,6 @@ export type Database = {
           last_event_at?: string | null
           name: string
           public_key?: string
-          secret_key?: string
           settings?: Json
           workspace_id: string
         }
@@ -4266,7 +4318,6 @@ export type Database = {
           last_event_at?: string | null
           name?: string
           public_key?: string
-          secret_key?: string
           settings?: Json
           workspace_id?: string
         }
@@ -4280,6 +4331,57 @@ export type Database = {
           },
           {
             foreignKeyName: "tracking_sites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tracking_stages: {
+        Row: {
+          aliases: string[]
+          has_value: boolean
+          id: string
+          key: string
+          kind: string
+          label: string
+          position: number
+          site_id: string
+          workspace_id: string
+        }
+        Insert: {
+          aliases?: string[]
+          has_value?: boolean
+          id?: string
+          key: string
+          kind?: string
+          label: string
+          position?: number
+          site_id: string
+          workspace_id: string
+        }
+        Update: {
+          aliases?: string[]
+          has_value?: boolean
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          position?: number
+          site_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_stages_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_stages_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -4606,6 +4708,17 @@ export type Database = {
         }
         Returns: Json
       }
+      _tracking_template: {
+        Args: { p_template: string }
+        Returns: {
+          aliases: string[]
+          has_value: boolean
+          key: string
+          kind: string
+          label: string
+          pos: number
+        }[]
+      }
       accept_client_invitation: { Args: { p_token: string }; Returns: Json }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       ad_campaigns: {
@@ -4682,6 +4795,10 @@ export type Database = {
           p_scope?: string
           p_ws: string
         }
+        Returns: Json
+      }
+      create_tracking_key: {
+        Args: { p_name: string; p_site: string }
         Returns: Json
       }
       create_workspace: {
@@ -5059,6 +5176,7 @@ export type Database = {
       }
       restore_onboarding_templates: { Args: { ws: string }; Returns: undefined }
       revoke_api_token: { Args: { p_id: string }; Returns: undefined }
+      revoke_tracking_key: { Args: { p_id: string }; Returns: undefined }
       seed_onboarding: { Args: { ws: string }; Returns: undefined }
       seed_utm_presets: { Args: { ws: string }; Returns: undefined }
       seed_workspace_defaults: { Args: { ws: string }; Returns: undefined }
@@ -5085,6 +5203,10 @@ export type Database = {
       }
       spend_summary: { Args: { days?: number; ws: string }; Returns: Json }
       task_ws: { Args: { t: string }; Returns: string }
+      tracking_apply_template: {
+        Args: { p_site: string; p_template: string }
+        Returns: undefined
+      }
       tracking_conversions: {
         Args: {
           p_end: string
@@ -5107,6 +5229,16 @@ export type Database = {
           visitor_id: string
         }[]
       }
+      tracking_funnel: {
+        Args: { p_end: string; p_site: string; p_start: string }
+        Returns: {
+          events: number
+          people: number
+          stage_id: string
+          type: string
+          value: number
+        }[]
+      }
       tracking_people: {
         Args: { p_limit?: number; p_q?: string; p_site: string }
         Returns: {
@@ -5123,7 +5255,6 @@ export type Database = {
           visitors: number
         }[]
       }
-      tracking_site_secret: { Args: { p_site: string }; Returns: string }
       tracking_stats: {
         Args: { p_end: string; p_site: string; p_start: string }
         Returns: Json

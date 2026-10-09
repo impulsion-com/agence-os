@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Json } from "@/lib/database.types";
 import { MODELS, WINDOWS, type ModelId } from "@/lib/tracking/attribution";
+import { TEMPLATES, type TemplateId } from "@/lib/tracking/funnel";
 import { isDomain, normalizeDomain, type SiteSettings } from "@/lib/tracking/settings";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import type { SiteRow } from "@/lib/tracking/load";
@@ -26,6 +27,7 @@ export function SiteModal({ site, onClose }: { site?: SiteRow; onClose: () => vo
   const [s, setS] = useState<SiteSettings>(
     site?.settings ?? { window_days: 30, model: "last_click", auto_contacts: true, consent: "none", capture_forms: true },
   );
+  const [template, setTemplate] = useState<TemplateId>("leads");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
@@ -45,7 +47,8 @@ export function SiteModal({ site, onClose }: { site?: SiteRow; onClose: () => vo
         router.refresh();
         onClose();
       } else {
-        const created = must(await sb.from("tracking_sites").insert({ ...row, workspace_id: ws.workspace.id }).select("id").single());
+        // settings.template n'est lu qu'à la création, par le déclencheur qui pose les étapes de l'entonnoir
+        const created = must(await sb.from("tracking_sites").insert({ ...row, settings: { ...s, template } as unknown as Json, workspace_id: ws.workspace.id }).select("id").single());
         toast("Site créé : installe maintenant le script");
         router.push(`${ws.base}/tracking/${created!.id}?tab=install`);
         onClose();
@@ -120,6 +123,17 @@ export function SiteModal({ site, onClose }: { site?: SiteRow; onClose: () => vo
               </span>
             )}
           </div>
+          {!site && (
+            <div className="field trk-span">
+              <label htmlFor="trk-template">Entonnoir de départ</label>
+              <select id="trk-template" className="select" value={template} onChange={(e) => setTemplate(e.target.value as TemplateId)}>
+                {TEMPLATES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} : {t.desc.toLowerCase()}</option>
+                ))}
+              </select>
+              <span className="hint">Les étapes du parcours que tu veux suivre. Tu pourras les modifier ensuite dans l&apos;onglet Entonnoir.</span>
+            </div>
+          )}
           <div className="field">
             <label htmlFor="trk-model">Modèle d&apos;attribution par défaut</label>
             <select id="trk-model" className="select" value={s.model} onChange={(e) => setS({ ...s, model: e.target.value as ModelId })}>

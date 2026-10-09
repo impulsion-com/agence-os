@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { dayList, type Period } from "@/lib/ads/metrics";
 import { NONE, DIMENSIONS, attributeTree, attributedByDay, credits, inWindow, linkCampaigns, type Conversion, type ModelId, type Touch, type TreeNode } from "./attribution";
 import { isPaid, platformChannel } from "./channels";
+import { buildFunnel, type Funnel, type Stage } from "./funnel";
 import { readSettings, type SiteSettings } from "./settings";
 
 type SB = Awaited<ReturnType<typeof supabaseServer>>;
@@ -41,12 +42,33 @@ export async function loadSites(ws: string): Promise<SiteRow[]> {
   return (data ?? []).map((s) => ({ ...s, settings: readSettings(s.settings) }));
 }
 
-/** Clé secrète : lue seulement pour les membres qui peuvent écrire (onglet API). */
-export async function loadSecret(siteId: string) {
+/** Clés d'envoi d'un site (jamais le secret : seul son début est conservé). Vide pour un invité. */
+export interface SiteKey {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+export async function loadKeys(siteId: string): Promise<SiteKey[]> {
   const sb = await supabaseServer();
-  // Privilège par colonne : la clé ne se lit que par cette fonction, refusée aux invités
-  const { data } = await sb.rpc("tracking_site_secret", { p_site: siteId });
-  return data ?? null;
+  const { data } = await sb.from("tracking_keys").select("id, name, prefix, created_at, last_used_at, revoked_at").eq("site_id", siteId).order("created_at", { ascending: false });
+  return data ?? [];
+}
+
+// ---------------------------------------------------------------------
+// Entonnoir
+// ---------------------------------------------------------------------
+export async function loadFunnel(siteId: string, period: Period): Promise<{ stages: Stage[]; funnel: Funnel }> {
+  const sb = await supabaseServer();
+  const [st, agg] = await Promise.all([
+    sb.from("tracking_stages").select("id, key, label, position, kind, has_value, aliases").eq("site_id", siteId).order("position"),
+    sb.rpc("tracking_funnel", { p_site: siteId, p_start: period.start, p_end: period.end }),
+  ]);
+  if (agg.error) throw new Error(agg.error.message);
+  const stages = (st.data ?? []) as Stage[];
+  return { stages, funnel: buildFunnel(stages, (agg.data ?? []).map((r) => ({ ...r, value: Number(r.value) || 0 }))) };
 }
 
 // ---------------------------------------------------------------------

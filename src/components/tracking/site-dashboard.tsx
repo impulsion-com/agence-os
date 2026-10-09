@@ -10,18 +10,21 @@ import { Menu } from "@/components/ui/overlay";
 import { useWorkspace } from "@/lib/workspace/context";
 import type { Period } from "@/lib/ads/metrics";
 import type { ModelId } from "@/lib/tracking/attribution";
-import type { Goal, Overview, Person, SiteRow } from "@/lib/tracking/load";
+import type { Funnel, Stage } from "@/lib/tracking/funnel";
+import type { Goal, Overview, Person, SiteKey, SiteRow } from "@/lib/tracking/load";
 import { ApiTab } from "./api-tab";
 import { AttributionTab } from "./attribution-tab";
+import { FunnelTab } from "./funnel-tab";
 import { InstallTab } from "./install-tab";
 import { JourneysTab } from "./journeys-tab";
 import { PeopleTab } from "./people-tab";
 import { SiteModal } from "./site-modal";
 import { SiteStatus } from "./shared";
 
-export type Tab = "overview" | "journeys" | "people" | "install" | "api";
+export type Tab = "overview" | "funnel" | "journeys" | "people" | "install" | "api";
 export const TABS: { id: Tab; name: string }[] = [
   { id: "overview", name: "Attribution" },
+  { id: "funnel", name: "Entonnoir" },
   { id: "journeys", name: "Parcours" },
   { id: "people", name: "Visiteurs identifiés" },
   { id: "install", name: "Installation" },
@@ -39,7 +42,8 @@ export interface DashboardProps {
   overview: Overview | null;
   people: Person[] | null;
   q: string;
-  secret: string | null;
+  funnel: { stages: Stage[]; funnel: Funnel } | null;
+  keys: SiteKey[];
   appUrl: string;
 }
 
@@ -104,10 +108,11 @@ export function SiteDashboard(p: DashboardProps) {
       </nav>
 
       {p.tab === "overview" && p.overview && <AttributionTab {...p} overview={p.overview} />}
+      {p.tab === "funnel" && p.funnel && <FunnelTab site={site} period={p.period} stages={p.funnel.stages} funnel={p.funnel.funnel} />}
       {p.tab === "journeys" && p.overview && <JourneysTab {...p} overview={p.overview} />}
       {p.tab === "people" && <PeopleTab site={site} people={p.people ?? []} q={p.q} />}
       {p.tab === "install" && <InstallTab site={site} appUrl={p.appUrl} />}
-      {p.tab === "api" && <ApiTab site={site} secret={p.secret} appUrl={p.appUrl} />}
+      {p.tab === "api" && <ApiTab site={site} keys={p.keys} appUrl={p.appUrl} />}
 
       {edit && <SiteModal site={site} onClose={() => setEdit(false)} />}
     </div>
