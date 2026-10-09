@@ -385,7 +385,7 @@ test("extension : entité connue sans activité, des zéros et pas une absence",
 test("extension : personnes créditées à une ligne, étape la plus avancée d'abord", () => {
   const convs = [cv("1", "lead", "p1", [paid(20)], 0, 21), cv("2", "purchase", "p1", [paid(20)], 900, 28), cv("3", "lead", "p2", [paid(22, { ad_key: "a2" })], 0, 23), cv("4", "lead", "p3", [T(20, "organic_search")], 0, 22)];
   const camp = creditesDe(convs, STAGES, "last_click", 30, "campagne", "c1");
-  assert.deepEqual(camp.map((c) => [c.personne, c.etape, c.credit]), [["p1", "Ventes", 2], ["p2", "Prospects", 1]]);
+  assert.deepEqual(camp.map((c) => [c.personne, c.etape, c.credit]), [["p1", "Ventes", 900], ["p2", "Prospects", 0]]);
   assert.equal(camp[0].jour, day(28).slice(0, 10));
   assert.deepEqual(creditesDe(convs, STAGES, "last_click", 30, "pub", "a2").map((c) => c.personne), ["p2"]);
   assert.deepEqual(creditesDe(convs, STAGES, "last_click", 30, "pub", "inconnue"), []);

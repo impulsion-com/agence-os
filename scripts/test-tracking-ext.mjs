@@ -126,7 +126,7 @@ try {
   // 4. prospects et index
   // -------------------------------------------------------------------
   const pr = (await api(`prospects?${q}&niveau=pub&id=a1`, token)).body;
-  check("prospects : la personne, son étape la plus avancée, un lien vers sa fiche", pr.prospects.length === 1 && pr.prospects[0].nom === "Claire Martin" && pr.prospects[0].etape === "Ventes" && /\/tracking\/[0-9a-f-]{36}\?tab=people&person=[0-9a-f-]{36}$/.test(pr.prospects[0].lien), pr.prospects);
+  check("prospects : la personne, son étape la plus avancée, le montant attribué, un lien vers sa fiche", pr.prospects.length === 1 && pr.prospects[0].nom === "Claire Martin" && pr.prospects[0].etape === "Ventes" && pr.prospects[0].credit === 1000 && /\/tracking\/[0-9a-f-]{36}\?tab=people&person=[0-9a-f-]{36}$/.test(pr.prospects[0].lien), pr.prospects);
   check("prospects : entité connue sans personne : liste vide", ((r) => r.status === 200 && r.body.prospects.length === 0)(await api(`prospects?${q}&niveau=pub&id=a3`, token)));
   check("prospects : entité inconnue : 404", ((r) => r.status === 404 && r.body.code === "entite_inconnue")(await api(`prospects?${q}&niveau=pub&id=zzz`, token)));
   const ix = (await api(`index?compte=act_${ext}&plateforme=meta&niveau=pub`, token)).body;
