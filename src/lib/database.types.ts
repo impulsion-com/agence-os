@@ -4436,6 +4436,64 @@ export type Database = {
           },
         ]
       }
+      visitor_signals: {
+        Row: {
+          fbc: string | null
+          fbp: string | null
+          ga_cid: string | null
+          ip: unknown
+          seen_at: string
+          site_id: string
+          ua: string | null
+          visitor_id: string
+          workspace_id: string
+        }
+        Insert: {
+          fbc?: string | null
+          fbp?: string | null
+          ga_cid?: string | null
+          ip?: unknown
+          seen_at?: string
+          site_id: string
+          ua?: string | null
+          visitor_id: string
+          workspace_id: string
+        }
+        Update: {
+          fbc?: string | null
+          fbp?: string | null
+          ga_cid?: string | null
+          ip?: unknown
+          seen_at?: string
+          site_id?: string
+          ua?: string | null
+          visitor_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visitor_signals_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "tracking_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitor_signals_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: true
+            referencedRelation: "visitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitor_signals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visitors: {
         Row: {
           anon_id: string
@@ -4448,7 +4506,9 @@ export type Database = {
           identified_at: string | null
           last_seen: string
           name: string | null
+          person_id: string | null
           phone: string | null
+          phone_e164: string | null
           site_id: string
           workspace_id: string
         }
@@ -4463,7 +4523,9 @@ export type Database = {
           identified_at?: string | null
           last_seen?: string
           name?: string | null
+          person_id?: string | null
           phone?: string | null
+          phone_e164?: string | null
           site_id: string
           workspace_id: string
         }
@@ -4478,7 +4540,9 @@ export type Database = {
           identified_at?: string | null
           last_seen?: string
           name?: string | null
+          person_id?: string | null
           phone?: string | null
+          phone_e164?: string | null
           site_id?: string
           workspace_id?: string
         }
@@ -5239,6 +5303,10 @@ export type Database = {
           value: number
         }[]
       }
+      tracking_link_person: {
+        Args: { p_email: string; p_phone: string; p_visitor: string }
+        Returns: Json
+      }
       tracking_people: {
         Args: { p_limit?: number; p_q?: string; p_site: string }
         Returns: {
@@ -5249,12 +5317,14 @@ export type Database = {
           last_seen: string
           leads: number
           name: string
+          person_id: string
           phone: string
           purchases: number
           revenue: number
           visitors: number
         }[]
       }
+      tracking_purge_signals: { Args: never; Returns: number }
       tracking_stats: {
         Args: { p_end: string; p_site: string; p_start: string }
         Returns: Json

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { attributeBy, attributeTree, credits, inWindow, linkCampaigns, DIMENSIONS } from "../attribution.ts";
 import { classify, hostMatches } from "../channels.ts";
 import { buildFunnel, stageKey } from "../funnel.ts";
+import { normalizePhone } from "../phone.ts";
 
 const day = (n) => new Date(Date.UTC(2026, 8, 1 + n, 12)).toISOString();
 const conv = (touches, value = 100, at = 30) => ({ id: "c", ts: day(at), type: "purchase", value, person: "p", touches });
@@ -166,4 +167,26 @@ test("clé d'étape : accents, espaces et chiffres en tête", () => {
   assert.equal(stageKey(" Rendez-vous honoré "), "rendez_vous_honore");
   assert.equal(stageKey("2e appel"), "e_appel");
   assert.equal(stageKey("---"), "");
+});
+
+// ---------------------------------------------------------------------
+// Téléphone
+// ---------------------------------------------------------------------
+test("téléphone : écritures françaises d'un même numéro", () => {
+  for (const raw of ["06 12 34 56 78", "0612345678", "+33 6 12 34 56 78", "+33 (0)6 12 34 56 78", "0033612345678", "33612345678", "06.12.34.56.78"])
+    assert.equal(normalizePhone(raw), "33612345678", raw);
+});
+
+test("téléphone : le pays du visiteur sert aux numéros sans indicatif", () => {
+  assert.equal(normalizePhone("0475 12 34 56", "BE"), "32475123456");
+  assert.equal(normalizePhone("514 555 0199", "CA"), "15145550199");
+  assert.equal(normalizePhone("612 34 56 78", "ES"), "34612345678");
+  assert.equal(normalizePhone("0692 12 34 56", "RE"), "262692123456");
+  assert.equal(normalizePhone("0692 12 34 56", "FR"), "262692123456");
+  assert.equal(normalizePhone("0612345678", "ZZ"), "33612345678");
+  assert.equal(normalizePhone("+1 514 555 0199", "FR"), "15145550199");
+});
+
+test("téléphone : une saisie inexploitable rend null", () => {
+  for (const raw of ["", null, undefined, "abc", "12", "0", "+33", "1".repeat(20)]) assert.equal(normalizePhone(raw), null, String(raw));
 });

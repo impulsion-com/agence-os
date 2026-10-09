@@ -431,7 +431,8 @@ export async function loadOverview(
 // Personnes identifiées
 // ---------------------------------------------------------------------
 export interface Person {
-  email: string;
+  person_id: string;
+  email: string | null;
   name: string | null;
   phone: string | null;
   visitors: number;

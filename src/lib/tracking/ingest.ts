@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { classify, deviceOf, hostMatches } from "./channels";
+import { normalizePhone } from "./phone";
 import { readSettings, type SiteSettings } from "./settings";
 
 // =====================================================================
@@ -97,11 +98,16 @@ const optNum = z.preprocess((v) => (v === "" || v === null ? undefined : typeof 
 const currency = z.preprocess((v) => (typeof v === "string" && v ? v.toUpperCase() : undefined), z.string().regex(/^[A-Z]{3}$/).optional());
 const orderId = z.preprocess((v) => (v === null || v === undefined || v === "" ? undefined : String(v)), z.string().max(120).optional());
 
-export const IdentitySchema = z.object({
-  email: z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), z.email().max(254)),
-  name: str(200).optional(),
-  phone: str(40).optional(),
-});
+const EmailSchema = z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), z.email().max(254));
+
+/** Une personne se reconnaît à son email, à son téléphone, ou aux deux. */
+export const IdentitySchema = z
+  .object({
+    email: EmailSchema.optional(),
+    name: str(200).optional(),
+    phone: str(40).optional(),
+  })
+  .refine((i) => i.email || i.phone, { message: "email ou téléphone requis" });
 export type Identity = z.infer<typeof IdentitySchema>;
 
 export const HitSchema = z.object({
@@ -112,6 +118,8 @@ export const HitSchema = z.object({
   r: z.string().max(2048).optional(),
   s: z.union([z.literal(0), z.literal(1)]).optional(),
   d: z.unknown().optional(),
+  // Cookies des régies (_fbp, _fbc, _ga), envoyés seulement après consentement
+  x: z.object({ fbp: str(200).optional(), fbc: str(500).optional(), ga: str(100).optional() }).optional(),
   e: z
     .object({
       type: z.string().trim().min(1).max(40),
@@ -137,7 +145,7 @@ export const ConversionSchema = z
     ts: z.union([z.string().max(40), z.number()]).optional(),
     props: z.record(z.string(), z.unknown()).optional(),
   })
-  .refine((c) => c.email || c.anon_id, { message: "email ou anon_id requis" });
+  .refine((c) => c.email || c.anon_id || c.phone, { message: "email, téléphone ou anon_id requis" });
 export type ConversionInput = z.infer<typeof ConversionSchema>;
 
 /** Nom d'évènement normalisé : purchase, lead, booking… ou nom libre en minuscules. */
@@ -174,21 +182,40 @@ async function markSite(siteId: string) {
 }
 
 // ---------------------------------------------------------------------
-// Identité : email sur le visiteur, prospect automatique, contact CRM (site de l'agence)
+// Identité : email et téléphone sur le visiteur, rattachement à sa personne,
+// prospect automatique, contact CRM (site de l'agence)
 // ---------------------------------------------------------------------
-async function identify(site: Site, visitor: { id: string; email: string | null; contact_id: string | null }, who: Identity, at = new Date().toISOString()) {
+interface VisitorRef {
+  id: string;
+  email: string | null;
+  contact_id: string | null;
+  person_id: string | null;
+  phone_e164: string | null;
+  country: string | null;
+}
+const VISITOR_COLS = "id, email, contact_id, person_id, phone_e164, country";
+
+async function identify(site: Site, visitor: VisitorRef, who: Identity, at = new Date().toISOString()) {
   const sb = supabaseAdmin();
-  const patch: { email?: string; name?: string; phone?: string; identified_at?: string; contact_id?: string } = {};
-  if (visitor.email !== who.email) {
-    patch.email = who.email;
-    patch.identified_at = at;
-  }
+  // Un numéro écrit sans indicatif se lit dans le pays du visiteur (France à défaut)
+  const phone = normalizePhone(who.phone, visitor.country);
+  if (!who.email && !phone) return;
+
+  // Avant d'écrire l'email : c'est ce qui dit si la personne est nouvelle sur ce site
+  const { data: link, error: linkError } = await sb.rpc("tracking_link_person", { p_visitor: visitor.id, p_email: who.email ?? "", p_phone: phone ?? "" });
+  if (linkError) console.error("[tracking] personne", linkError.message);
+  const isNew = (link as { is_new?: boolean } | null)?.is_new === true;
+
+  const patch: { email?: string; name?: string; phone?: string; phone_e164?: string; identified_at?: string; contact_id?: string } = {};
+  if (who.email && visitor.email !== who.email) patch.email = who.email;
   if (who.name) patch.name = who.name;
   if (who.phone) patch.phone = who.phone;
+  if (phone && visitor.phone_e164 !== phone) patch.phone_e164 = phone;
+  if (patch.email || (!visitor.person_id && !visitor.email)) patch.identified_at = at;
 
   // Site de l'agence elle-même (aucun client) : on relie ou crée un contact CRM.
   // Pour un site client, les visiteurs sont les prospects du client : jamais de contact CRM de l'agence.
-  if (!site.company_id && site.settings.auto_contacts && !visitor.contact_id) {
+  if (who.email && !site.company_id && site.settings.auto_contacts && !visitor.contact_id) {
     const { data: found } = await sb.from("contacts").select("id").eq("workspace_id", site.workspace_id).ilike("email", who.email.replace(/[\\%_]/g, "\\$&")).limit(1).maybeSingle();
     if (found) patch.contact_id = found.id;
     else {
@@ -210,15 +237,15 @@ async function identify(site: Site, visitor: { id: string; email: string | null;
   }
   if (Object.keys(patch).length) await sb.from("visitors").update(patch).eq("id", visitor.id);
 
-  // Première identification de cet email sur le site = un prospect (dédoublonné par l'index unique)
-  if (patch.email) {
+  // Une personne qui apparaît sur le site = un prospect (l'index unique écarte un doublon simultané)
+  if (isNew) {
     const { error } = await sb.from("tracking_events").insert({
       site_id: site.id,
       workspace_id: site.workspace_id,
       visitor_id: visitor.id,
       type: "lead",
       name: "identify",
-      order_id: `auto:${who.email}`,
+      order_id: `auto:${who.email ?? phone}`,
       source: "script",
       ts: at,
     });
@@ -229,7 +256,7 @@ async function identify(site: Site, visitor: { id: string; email: string | null;
 // ---------------------------------------------------------------------
 // Hit du script
 // ---------------------------------------------------------------------
-export async function ingestHit(site: Site, hit: Hit, ctx: { ua: string; country: string | null }) {
+export async function ingestHit(site: Site, hit: Hit, ctx: { ua: string; country: string | null; ip: string | null }) {
   const sb = supabaseAdmin();
   const now = new Date().toISOString();
   const { data: visitor, error } = await sb
@@ -245,11 +272,29 @@ export async function ingestHit(site: Site, hit: Hit, ctx: { ua: string; country
       },
       { onConflict: "site_id,anon_id" },
     )
-    .select("id, email, contact_id")
+    .select(VISITOR_COLS)
     .single();
   if (error || !visitor) {
     console.error("[tracking] visiteur", error?.message);
     return;
+  }
+
+  // Signaux pour le renvoi aux régies : seulement sur un site qui attend le consentement (le script
+  // n'envoie alors rien avant aos('consent', true)). Un site en suivi immédiat se déclare exempté,
+  // ce qui exclut les identifiants publicitaires.
+  if (site.settings.consent === "required" && hit.t === "page" && (hit.s === 1 || hit.x)) {
+    const { error: e0 } = await sb.from("visitor_signals").upsert({
+      visitor_id: visitor.id,
+      site_id: site.id,
+      workspace_id: site.workspace_id,
+      ...(hit.x?.fbp ? { fbp: hit.x.fbp } : {}),
+      ...(hit.x?.fbc ? { fbc: hit.x.fbc } : {}),
+      ...(hit.x?.ga ? { ga_cid: hit.x.ga } : {}),
+      ...(ctx.ip ? { ip: ctx.ip } : {}),
+      ua: ctx.ua.slice(0, 400),
+      seen_at: now,
+    });
+    if (e0) console.error("[tracking] signaux", e0.message);
   }
 
   const url = hit.u.slice(0, 2000);
@@ -324,31 +369,40 @@ function parseTs(ts: string | number | undefined) {
 
 export async function recordConversion(site: Site, input: ConversionInput, source: "api" | "stripe" = "api") {
   const sb = supabaseAdmin();
-  if (!input.email && !input.anon_id) return { ok: false as const, status: 400, error: "email ou anon_id requis" };
-  const email = input.email ? IdentitySchema.shape.email.safeParse(input.email) : null;
+  if (!input.email && !input.anon_id && !input.phone) return { ok: false as const, status: 400, error: "email, téléphone ou anon_id requis" };
+  const email = input.email ? EmailSchema.safeParse(input.email) : null;
   if (input.email && !email?.success) return { ok: false as const, status: 400, error: "email invalide" };
   const mail = email?.success ? email.data : null;
+  // Sans visiteur connu, le pays est inconnu : un numéro sans indicatif est lu comme français
+  const phone = normalizePhone(input.phone);
+  if (!mail && !input.anon_id && !phone) return { ok: false as const, status: 400, error: "téléphone invalide" };
   const at = parseTs(input.ts).toISOString();
 
-  let visitor: { id: string; email: string | null; contact_id: string | null } | null = null;
+  let visitor: VisitorRef | null = null;
   if (input.anon_id) {
-    const { data: known } = await sb.from("visitors").select("id, email, contact_id").eq("site_id", site.id).eq("anon_id", input.anon_id).maybeSingle();
+    const { data: known } = await sb.from("visitors").select(VISITOR_COLS).eq("site_id", site.id).eq("anon_id", input.anon_id).maybeSingle();
     visitor = known;
   }
   if (!visitor && mail) {
-    const { data } = await sb.from("visitors").select("id, email, contact_id").eq("site_id", site.id).eq("email", mail).order("last_seen", { ascending: false }).limit(1).maybeSingle();
+    const { data } = await sb.from("visitors").select(VISITOR_COLS).eq("site_id", site.id).eq("email", mail).order("last_seen", { ascending: false }).limit(1).maybeSingle();
+    visitor = data;
+  }
+  // Par téléphone seulement si aucun email n'est fourni : avec un email inconnu, on crée un visiteur que
+  // tracking_link_person rattache à la même personne, et les deux emails sont conservés.
+  if (!visitor && !mail && phone) {
+    const { data } = await sb.from("visitors").select(VISITOR_COLS).eq("site_id", site.id).eq("phone_e164", phone).order("last_seen", { ascending: false }).limit(1).maybeSingle();
     visitor = data;
   }
   if (!visitor) {
     const { data, error } = await sb
       .from("visitors")
       .insert({ site_id: site.id, workspace_id: site.workspace_id, anon_id: input.anon_id ?? `srv_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`, first_seen: at, last_seen: at })
-      .select("id, email, contact_id")
+      .select(VISITOR_COLS)
       .single();
     if (error || !data) return { ok: false as const, status: 500, error: "enregistrement impossible" };
     visitor = data;
   }
-  if (mail) await identify(site, visitor, { email: mail, name: input.name, phone: input.phone }, at);
+  if (mail || phone) await identify(site, visitor, { email: mail ?? undefined, name: input.name, phone: input.phone }, at);
 
   const { data: ev, error } = await sb
     .from("tracking_events")

@@ -28,9 +28,10 @@ export async function POST(req: NextRequest) {
   if (!site) return json({ error: "clé inconnue" }, 404);
   if (!originAllowed(site, req.headers.get("origin"))) return json({ error: "domaine non autorisé" }, 403);
 
-  // Pays seulement (en-tête Vercel), jamais l'adresse IP
+  // Pays (en-tête Vercel). L'adresse IP n'est conservée que sur un site qui attend le consentement, 30 jours (voir ingestHit)
   const country = req.headers.get("x-vercel-ip-country")?.slice(0, 2).toUpperCase() || null;
-  after(() => ingestHit(site, hit, { ua, country }).catch((e) => console.error("[tracking] collecte", e)));
+  const ip = clientIp(req);
+  after(() => ingestHit(site, hit, { ua, country, ip: /^[0-9a-f.:]{3,45}$/i.test(ip) && ip !== "0" ? ip : null }).catch((e) => console.error("[tracking] collecte", e)));
   return ok();
 }
 

@@ -8,6 +8,7 @@
 // - API : aos('identify', {email, name, phone}), aos('track', type, {value, currency, order_id, ...}),
 //   aos('consent', true|false), aos('page') ; window.aos.id = identifiant visiteur
 // - consentement : si le site est en mode « required », rien n'est déposé ni envoyé avant aos('consent', true)
+// - après consentement (mode « required ») : cookies _fbp, _fbc et _ga joints à la page vue, pour le renvoi aux régies
 // - cross-domain : les liens vers les autres domaines déclarés reçoivent ?_aos_id=<id>
 // - attributs facultatifs : data-consent="required|none", data-domains="a.fr,b.fr", data-forms="false"
 //
@@ -37,7 +38,10 @@ var x={email:m,name:cl(o.name),phone:cl(o.phone)},s=JSON.stringify(x);if(s==E)re
 function mine(h){h=h.replace(/^www\./,'');for(var i=0;i<C.d.length;i++){var x=C.d[i];if(h==x||h.slice(-x.length-1)=='.'+x)return 1}return 0}
 function srcd(){var r=d.referrer,h;if(/[?&](utm_[a-z]+|gclid|gbraid|wbraid|fbclid|ttclid|msclkid|li_fat_id|sccid|epik|twclid|aos_lid)=/.test(l.search))return 1;
 if(r){try{h=new URL(r).hostname}catch(e){}if(h&&h!=l.hostname&&!mine(h))return 1}return 0}
-function page(s){send({t:'page',s:s?1:0,r:s?d.referrer:void 0})}
+function ad(s){if(C.c!='required')return;var f=gc('_fbp'),c=gc('_fbc'),g=gc('_ga'),m=l.search.match(/[?&]fbclid=([^&#]+)/),x,j;
+if(!c&&m)c='fb.1.'+Date.now()+'.'+m[1];if(!f&&!c&&!g)return;x={fbp:f||void 0,fbc:c||void 0,ga:g||void 0};j=[f,c&&c.split('.').pop(),g].join('|');
+if(!s&&j==ls('_aos_x'))return;ls('_aos_x',j);return x}
+function page(s){send({t:'page',s:s?1:0,r:s?d.referrer:void 0,x:ad(s)})}
 function run(a){var c=a[0],o=a[1],p=a[2]||{},x,e,k,r={};if(!ok)return;
 if(c=='identify'){x=ident(o);x&&send({t:'identify',d:x})}
 else if(c=='track'&&o){e={type:String(o).slice(0,40)};for(k in p)(k=='value'||k=='currency'||k=='order_id'?e:r)[k]=p[k];
@@ -63,7 +67,7 @@ s=!m&&!gc('_aos_s');page(srcd()||s);if(on)return;on=1;while(Q.length)run(Q.shift
 if(C.f){d.addEventListener('submit',fs,true);d.addEventListener('click',fs,true)}
 d.addEventListener('mousedown',deco,true);d.addEventListener('touchstart',deco,true);d.addEventListener('keydown',function(e){e.key=='Enter'&&deco(e)},true);
 history.pushState=function(){P.apply(this,arguments);setTimeout(function(){run(['page'])},0)};w.addEventListener('popstate',function(){run(['page'])})}
-function consent(v){G=!!v;if(!C)return;if(G){ok=1;start()}else{ok=0;sc(N,'',-1,1);sc('_aos_s','',-1,1);ls(N,null);ID=api.id=void 0;E=''}}
+function consent(v){G=!!v;if(!C)return;if(G){ok=1;start()}else{ok=0;sc(N,'',-1,1);sc('_aos_s','',-1,1);ls(N,null);ls('_aos_x',null);ID=api.id=void 0;E=''}}
 fetch(B+'/api/t/config?k='+K).then(function(r){return r.ok&&r.json()}).then(function(c){if(!c)return;var dm=A('domains');
 C={d:(dm?dm.split(','):c.d||[]).map(function(x){return String(x).trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'').replace(/^www\./,'')}).filter(Boolean),
 c:A('consent')||c.c,f:A('forms')?A('forms')!='false':c.f!==false};
