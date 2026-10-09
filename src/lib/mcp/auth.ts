@@ -36,8 +36,9 @@ export function appUrl(request: Request) {
 /**
  * Résout le jeton : utilisateur, espace et rôle ACTUEL dans l'espace (revérifié à
  * chaque appel : un membre retiré ou passé invité perd l'accès ou l'écriture aussitôt).
+ * `ext` : appel venu de /api/ext/v1, seul endroit où un jeton de portée « ext » est accepté.
  */
-export async function authenticate(token: string | null, request: Request): Promise<Omit<McpContext, "cache" | "log">> {
+export async function authenticate(token: string | null, request: Request, opts: { ext?: boolean } = {}): Promise<Omit<McpContext, "cache" | "log">> {
   if (!token) throw new AuthError("Jeton manquant : ajoute l'en-tête « Authorization: Bearer aos_… ».");
   if (!TOKEN_RE.test(token)) throw new AuthError("Jeton invalide.");
   const db = supabaseAdmin();
@@ -49,6 +50,8 @@ export async function authenticate(token: string | null, request: Request): Prom
   if (!t) throw new AuthError("Jeton invalide.");
   if (t.revoked_at) throw new AuthError("Ce jeton a été révoqué.");
   if (t.expires_at && new Date(t.expires_at).getTime() <= Date.now()) throw new AuthError("Ce jeton a expiré.");
+  // Un jeton d'extension n'ouvre que /api/ext/v1 : il vit dans un navigateur, il doit donner le moins possible
+  if (t.scope === "ext" && !opts.ext) throw new AuthError("Ce jeton est réservé à l'extension Chrome : crée un jeton de lecture pour le serveur MCP.", 403);
 
   const [member, workspace, profile] = await Promise.all([
     db.from("workspace_members").select("role").eq("workspace_id", t.workspace_id).eq("user_id", t.user_id).maybeSingle(),

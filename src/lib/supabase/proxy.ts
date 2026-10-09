@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// /t.js et /api/t/* : script de tracking et collecte depuis les sites clients ; /l/ : liens courts
-const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot", "/reset", "/auth", "/p/", "/r/", "/l/", "/t.js", "/api/t/", "/f/", "/b/", "/api/mcp", "/api/booking/", "/api/signature/", "/api/onboarding/", "/invite/", "/api/cron"];
+// /t.js et /api/t/* : script de tracking et collecte depuis les sites clients ; /l/ : liens courts ;
+// /api/ext/ : lecture par jeton pour l'extension Chrome, validé dans chaque route (rien n'écrit sous ce préfixe)
+const PUBLIC_PREFIXES = ["/login", "/signup", "/forgot", "/reset", "/auth", "/p/", "/r/", "/l/", "/t.js", "/api/t/", "/f/", "/b/", "/api/mcp", "/api/ext/", "/api/booking/", "/api/signature/", "/api/onboarding/", "/invite/", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

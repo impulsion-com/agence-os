@@ -86,10 +86,11 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   attend le consentement. Sources hors script : API, Stripe, webhook générique et import CSV
   (`src/lib/tracking/sources.ts`), toutes par `recordConversion`. Tableau des campagnes : `campaigns.ts` (pur).
   Les modules purs du tracking s'importent entre eux par chemin relatif avec extension `.ts`, pour rester
-  chargeables par les tests Node. Tests :
+  chargeables par les tests Node. API de l'extension Chrome : `/api/ext/v1` (`ext-contract.ts`, `ext.ts`),
+  lecture seule, jeton de portée `ext` ; **rien n'écrit sous `/api/ext/`**. Tests :
   `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs` (moteur) et
   `node scripts/test-tracking-os.mjs`, puis avec `--env-file=.env.local` `scripts/test-tracking-identity.mjs`,
-  `scripts/test-tracking-sources.mjs` et `scripts/test-tracking-campaigns.mjs`
+  `scripts/test-tracking-sources.mjs`, `scripts/test-tracking-campaigns.mjs` et `scripts/test-tracking-ext.mjs`
   (parcours réels, serveur de dev lancé).
 
 ## Développement

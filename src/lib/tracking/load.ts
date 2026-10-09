@@ -153,7 +153,7 @@ export interface Overview {
   convCount: number;
 }
 
-interface RawConv {
+export interface RawConv {
   id: string;
   ts: string;
   type: string;
@@ -454,9 +454,25 @@ export interface CampaignsData {
   adLevel: boolean;
 }
 
-export async function loadCampaigns(site: { id: string; company_id: string | null }, ws: string, period: Period, opts: { model: ModelId; window: number }): Promise<CampaignsData> {
-  const sb = await supabaseServer();
-  const stages = await loadStages(site.id);
+/** D'où viennent les données : la session d'un membre (écrans) ou le service role au nom d'un jeton (API de l'extension). */
+export interface CampaignAccess {
+  sb: Pick<SB, "from">;
+  conversions: (types: string[]) => Promise<RawConv[]>;
+}
+
+export interface CampaignsFull extends CampaignsData {
+  /** Conversions rapprochées des campagnes connues, pour lister les personnes d'une ligne. */
+  convs: Conversion[];
+  /** Email de chaque personne créditée, non masqué. */
+  emails: Record<string, string | null>;
+  accountIds: string[];
+  platforms: Record<string, string>;
+}
+
+export async function campaignsData(access: CampaignAccess, site: { id: string; company_id: string | null }, ws: string, period: { start: string; end: string }, opts: { model: ModelId; window: number }): Promise<CampaignsFull> {
+  const { sb } = access;
+  const { data: st } = await sb.from("tracking_stages").select("id, key, label, position, kind, has_value, aliases").eq("site_id", site.id).order("position");
+  const stages = (st ?? []) as Stage[];
   const types = [...new Set(stages.flatMap((s) => [s.key, ...s.aliases]))];
   let aq = sb.from("ad_accounts").select("id, platform").eq("workspace_id", ws);
   aq = site.company_id ? aq.eq("company_id", site.company_id) : aq.is("company_id", null);
@@ -464,11 +480,13 @@ export async function loadCampaigns(site: { id: string; company_id: string | nul
   const ids = (accounts ?? []).map((a) => a.id);
   const platform = new Map((accounts ?? []).map((a) => [a.id, a.platform as string]));
 
-  const [raw, spend, adRows, adNames] = await Promise.all([
-    types.length
-      ? paged<RawConv>((a, b) => sb.rpc("tracking_conversions", { p_site: site.id, p_start: period.start, p_end: period.end, p_window: opts.window, p_types: types }).range(a, b))
-      : Promise.resolve([] as RawConv[]),
-    spendRows(sb, ws, site.company_id, period.start, period.end),
+  const [raw, spendDaily, adRows, adNames] = await Promise.all([
+    types.length ? access.conversions(types) : Promise.resolve([] as RawConv[]),
+    ids.length
+      ? paged<{ ad_account_id: string; campaign_id: string; campaign_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
+          sb.from("ad_metrics_daily").select("ad_account_id, campaign_id, campaign_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("campaign_id").range(a, b),
+        )
+      : Promise.resolve([]),
     ids.length
       ? paged<{ ad_account_id: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number }>((a, b) =>
           sb.from("ad_metrics_ad_daily").select("ad_account_id, campaign_id, adset_id, ad_id, ad_name, spend").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
@@ -482,11 +500,11 @@ export async function loadCampaigns(site: { id: string; company_id: string | nul
   ]);
 
   const camps = new Map<string, CampaignSpend>();
-  for (const r of spend.rows) {
-    const c = camps.get(r.campaign_id) ?? { platform: r.platform, campaign_id: r.campaign_id, campaign_name: r.campaign_name, spend: 0, pconv: 0, pvalue: 0 };
-    c.spend += r.spend;
-    c.pconv += r.conversions;
-    c.pvalue += r.value;
+  for (const r of spendDaily) {
+    const c = camps.get(r.campaign_id) ?? { platform: platform.get(r.ad_account_id) ?? "other", campaign_id: r.campaign_id, campaign_name: r.campaign_name, spend: 0, pconv: 0, pvalue: 0 };
+    c.spend += Number(r.spend);
+    c.pconv += Number(r.conversions);
+    c.pvalue += Number(r.conversion_value);
     camps.set(r.campaign_id, c);
   }
   const names = new Map(adNames.map((a) => [a.ad_id, a]));
@@ -515,9 +533,39 @@ export async function loadCampaigns(site: { id: string; company_id: string | nul
     [...known.values()],
   );
   const who: Record<string, string> = {};
-  for (const c of raw) if (!(c.person in who) || c.email) who[c.person] = maskEmail(c.email);
+  const emails: Record<string, string | null> = {};
+  for (const c of raw) {
+    if (!(c.person in who) || c.email) who[c.person] = maskEmail(c.email);
+    if (!emails[c.person]) emails[c.person] = c.email;
+  }
 
-  return { table: buildCampaignTable(convs, stages, opts.model, opts.window, [...camps.values()], [...ads.values()]), stages, who, accounts: ids.length, adLevel: ads.size > 0 };
+  return {
+    table: buildCampaignTable(convs, stages, opts.model, opts.window, [...camps.values()], [...ads.values()]),
+    stages,
+    who,
+    accounts: ids.length,
+    adLevel: ads.size > 0,
+    convs,
+    emails,
+    accountIds: ids,
+    platforms: Object.fromEntries(platform),
+  };
+}
+
+export async function loadCampaigns(site: { id: string; company_id: string | null }, ws: string, period: Period, opts: { model: ModelId; window: number }): Promise<CampaignsData> {
+  const sb = await supabaseServer();
+  const full = await campaignsData(
+    {
+      sb,
+      conversions: (types) => paged<RawConv>((a, b) => sb.rpc("tracking_conversions", { p_site: site.id, p_start: period.start, p_end: period.end, p_window: opts.window, p_types: types }).range(a, b)),
+    },
+    site,
+    ws,
+    period,
+    opts,
+  );
+  // Les écrans n'ont besoin ni des conversions brutes ni des emails en clair
+  return { table: full.table, stages: full.stages, who: full.who, accounts: full.accounts, adLevel: full.adLevel };
 }
 
 // ---------------------------------------------------------------------
