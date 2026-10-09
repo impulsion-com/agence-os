@@ -20,7 +20,7 @@ const send = async (key, body) => {
 };
 const rowOf = async (label) => {
   const tr = p.locator("table.trk-funnel tbody tr", { hasText: label });
-  return { people: (await tr.locator("td").nth(1).innerText()).trim(), value: (await tr.locator("td").nth(5).innerText()).trim() };
+  return { people: (await tr.locator("td").nth(1).innerText()).trim(), value: (await tr.locator("td").nth(6).innerText()).trim() };
 };
 
 let siteUrl = null;

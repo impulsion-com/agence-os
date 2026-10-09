@@ -11,19 +11,22 @@ import { useWorkspace } from "@/lib/workspace/context";
 import type { Period } from "@/lib/ads/metrics";
 import type { ModelId } from "@/lib/tracking/attribution";
 import type { Funnel, Stage } from "@/lib/tracking/funnel";
-import type { Goal, Overview, Person, SiteKey, SiteRow } from "@/lib/tracking/load";
+import type { CampaignsData, Goal, Overview, Person, PersonSheet, SiteKey, SiteRow } from "@/lib/tracking/load";
 import { ApiTab } from "./api-tab";
 import { AttributionTab } from "./attribution-tab";
+import { CampaignsTab } from "./campaigns-tab";
 import { FunnelTab } from "./funnel-tab";
 import { InstallTab } from "./install-tab";
 import { JourneysTab } from "./journeys-tab";
 import { PeopleTab } from "./people-tab";
+import { PersonDrawer } from "./person-drawer";
 import { SiteModal } from "./site-modal";
 import { SiteStatus } from "./shared";
 
-export type Tab = "overview" | "funnel" | "journeys" | "people" | "install" | "api";
+export type Tab = "overview" | "campaigns" | "funnel" | "journeys" | "people" | "install" | "api";
 export const TABS: { id: Tab; name: string }[] = [
   { id: "overview", name: "Attribution" },
+  { id: "campaigns", name: "Campagnes" },
   { id: "funnel", name: "Entonnoir" },
   { id: "journeys", name: "Parcours" },
   { id: "people", name: "Visiteurs identifiés" },
@@ -42,7 +45,9 @@ export interface DashboardProps {
   overview: Overview | null;
   people: Person[] | null;
   q: string;
+  campaigns: CampaignsData | null;
   funnel: { stages: Stage[]; funnel: Funnel } | null;
+  person: PersonSheet | null;
   keys: SiteKey[];
   stages: Stage[];
   appUrl: string;
@@ -59,6 +64,7 @@ export function SiteDashboard(p: DashboardProps) {
     // la période, le modèle et l'objectif suivent d'un onglet à l'autre
     const q = new URLSearchParams(sp.toString());
     q.delete("q");
+    q.delete("person");
     if (tab === "overview") q.delete("tab");
     else q.set("tab", tab);
     return `${ws.base}/tracking/${site.id}${q.size ? `?${q}` : ""}`;
@@ -109,12 +115,14 @@ export function SiteDashboard(p: DashboardProps) {
       </nav>
 
       {p.tab === "overview" && p.overview && <AttributionTab {...p} overview={p.overview} />}
+      {p.tab === "campaigns" && p.campaigns && <CampaignsTab site={site} period={p.period} model={p.model} window={p.window} data={p.campaigns} />}
       {p.tab === "funnel" && p.funnel && <FunnelTab site={site} period={p.period} stages={p.funnel.stages} funnel={p.funnel.funnel} />}
       {p.tab === "journeys" && p.overview && <JourneysTab {...p} overview={p.overview} />}
       {p.tab === "people" && <PeopleTab site={site} people={p.people ?? []} q={p.q} />}
       {p.tab === "install" && <InstallTab site={site} appUrl={p.appUrl} />}
       {p.tab === "api" && <ApiTab site={site} keys={p.keys} stages={p.stages} appUrl={p.appUrl} />}
 
+      {p.person && <PersonDrawer person={p.person} stages={p.stages} />}
       {edit && <SiteModal site={site} onClose={() => setEdit(false)} />}
     </div>
   );

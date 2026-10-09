@@ -5294,10 +5294,16 @@ export type Database = {
         }[]
       }
       tracking_funnel: {
-        Args: { p_end: string; p_site: string; p_start: string }
+        Args: {
+          p_end: string
+          p_site: string
+          p_start: string
+          p_window?: number
+        }
         Returns: {
           events: number
           people: number
+          sourced: number
           stage_id: string
           type: string
           value: number
@@ -5323,6 +5329,10 @@ export type Database = {
           revenue: number
           visitors: number
         }[]
+      }
+      tracking_person: {
+        Args: { p_person: string; p_site: string }
+        Returns: Json
       }
       tracking_purge_signals: { Args: never; Returns: number }
       tracking_stats: {

@@ -201,7 +201,7 @@ interface VisitorRef {
 }
 const VISITOR_COLS = "id, email, contact_id, person_id, phone_e164, country";
 
-async function identify(site: Site, visitor: VisitorRef, who: Identity, at = new Date().toISOString()) {
+async function identify(site: Site, visitor: VisitorRef, who: Identity, at = new Date().toISOString(), source = "script") {
   const sb = supabaseAdmin();
   // Un numéro écrit sans indicatif se lit dans le pays du visiteur (France à défaut)
   const phone = normalizePhone(who.phone, visitor.country);
@@ -252,7 +252,7 @@ async function identify(site: Site, visitor: VisitorRef, who: Identity, at = new
       type: "lead",
       name: "identify",
       order_id: `auto:${who.email ?? phone}`,
-      source: "script",
+      source,
       ts: at,
     });
     if (error && error.code !== DUP) console.error("[tracking] lead auto", error.message);
@@ -408,7 +408,7 @@ export async function recordConversion(site: Site, input: ConversionInput, sourc
     if (error || !data) return { ok: false as const, status: 500, error: "enregistrement impossible" };
     visitor = data;
   }
-  if (mail || phone) await identify(site, visitor, { email: mail ?? undefined, name: input.name, phone: input.phone }, at);
+  if (mail || phone) await identify(site, visitor, { email: mail ?? undefined, name: input.name, phone: input.phone }, at, source);
 
   const { data: ev, error } = await sb
     .from("tracking_events")

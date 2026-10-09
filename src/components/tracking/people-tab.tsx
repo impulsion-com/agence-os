@@ -74,7 +74,7 @@ export function PeopleTab({ site, people, q }: { site: SiteRow; people: Person[]
                       <span className="client">
                         <UserRound size={14} className="faint" />
                         <span style={{ minWidth: 0 }}>
-                          <span className="trunc" style={{ display: "block", fontWeight: 500 }}>{p.email ?? p.phone ?? "Sans email"}</span>
+                          <button type="button" className="trunc trk-person-link" onClick={() => go({ person: p.person_id })} title="Ouvrir la fiche">{p.email ?? p.phone ?? "Sans email"}</button>
                           <span className="sub trunc" style={{ display: "block" }}>
                             {p.name || "Nom inconnu"}
                             {p.contact_id && (

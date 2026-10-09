@@ -19,7 +19,8 @@ import { ChannelLabel, fmtConv, fmtPct, useQueryNav } from "./shared";
 // ---------------------------------------------------------------------
 // Barre de filtres (partagée avec l'onglet Parcours)
 // ---------------------------------------------------------------------
-export function AttrFilters({ period, model, window, goal, site }: { period: Period; model: ModelId; window: number; goal: Goal; site: SiteRow }) {
+/** `goal` absent : pas de bascule Ventes / Prospects (onglet Campagnes, qui montre toutes les étapes). */
+export function AttrFilters({ period, model, window, goal, site }: { period: Period; model: ModelId; window: number; goal?: Goal; site: SiteRow }) {
   const go = useQueryNav();
   return (
     <div className="trk-filters">
@@ -54,14 +55,16 @@ export function AttrFilters({ period, model, window, goal, site }: { period: Per
           onSelect: () => go({ window: w === site.settings.window_days ? null : String(w) }),
         }))}
       />
-      <div className="seg" role="group" aria-label="Objectif">
-        <button type="button" className={goal === "sales" ? "on" : ""} aria-pressed={goal === "sales"} onClick={() => go({ goal: null })}>
-          Ventes
-        </button>
-        <button type="button" className={goal === "leads" ? "on" : ""} aria-pressed={goal === "leads"} onClick={() => go({ goal: "leads" })}>
-          Prospects
-        </button>
-      </div>
+      {goal && (
+        <div className="seg" role="group" aria-label="Objectif">
+          <button type="button" className={goal === "sales" ? "on" : ""} aria-pressed={goal === "sales"} onClick={() => go({ goal: null })}>
+            Ventes
+          </button>
+          <button type="button" className={goal === "leads" ? "on" : ""} aria-pressed={goal === "leads"} onClick={() => go({ goal: "leads" })}>
+            Prospects
+          </button>
+        </div>
+      )}
     </div>
   );
 }

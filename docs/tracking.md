@@ -167,7 +167,34 @@ prospect d'une période précédente, et un taux peut dépasser 100 %. Les évè
 
 Moteur : `src/lib/tracking/funnel.ts`, RPC `tracking_funnel`.
 
-## 10. API serveur
+## 10. Campagnes, fiche d'une personne, couverture
+
+**Onglet Campagnes.** Une ligne par campagne, dépliable en ensembles puis en publicités, avec la dépense, une
+colonne par étape de l'entonnoir, le chiffre d'affaires attribué, le ROAS réel et le coût par vente. Le
+bouton « Personnes » d'une ligne liste celles qu'elle a amenées.
+
+- Une étape affiche une **somme de poids**, pas un compte de lignes : sous un modèle multi-touches, une vente
+  peut valoir 0,5 sur une campagne et 0,5 sur une autre.
+- Une campagne qui dépense sans rien produire reste visible, avec des zéros.
+- Trois lignes de pied se recoupent : publicité + hors publicité = toutes les conversions.
+- Pour descendre jusqu'à la publicité, les URL des annonces doivent porter `utm_id`, `aos_adset` et `aos_ad`
+  (modèles UTM de [Liens trackés](./liens.md)). La dépense par publicité vient de la synchro du Reporting.
+
+**Fiche d'une personne.** Depuis l'onglet Visiteurs identifiés ou depuis une ligne de campagne : emails,
+téléphones, appareils reliés, et un seul fil qui mêle points de contact et évènements, du plus récent au
+plus ancien.
+
+**Couverture.** L'onglet Entonnoir indique par étape la part des évènements « avec une source », c'est-à-dire
+précédés d'au moins un point de contact autre que direct dans la fenêtre du site. C'est la mesure de
+confiance du reste : si 30 % seulement des ventes ont une source, le tableau des campagnes ne décrit que ces
+30 %. La couverture baisse en général le long de l'entonnoir, parce qu'une vente arrive plus tard, souvent
+sous un autre email ou depuis un autre appareil. **Compte tes ventes dans l'onglet Entonnoir, et cherche
+leur provenance dans l'onglet Campagnes : jamais l'inverse.**
+
+Code : `src/lib/tracking/campaigns.ts` (pur, testé), `loadCampaigns` et `loadPerson` dans `load.ts`,
+RPC `tracking_person` et `tracking_funnel`.
+
+## 11. API serveur
 
 L'onglet API crée des **clés d'envoi** (`sk_…`), une par outil branché (Stripe, CRM, Zapier). Une clé n'est
 affichée qu'une fois, à sa création : seule son empreinte SHA-256 est conservée (`tracking_keys`). Tu peux en
@@ -193,7 +220,7 @@ Réponses : 201 créée, 200 `{ "duplicate": true }`, 400, 401, 413, 429.
   d'un visiteur compte comme conversion `deal_won` de la valeur du deal. Pour ce site seulement, les
   visiteurs identifiés sont reliés à un contact CRM (réglage « Créer les contacts CRM »).
 
-## 11. Webhook d'un CRM ou d'un agenda
+## 12. Webhook d'un CRM ou d'un agenda
 
 Pour un outil qui sait envoyer un webhook mais pas choisir la forme de ses données :
 
@@ -221,7 +248,7 @@ vérifie le premier envoi dans l'onglet Installation (testeur en direct).
 
 Code : `src/lib/tracking/sources.ts`.
 
-## 12. Import CSV des conversions hors ligne
+## 13. Import CSV des conversions hors ligne
 
 Onglet Sources > **Importer un fichier CSV**. Colonnes reconnues, en français ou en anglais : email,
 téléphone, type, valeur, devise, date, identifiant. Il faut l'email ou le téléphone. Sans colonne « type »,
@@ -234,7 +261,7 @@ tu choisis l'étape pour tout le fichier.
   sert de clé.
 - Réservé aux membres qui peuvent modifier l'espace. Envoi par paquets de 100 lignes.
 
-## 13. Sécurité
+## 14. Sécurité
 
 Collecte publique (`/t.js`, `/api/t/*` hors proxy de session), CORS ouvert, validation zod, corps
 limité à 16 Ko, filtre des robots par user-agent, contrôle de l'origine face aux domaines déclarés,

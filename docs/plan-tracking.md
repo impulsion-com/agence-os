@@ -112,12 +112,19 @@ changements d'étape du pipeline d'Agence OS autres que « gagné ».
 
 ### 4. Attribution et lecture
 
-- Crédit stocké et recalculable quand on change de modèle ou de fenêtre.
-- Tableau campagne → ensemble → publicité → personnes, avec dépense, étapes de
-  l'entonnoir, chiffre d'affaires, ROAS réel et écart avec la régie.
-- Fiche d'une personne : parcours complet, tous appareils.
-- Écran Santé : part des conversions rattachées à une source, par étape. C'est le
-  chiffre qui dit si on peut se fier au reste.
+**Fait le 9 octobre 2026** (migration `0102_tracking_person_coverage.sql`).
+
+- Onglet Campagnes : campagne → ensemble → publicité → personnes, avec dépense, une
+  colonne par étape de l'entonnoir, chiffre d'affaires attribué, ROAS réel, coût par
+  vente et conversions déclarées par la régie.
+- Fiche d'une personne : identités, appareils, parcours complet.
+- Couverture par étape dans l'onglet Entonnoir (colonne « Avec une source »), avec
+  un avertissement quand une étape passe sous 50 %.
+- Les objectifs Ventes et Prospects de l'onglet Attribution suivent l'entonnoir du site.
+
+Écart avec le plan : le crédit n'est pas stocké, il reste calculé à la lecture comme
+avant. C'est toujours recalculable par construction, et suffisant aux volumes visés.
+Le stockage redevient une question à l'étape 5 si l'API de l'extension est trop lente.
 
 ### 5. Extension Chrome
 
