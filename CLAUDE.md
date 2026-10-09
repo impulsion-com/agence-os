@@ -84,10 +84,12 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   `visitors.person_id` (email ou téléphone, via `tracking_link_person`, service role). Les signaux pour les
   régies (cookies, IP, navigateur) sont dans `visitor_signals`, sans policy, écrits seulement si le site
   attend le consentement. Sources hors script : API, Stripe, webhook générique et import CSV
-  (`src/lib/tracking/sources.ts`), toutes par `recordConversion`. Tests :
+  (`src/lib/tracking/sources.ts`), toutes par `recordConversion`. Tableau des campagnes : `campaigns.ts` (pur).
+  Les modules purs du tracking s'importent entre eux par chemin relatif avec extension `.ts`, pour rester
+  chargeables par les tests Node. Tests :
   `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs` (moteur) et
-  `node scripts/test-tracking-os.mjs`, puis avec `--env-file=.env.local` `scripts/test-tracking-identity.mjs`
-  et `scripts/test-tracking-sources.mjs`
+  `node scripts/test-tracking-os.mjs`, puis avec `--env-file=.env.local` `scripts/test-tracking-identity.mjs`,
+  `scripts/test-tracking-sources.mjs` et `scripts/test-tracking-campaigns.mjs`
   (parcours réels, serveur de dev lancé).
 
 ## Développement

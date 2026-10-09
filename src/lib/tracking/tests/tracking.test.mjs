@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import { attributeBy, attributeTree, credits, inWindow, linkCampaigns, DIMENSIONS } from "../attribution.ts";
 import { classify, hostMatches } from "../channels.ts";
+import { buildCampaignTable, ratio } from "../campaigns.ts";
 import { buildFunnel, stageKey } from "../funnel.ts";
 import { normalizePhone } from "../phone.ts";
 import { atPath, parseConversionsCsv, readWebhook, webhookUrl } from "../sources.ts";
@@ -255,4 +256,82 @@ test("import CSV : refus net quand rien ne permet de rattacher une ligne", () =>
   assert.match(parseConversionsCsv("nom;valeur\nClaire;10\n", "purchase").errors[0], /email/);
   assert.match(parseConversionsCsv("email\na@b.fr\n", "").errors[0], /type/);
   assert.match(parseConversionsCsv("email", "purchase").errors[0], /en-têtes/);
+});
+
+// ---------------------------------------------------------------------
+// Tableau des campagnes
+// ---------------------------------------------------------------------
+const STAGES = [
+  { key: "lead", label: "Prospects", kind: "lead", has_value: false, aliases: [] },
+  { key: "booking", label: "RDV", kind: "step", has_value: false, aliases: [] },
+  { key: "purchase", label: "Ventes", kind: "sale", has_value: true, aliases: ["deal_won"] },
+];
+const paid = (at, extra = {}) => T(at, "paid_meta", { platform: "meta", campaign_key: "c1", campaign: "Prospection", adset_key: "s1", ad_key: "a1", content: "Vidéo A", ...extra });
+const cv = (id, type, person, touches, value = 0, at = 30) => ({ id, ts: day(at), type, value, person, touches });
+const CAMPS = [{ platform: "meta", campaign_id: "c1", campaign_name: "Prospection froide", spend: 300, pconv: 9, pvalue: 2000 }, { platform: "meta", campaign_id: "c2", campaign_name: "Retargeting", spend: 50, pconv: 0, pvalue: 0 }];
+const ADS = [
+  { platform: "meta", campaign_id: "c1", campaign_name: "Prospection froide", adset_id: "s1", adset_name: "Large", ad_id: "a1", ad_name: "Vidéo A", spend: 200 },
+  { platform: "meta", campaign_id: "c1", campaign_name: "Prospection froide", adset_id: "s1", adset_name: "Large", ad_id: "a2", ad_name: "Image B", spend: 100 },
+];
+
+test("campagnes : crédit, dépense et chiffre d'affaires à chaque niveau", () => {
+  const t = buildCampaignTable(
+    [cv("1", "lead", "p1", [paid(20)]), cv("2", "booking", "p1", [paid(20)]), cv("3", "purchase", "p1", [paid(20)], 1000), cv("4", "lead", "p2", [paid(21, { ad_key: "a2", content: "Image B" })])],
+    STAGES, "last_click", 30, CAMPS, ADS,
+  );
+  const c1 = t.rows.find((r) => r.key === "c1");
+  assert.equal(c1.label, "Prospection froide");
+  assert.deepEqual(c1.stages, { lead: 2, booking: 1, purchase: 1 });
+  assert.equal(c1.value, 1000);
+  assert.equal(c1.spend, 300);
+  near(ratio(c1.value, c1.spend), 1000 / 300);
+  assert.deepEqual(c1.people.sort(), ["p1", "p2"]);
+  const s1 = c1.children[0];
+  assert.equal(s1.label, "Large");
+  assert.equal(s1.spend, 300);
+  assert.deepEqual(s1.children.map((a) => [a.key, a.label, a.spend, a.stages.lead, a.value]), [["a1", "Vidéo A", 200, 1, 1000], ["a2", "Image B", 100, 1, 0]]);
+});
+
+test("campagnes : une campagne qui dépense sans rien produire reste visible, avec des zéros", () => {
+  const t = buildCampaignTable([], STAGES, "last_click", 30, CAMPS, ADS);
+  const c2 = t.rows.find((r) => r.key === "c2");
+  assert.deepEqual([c2.spend, c2.value, c2.stages, c2.pconv], [50, 0, {}, 0]);
+  assert.equal(ratio(c2.value, c2.spend), 0);
+  assert.equal(ratio(10, null), null);
+  assert.equal(ratio(10, 0), null);
+  assert.equal(t.total.spend, 350);
+});
+
+test("campagnes : l'organique et le direct ne sont crédités à aucune campagne, le total les compte", () => {
+  const t = buildCampaignTable(
+    [cv("1", "purchase", "p1", [T(20, "organic_search")], 400), cv("2", "purchase", "p2", [], 100), cv("3", "purchase", "p3", [paid(25)], 500)],
+    STAGES, "last_click", 30, CAMPS, [],
+  );
+  assert.equal(t.organic.stages.purchase, 2);
+  assert.equal(t.organic.value, 500);
+  assert.equal(t.total.stages.purchase, 3);
+  assert.equal(t.total.value, 1000);
+  assert.equal(t.rows.find((r) => r.key === "c1").value, 500);
+});
+
+test("campagnes : modèle linéaire partagé entre deux campagnes, étape d'entrée comptée une fois par personne", () => {
+  const two = [paid(10), paid(20, { campaign_key: "c2", campaign: "Retargeting", adset_key: null, ad_key: null })];
+  const t = buildCampaignTable([cv("1", "purchase", "p1", two, 1000), cv("2", "lead", "p1", two, 0, 12), cv("3", "lead", "p1", two, 0, 25), cv("4", "deal_won", "p1", two, 200)], STAGES, "linear", 30, CAMPS, []);
+  const [c1, c2] = ["c1", "c2"].map((k) => t.rows.find((r) => r.key === k));
+  near(c1.value, 600);
+  near(c2.value, 600);
+  near(c1.stages.purchase, 1);
+  assert.equal(t.total.stages.lead, 1);
+  assert.equal(c2.children.length, 0);
+});
+
+test("campagnes : sans identifiant de régie, la campagne est reconnue par son nom d'URL et n'a pas de dépense", () => {
+  const t = buildCampaignTable([cv("1", "lead", "p1", [T(20, "paid_google", { platform: "google", campaign: "brand-fr" })])], STAGES, "last_click", 30, [], []);
+  assert.deepEqual([t.rows[0].key, t.rows[0].label, t.rows[0].spend, t.rows[0].platform], ["brand-fr", "brand-fr", null, "google"]);
+});
+
+test("campagnes : un évènement hors entonnoir n'entre pas dans le tableau", () => {
+  const t = buildCampaignTable([cv("1", "webinaire", "p1", [paid(20)])], STAGES, "last_click", 30, [], []);
+  assert.equal(t.rows.length, 0);
+  assert.deepEqual(t.total.stages, {});
 });

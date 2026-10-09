@@ -6,13 +6,13 @@ import { SiteDashboard, type Tab } from "@/components/tracking/site-dashboard";
 import { resolvePeriod } from "@/lib/ads/metrics";
 import { addDays, today } from "@/lib/format";
 import { MODEL_IDS, WINDOWS, type ModelId } from "@/lib/tracking/attribution";
-import { loadFunnel, loadKeys, loadStages, loadOverview, loadPeople, loadSites, type Goal } from "@/lib/tracking/load";
+import { loadCampaigns, loadFunnel, loadKeys, loadPerson, loadStages, loadOverview, loadPeople, loadSites, type Goal } from "@/lib/tracking/load";
 import { loadWorkspace } from "@/lib/workspace/load";
 
 export const metadata: Metadata = { title: "Attribution" };
 
 const UUID = /^[0-9a-f-]{36}$/i;
-const TABS: Tab[] = ["overview", "funnel", "journeys", "people", "install", "api"];
+const TABS: Tab[] = ["overview", "campaigns", "funnel", "journeys", "people", "install", "api"];
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
 /** URL publique de l'application (snippet d'installation, exemples d'API). */
@@ -44,13 +44,16 @@ export default async function TrackingSitePage({ params, searchParams }: PagePro
   const window = WINDOWS.includes(w) ? w : site.settings.window_days;
   const goal: Goal = one(sp.goal) === "leads" ? "leads" : "sales";
   const q = (one(sp.q) ?? "").trim();
+  const personId = UUID.test(one(sp.person) ?? "") ? (one(sp.person) as string) : null;
 
-  const [overview, funnel, people, keys, stages, url] = await Promise.all([
+  const [overview, campaigns, funnel, people, keys, stages, person, url] = await Promise.all([
     tab === "overview" || tab === "journeys" ? loadOverview(site, workspace.id, period, { model, window, goal }) : null,
-    tab === "funnel" ? loadFunnel(site.id, period) : null,
+    tab === "campaigns" ? loadCampaigns(site, workspace.id, period, { model, window }) : null,
+    tab === "funnel" ? loadFunnel(site.id, period, site.settings.window_days) : null,
     tab === "people" ? loadPeople(site.id, q) : null,
     tab === "api" && role !== "guest" ? loadKeys(site.id) : [],
-    tab === "api" ? loadStages(site.id) : [],
+    tab === "api" || personId ? loadStages(site.id) : [],
+    personId ? loadPerson(site.id, personId) : null,
     appUrl(),
   ]);
 
@@ -66,7 +69,9 @@ export default async function TrackingSitePage({ params, searchParams }: PagePro
       overview={overview}
       people={people}
       q={q}
+      campaigns={campaigns}
       funnel={funnel}
+      person={person}
       keys={keys}
       stages={stages}
       appUrl={url}

@@ -33,6 +33,8 @@ export interface FunnelAgg {
   events: number;
   people: number;
   value: number;
+  /** Conversions rattachées à une source : au moins un point de contact non direct dans la fenêtre. */
+  sourced?: number;
 }
 
 export interface FunnelRow {
@@ -44,6 +46,8 @@ export interface FunnelRow {
   fromPrev: number | null;
   /** Part de l'étape la plus fournie, pour la largeur de la barre (0 à 1). */
   share: number;
+  /** Part des conversions de l'étape rattachées à une source, en % (null : étape vide). */
+  coverage: number | null;
 }
 
 export interface Funnel {
@@ -60,7 +64,16 @@ export function buildFunnel(stages: Stage[], agg: FunnelAgg[]): Funnel {
     const a = byStage.get(stage.id);
     const people = a?.people ?? 0;
     const prev = i > 0 ? (byStage.get(ordered[i - 1].id)?.people ?? 0) : 0;
-    return { stage, events: a?.events ?? 0, people, value: a?.value ?? 0, fromPrev: i > 0 && prev > 0 ? (people / prev) * 100 : null, share: max ? people / max : 0 };
+    const events = a?.events ?? 0;
+    return {
+      stage,
+      events,
+      people,
+      value: a?.value ?? 0,
+      fromPrev: i > 0 && prev > 0 ? (people / prev) * 100 : null,
+      share: max ? people / max : 0,
+      coverage: events > 0 ? ((a?.sourced ?? 0) / events) * 100 : null,
+    };
   });
   const other = agg
     .filter((a) => !a.stage_id && a.type)

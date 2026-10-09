@@ -4,6 +4,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { dayList, type Period } from "@/lib/ads/metrics";
 import { NONE, DIMENSIONS, attributeTree, attributedByDay, credits, inWindow, linkCampaigns, type Conversion, type ModelId, type Touch, type TreeNode } from "./attribution";
 import { isPaid, platformChannel } from "./channels";
+import { buildCampaignTable, type AdSpend, type CampaignSpend, type CampaignTable } from "./campaigns";
 import { buildFunnel, type Funnel, type Stage } from "./funnel";
 import { readSettings, type SiteSettings } from "./settings";
 
@@ -66,11 +67,11 @@ export async function loadStages(siteId: string): Promise<Stage[]> {
   return (data ?? []) as Stage[];
 }
 
-export async function loadFunnel(siteId: string, period: Period): Promise<{ stages: Stage[]; funnel: Funnel }> {
+export async function loadFunnel(siteId: string, period: Period, windowDays: number): Promise<{ stages: Stage[]; funnel: Funnel }> {
   const sb = await supabaseServer();
   const [st, agg] = await Promise.all([
     sb.from("tracking_stages").select("id, key, label, position, kind, has_value, aliases").eq("site_id", siteId).order("position"),
-    sb.rpc("tracking_funnel", { p_site: siteId, p_start: period.start, p_end: period.end }),
+    sb.rpc("tracking_funnel", { p_site: siteId, p_start: period.start, p_end: period.end, p_window: windowDays }),
   ]);
   if (agg.error) throw new Error(agg.error.message);
   const stages = (st.data ?? []) as Stage[];
@@ -81,7 +82,7 @@ export async function loadFunnel(siteId: string, period: Period): Promise<{ stag
 // Tableau de bord d'attribution
 // ---------------------------------------------------------------------
 export type Goal = "sales" | "leads";
-export const GOAL_TYPES: Record<Goal, string[]> = { sales: ["purchase", "deal_won"], leads: ["lead", "booking"] };
+const DEFAULT_GOAL_TYPES: Record<Goal, string[]> = { sales: ["purchase", "deal_won"], leads: ["lead", "booking"] };
 
 export interface AttrRow {
   id: string;
@@ -230,6 +231,13 @@ export async function loadOverview(
   opts: { model: ModelId; window: number; goal: Goal },
 ): Promise<Overview> {
   const sb = await supabaseServer();
+  // Ventes et prospects sont ceux de l'entonnoir du site ; à défaut d'étape de ce type, les types historiques
+  const stages = await loadStages(site.id);
+  const typesOf = (kind: Stage["kind"], fallback: string[]) => {
+    const t = stages.filter((s) => s.kind === kind).flatMap((s) => [s.key, ...s.aliases]);
+    return t.length ? [...new Set(t)] : fallback;
+  };
+  const GOAL_TYPES: Record<Goal, string[]> = { sales: typesOf("sale", DEFAULT_GOAL_TYPES.sales), leads: typesOf("lead", DEFAULT_GOAL_TYPES.leads) };
   const types = [...GOAL_TYPES.sales, ...GOAL_TYPES.leads];
   const [raw, statsCur, statsPrev, spend] = await Promise.all([
     paged<RawConv>((a, b) =>
@@ -431,6 +439,108 @@ export async function loadOverview(
     accounts: spend.accounts,
     convCount: goalCur.length,
   };
+}
+
+// ---------------------------------------------------------------------
+// Tableau des campagnes (campagne, ensemble, publicité) sur l'entonnoir du site
+// ---------------------------------------------------------------------
+export interface CampaignsData {
+  table: CampaignTable;
+  stages: Stage[];
+  /** Libellé masqué de chaque personne créditée (clé : identifiant de personne). */
+  who: Record<string, string>;
+  accounts: number;
+  /** Au moins une publicité synchronisée : la dépense descend sous la campagne. */
+  adLevel: boolean;
+}
+
+export async function loadCampaigns(site: { id: string; company_id: string | null }, ws: string, period: Period, opts: { model: ModelId; window: number }): Promise<CampaignsData> {
+  const sb = await supabaseServer();
+  const stages = await loadStages(site.id);
+  const types = [...new Set(stages.flatMap((s) => [s.key, ...s.aliases]))];
+  let aq = sb.from("ad_accounts").select("id, platform").eq("workspace_id", ws);
+  aq = site.company_id ? aq.eq("company_id", site.company_id) : aq.is("company_id", null);
+  const { data: accounts } = await aq;
+  const ids = (accounts ?? []).map((a) => a.id);
+  const platform = new Map((accounts ?? []).map((a) => [a.id, a.platform as string]));
+
+  const [raw, spend, adRows, adNames] = await Promise.all([
+    types.length
+      ? paged<RawConv>((a, b) => sb.rpc("tracking_conversions", { p_site: site.id, p_start: period.start, p_end: period.end, p_window: opts.window, p_types: types }).range(a, b))
+      : Promise.resolve([] as RawConv[]),
+    spendRows(sb, ws, site.company_id, period.start, period.end),
+    ids.length
+      ? paged<{ ad_account_id: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number }>((a, b) =>
+          sb.from("ad_metrics_ad_daily").select("ad_account_id, campaign_id, adset_id, ad_id, ad_name, spend").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
+        )
+      : Promise.resolve([]),
+    ids.length
+      ? paged<{ ad_id: string; name: string; campaign_name: string; adset_name: string }>((a, b) =>
+          sb.from("ad_ads").select("ad_id, name, campaign_name, adset_name").in("ad_account_id", ids).order("ad_id").range(a, b),
+        )
+      : Promise.resolve([]),
+  ]);
+
+  const camps = new Map<string, CampaignSpend>();
+  for (const r of spend.rows) {
+    const c = camps.get(r.campaign_id) ?? { platform: r.platform, campaign_id: r.campaign_id, campaign_name: r.campaign_name, spend: 0, pconv: 0, pvalue: 0 };
+    c.spend += r.spend;
+    c.pconv += r.conversions;
+    c.pvalue += r.value;
+    camps.set(r.campaign_id, c);
+  }
+  const names = new Map(adNames.map((a) => [a.ad_id, a]));
+  const ads = new Map<string, AdSpend>();
+  for (const r of adRows) {
+    const n = names.get(r.ad_id);
+    const a = ads.get(r.ad_id) ?? {
+      platform: platform.get(r.ad_account_id) ?? "other",
+      campaign_id: r.campaign_id,
+      campaign_name: n?.campaign_name || camps.get(r.campaign_id)?.campaign_name || "",
+      adset_id: r.adset_id,
+      adset_name: n?.adset_name ?? "",
+      ad_id: r.ad_id,
+      ad_name: n?.name || r.ad_name,
+      spend: 0,
+    };
+    a.spend += Number(r.spend);
+    ads.set(r.ad_id, a);
+  }
+
+  const known = new Map<string, { id: string; name: string; platform: string }>();
+  for (const c of camps.values()) known.set(c.campaign_id, { id: c.campaign_id, name: c.campaign_name, platform: c.platform });
+  for (const a of ads.values()) if (a.campaign_id && !known.has(a.campaign_id)) known.set(a.campaign_id, { id: a.campaign_id, name: a.campaign_name, platform: a.platform });
+  const convs = linkCampaigns(
+    raw.map((c) => ({ id: c.id, ts: c.ts, type: c.type, value: Number(c.value) || 0, person: c.person, touches: (Array.isArray(c.touches) ? c.touches : []) as Touch[] })),
+    [...known.values()],
+  );
+  const who: Record<string, string> = {};
+  for (const c of raw) if (!(c.person in who) || c.email) who[c.person] = maskEmail(c.email);
+
+  return { table: buildCampaignTable(convs, stages, opts.model, opts.window, [...camps.values()], [...ads.values()]), stages, who, accounts: ids.length, adLevel: ads.size > 0 };
+}
+
+// ---------------------------------------------------------------------
+// Fiche d'une personne
+// ---------------------------------------------------------------------
+export interface PersonSheet {
+  person_id: string;
+  name: string | null;
+  emails: string[];
+  phones: string[];
+  contact_id: string | null;
+  first_seen: string;
+  last_seen: string;
+  pageviews: number;
+  devices: { id: string; device: string | null; country: string | null; first_seen: string; last_seen: string; server: boolean }[];
+  touches: (Touch & { visitor_id: string })[];
+  events: { id: number; ts: string; type: string; name: string | null; value: number | null; currency: string | null; source: string; order_id: string | null; url: string | null }[];
+}
+
+export async function loadPerson(siteId: string, personId: string): Promise<PersonSheet | null> {
+  const sb = await supabaseServer();
+  const { data } = await sb.rpc("tracking_person", { p_site: siteId, p_person: personId });
+  return (data as PersonSheet | null) ?? null;
 }
 
 // ---------------------------------------------------------------------

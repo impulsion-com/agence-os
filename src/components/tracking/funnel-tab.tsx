@@ -16,6 +16,8 @@ export function FunnelTab({ site, period, stages, funnel }: { site: SiteRow; per
   const currency = ws.workspace.currency || "EUR";
   const [edit, setEdit] = useState(false);
   const empty = funnel.rows.every((r) => r.events === 0);
+  // L'étape la moins bien couverte, si elle passe sous la moitié
+  const weakest = funnel.rows.filter((r) => r.coverage !== null && r.coverage < 50).sort((a, b) => (a.coverage ?? 0) - (b.coverage ?? 0))[0];
 
   return (
     <div className="trk-col">
@@ -47,6 +49,7 @@ export function FunnelTab({ site, period, stages, funnel }: { site: SiteRow; per
                     <th aria-hidden />
                     <th className="r">Depuis l&apos;étape précédente</th>
                     <th className="r">Évènements</th>
+                    <th className="r" title="Part des évènements de l'étape rattachés à une source : au moins un point de contact autre que direct dans la fenêtre d'attribution du site">Avec une source</th>
                     <th className="r">Valeur</th>
                   </tr>
                 </thead>
@@ -62,6 +65,7 @@ export function FunnelTab({ site, period, stages, funnel }: { site: SiteRow; per
                       </td>
                       <td className="r num">{fmtPct(r.fromPrev)}</td>
                       <td className="r num muted">{fmtConv(r.events)}</td>
+                      <td className={`r num${r.coverage !== null && r.coverage < 50 ? " low" : ""}`}>{fmtPct(r.coverage)}</td>
                       <td className="r num">{r.stage.has_value ? fmtKpi("value", r.value, currency) : "–"}</td>
                     </tr>
                   ))}
@@ -74,6 +78,13 @@ export function FunnelTab({ site, period, stages, funnel }: { site: SiteRow; per
                   ? "Aucune conversion reçue sur la période. Les étapes se remplissent avec le script du site et les conversions envoyées par l'API."
                   : "Chaque étape est comptée à sa date : une vente de cette période peut venir d'un prospect d'une période précédente, et un taux peut alors dépasser 100 %."}
               </p>
+              {weakest && (
+                <p className="faint">
+                  « Avec une source » dit jusqu&apos;où l&apos;attribution est fiable. Sur « {weakest.stage.label} », {fmtPct(weakest.coverage)} seulement des
+                  évènements ont une source : les chiffres par campagne de cette étape ne décrivent donc qu&apos;une partie de la réalité. Les causes habituelles :
+                  conversion envoyée sous un autre email ou téléphone que celui du visiteur, cookie expiré, consentement refusé.
+                </p>
+              )}
             </div>
           </>
         )}
