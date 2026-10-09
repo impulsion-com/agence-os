@@ -83,9 +83,11 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   déclencheur le pose à la création du site depuis `settings.template`. Une personne = les visiteurs de même
   `visitors.person_id` (email ou téléphone, via `tracking_link_person`, service role). Les signaux pour les
   régies (cookies, IP, navigateur) sont dans `visitor_signals`, sans policy, écrits seulement si le site
-  attend le consentement. Tests :
+  attend le consentement. Sources hors script : API, Stripe, webhook générique et import CSV
+  (`src/lib/tracking/sources.ts`), toutes par `recordConversion`. Tests :
   `node --experimental-strip-types --test src/lib/tracking/tests/tracking.test.mjs` (moteur) et
-  `node scripts/test-tracking-os.mjs` et `node --env-file=.env.local scripts/test-tracking-identity.mjs`
+  `node scripts/test-tracking-os.mjs`, puis avec `--env-file=.env.local` `scripts/test-tracking-identity.mjs`
+  et `scripts/test-tracking-sources.mjs`
   (parcours réels, serveur de dev lancé).
 
 ## Développement

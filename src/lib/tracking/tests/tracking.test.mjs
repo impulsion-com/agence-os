@@ -7,6 +7,7 @@ import { attributeBy, attributeTree, credits, inWindow, linkCampaigns, DIMENSION
 import { classify, hostMatches } from "../channels.ts";
 import { buildFunnel, stageKey } from "../funnel.ts";
 import { normalizePhone } from "../phone.ts";
+import { atPath, parseConversionsCsv, readWebhook, webhookUrl } from "../sources.ts";
 
 const day = (n) => new Date(Date.UTC(2026, 8, 1 + n, 12)).toISOString();
 const conv = (touches, value = 100, at = 30) => ({ id: "c", ts: day(at), type: "purchase", value, person: "p", touches });
@@ -189,4 +190,69 @@ test("téléphone : le pays du visiteur sert aux numéros sans indicatif", () =>
 
 test("téléphone : une saisie inexploitable rend null", () => {
   for (const raw of ["", null, undefined, "abc", "12", "0", "+33", "1".repeat(20)]) assert.equal(normalizePhone(raw), null, String(raw));
+});
+
+// ---------------------------------------------------------------------
+// Sources : webhook générique et import CSV
+// ---------------------------------------------------------------------
+const calcom = {
+  triggerEvent: "BOOKING_CREATED",
+  createdAt: "2026-09-12T08:00:00Z",
+  payload: { uid: "bk_42", organizer: { email: "agence@exemple.fr", name: "Agence" }, attendees: [{ email: "Claire@Exemple.fr", name: "Claire Martin" }] },
+};
+
+test("webhook : les chemins de l'URL désignent le bon email", () => {
+  const paths = { email: "payload.attendees.0.email", name: "payload.attendees.0.name", id: "payload.uid", date: "createdAt" };
+  assert.deepEqual(readWebhook(calcom, "booking", paths), {
+    email: "Claire@Exemple.fr", phone: undefined, name: "Claire Martin", type: "booking", value: undefined, currency: undefined, order_id: "bk_42", ts: "2026-09-12T08:00:00Z",
+  });
+  assert.equal(atPath(calcom, "payload.attendees.3.email"), undefined);
+  assert.equal(atPath(calcom, "payload.uid.trop.loin"), undefined);
+});
+
+test("webhook : sans chemin, le champ le plus proche de la racine gagne", () => {
+  const deal = { event: "deal.won", data: { id: 981, title: "Refonte", amount: "4 500,00", currency: "eur", person: { Email: "bob@exemple.fr", "Phone Number": "06 12 34 56 78" } } };
+  const r = readWebhook(deal, "purchase");
+  assert.equal(r.email, "bob@exemple.fr");
+  assert.equal(r.phone, "06 12 34 56 78");
+  assert.equal(r.value, 4500);
+  assert.equal(r.currency, "EUR");
+  assert.equal(r.order_id, "981");
+  assert.equal(readWebhook({ email: "racine@exemple.fr", contact: { email: "fond@exemple.fr" } }, "lead").email, "racine@exemple.fr");
+});
+
+test("webhook : sans email ni téléphone, rien à enregistrer", () => {
+  assert.equal(readWebhook({ event: "ping", id: 1 }, "lead"), null);
+  assert.equal(readWebhook("pas un objet", "lead"), null);
+  assert.equal(readWebhook(calcom, "booking", { email: "payload.attendees.9.email" }), null);
+});
+
+test("webhook : l'URL garde les chemins lisibles", () => {
+  assert.equal(
+    webhookUrl("https://app.fr", "sk_x", "booking", { email: "payload.email", id: "payload.uri" }),
+    "https://app.fr/api/t/webhooks/in?key=sk_x&type=booking&email=payload.email&id=payload.uri",
+  );
+});
+
+test("import CSV : colonnes en français, montants et dates français", () => {
+  const r = parseConversionsCsv("Email;Téléphone;Type;Montant;Date;Référence\nClaire@Exemple.fr;06 12 34 56 78;purchase;1 490,50 €;12/09/2026;FAC-1\n;+33 7 98 76 54 32;show;;14/09/2026;\n", "");
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.rows[0], { email: "claire@exemple.fr", phone: "06 12 34 56 78", type: "purchase", value: 1490.5, currency: undefined, order_id: "FAC-1", ts: "2026-09-12T12:00:00Z" });
+  assert.equal(r.rows[1].email, undefined);
+  assert.equal(r.rows[1].order_id, "csv:+33 7 98 76 54 32|show|2026-09-14|");
+  assert.equal(r.columns.value, "Montant");
+});
+
+test("import CSV : une étape par fichier, lignes illisibles signalées sans bloquer les autres", () => {
+  const r = parseConversionsCsv("email,valeur\na@b.fr,100\npas-un-email,50\n,20\nc@d.fr,abc\ne@f.fr,\n", "purchase");
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0].type, "purchase");
+  assert.equal(r.rows[1].value, undefined);
+  assert.equal(r.errors.length, 3);
+});
+
+test("import CSV : refus net quand rien ne permet de rattacher une ligne", () => {
+  assert.match(parseConversionsCsv("nom;valeur\nClaire;10\n", "purchase").errors[0], /email/);
+  assert.match(parseConversionsCsv("email\na@b.fr\n", "").errors[0], /type/);
+  assert.match(parseConversionsCsv("email", "purchase").errors[0], /en-têtes/);
 });

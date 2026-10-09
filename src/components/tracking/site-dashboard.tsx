@@ -28,7 +28,7 @@ export const TABS: { id: Tab; name: string }[] = [
   { id: "journeys", name: "Parcours" },
   { id: "people", name: "Visiteurs identifiés" },
   { id: "install", name: "Installation" },
-  { id: "api", name: "API" },
+  { id: "api", name: "Sources" },
 ];
 
 export interface DashboardProps {
@@ -44,6 +44,7 @@ export interface DashboardProps {
   q: string;
   funnel: { stages: Stage[]; funnel: Funnel } | null;
   keys: SiteKey[];
+  stages: Stage[];
   appUrl: string;
 }
 
@@ -112,7 +113,7 @@ export function SiteDashboard(p: DashboardProps) {
       {p.tab === "journeys" && p.overview && <JourneysTab {...p} overview={p.overview} />}
       {p.tab === "people" && <PeopleTab site={site} people={p.people ?? []} q={p.q} />}
       {p.tab === "install" && <InstallTab site={site} appUrl={p.appUrl} />}
-      {p.tab === "api" && <ApiTab site={site} keys={p.keys} appUrl={p.appUrl} />}
+      {p.tab === "api" && <ApiTab site={site} keys={p.keys} stages={p.stages} appUrl={p.appUrl} />}
 
       {edit && <SiteModal site={site} onClose={() => setEdit(false)} />}
     </div>

@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Lock, Plus } from "lucide-react";
+import { FileUp, KeyRound, Lock, Plus, Webhook } from "lucide-react";
 
 import { ConfirmModal } from "@/components/ui/overlay";
 import { must, useMutate, useWorkspace } from "@/lib/workspace/context";
 import { ago } from "@/lib/format";
+import type { Stage } from "@/lib/tracking/funnel";
 import type { SiteKey, SiteRow } from "@/lib/tracking/load";
+import { WEBHOOK_PRESETS, webhookUrl } from "@/lib/tracking/sources";
+import { ImportModal } from "./import-modal";
 import { Code, CopyButton } from "./shared";
 
 type Ex = "curl" | "zapier" | "stripe" | "shopify" | "woo" | "crm";
@@ -19,7 +22,7 @@ const EXAMPLES: { id: Ex; name: string }[] = [
   { id: "crm", name: "Deals du CRM" },
 ];
 
-export function ApiTab({ site, keys, appUrl }: { site: SiteRow; keys: SiteKey[]; appUrl: string }) {
+export function ApiTab({ site, keys, stages, appUrl }: { site: SiteRow; keys: SiteKey[]; stages: Stage[]; appUrl: string }) {
   const ws = useWorkspace();
   const mutate = useMutate();
   const [name, setName] = useState("");
@@ -28,10 +31,16 @@ export function ApiTab({ site, keys, appUrl }: { site: SiteRow; keys: SiteKey[];
   const [fresh, setFresh] = useState<string | null>(null);
   const [revoke, setRevoke] = useState<SiteKey | null>(null);
   const [ex, setEx] = useState<Ex>("curl");
+  const [preset, setPreset] = useState(WEBHOOK_PRESETS[0].id);
+  const [hookType, setHookType] = useState("");
+  const [importing, setImporting] = useState(false);
   const shownKey = fresh ?? "sk_VOTRE_CLE";
   const endpoint = `${appUrl}/api/t/conversion`;
   const active = keys.filter((k) => !k.revoked_at);
   const revoked = keys.filter((k) => k.revoked_at);
+  const hook = WEBHOOK_PRESETS.find((x) => x.id === preset) ?? WEBHOOK_PRESETS[0];
+  // L'étape proposée par le préréglage si le site la porte, sinon la première
+  const hookStage = hookType || (stages.some((x) => x.key === hook.type) ? hook.type : (stages[0]?.key ?? "purchase"));
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,11 +123,71 @@ export function ApiTab({ site, keys, appUrl }: { site: SiteRow; keys: SiteKey[];
 
       <section className="card">
         <div className="card-h">
+          <h2>
+            <Webhook size={15} style={{ display: "inline", verticalAlign: -2, marginRight: 6 }} />
+            Webhook d&apos;un CRM ou d&apos;un agenda
+          </h2>
+        </div>
+        <div className="card-b trk-prose">
+          <p>
+            Ton outil sait envoyer un webhook quand un rendez-vous est pris ou qu&apos;une affaire change d&apos;étape ? Colle-lui cette adresse : chaque appel
+            compte une personne dans l&apos;étape choisie, sans passer par Zapier ni Make. Une adresse par étape à suivre.
+          </p>
+          <div className="trk-hook">
+            <label className="field">
+              <span className="label">Outil</span>
+              <select className="select" value={preset} onChange={(e) => { setPreset(e.target.value); setHookType(""); }}>
+                {WEBHOOK_PRESETS.map((x) => (
+                  <option key={x.id} value={x.id}>{x.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">Étape à compter</span>
+              <select className="select" value={hookStage} onChange={(e) => setHookType(e.target.value)}>
+                {stages.map((x) => (
+                  <option key={x.id} value={x.key}>{x.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Code lang="Adresse du webhook (méthode POST)">{webhookUrl(appUrl, shownKey, hookStage, hook.paths)}</Code>
+          <p className="faint">{hook.note}</p>
+          <p className="faint">
+            Champs lus : <code>email</code>, <code>phone</code>, <code>name</code>, <code>value</code>, <code>id</code>, <code>date</code>, <code>currency</code>. Pour
+            désigner un champ précis, ajoute son chemin à l&apos;adresse, par exemple <code>&amp;email=contact.email&amp;value=deal.amount</code>. L&apos;identifiant
+            évite de compter deux fois le même envoi.
+          </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-h">
+          <h2>
+            <FileUp size={15} style={{ display: "inline", verticalAlign: -2, marginRight: 6 }} />
+            Conversions hors ligne
+          </h2>
+          {ws.canWrite && (
+            <button type="button" className="btn btn-sm" onClick={() => setImporting(true)}>
+              Importer un fichier CSV
+            </button>
+          )}
+        </div>
+        <div className="card-b trk-prose">
+          <p>
+            Les ventes signées au téléphone, les rendez-vous honorés ou les paiements reçus hors du site s&apos;importent depuis un fichier : un export de ton CRM
+            ou un tableur. Chaque ligne est rattachée à la personne par son email ou son téléphone, puis à la publicité qui l&apos;a amenée.
+          </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-h">
           <h2>Envoyer une conversion</h2>
         </div>
         <div className="card-b trk-prose">
           <p>
-            <code>POST {endpoint}</code> avec <code>Authorization: Bearer sk_…</code>. Corps JSON : <code>email</code> ou <code>anon_id</code> (valeur de{" "}
+            <code>POST {endpoint}</code> avec <code>Authorization: Bearer sk_…</code>. Corps JSON : <code>email</code>, <code>phone</code> ou <code>anon_id</code> (valeur de{" "}
             <code>window.aos.id</code> ou du cookie <code>_aos_id</code>), <code>type</code> (purchase, lead, booking ou nom libre), <code>value</code>,{" "}
             <code>currency</code>, <code>order_id</code>, <code>ts</code> (ISO 8601 ou secondes), <code>name</code>, <code>phone</code>, <code>props</code>.
           </p>
@@ -230,6 +299,7 @@ export function ApiTab({ site, keys, appUrl }: { site: SiteRow; keys: SiteKey[];
         </div>
       </section>
 
+      {importing && <ImportModal site={site} stages={stages} onClose={() => setImporting(false)} />}
       {revoke && (
         <ConfirmModal
           title={`Révoquer la clé « ${revoke.name} » ?`}

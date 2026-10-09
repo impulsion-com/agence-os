@@ -41,6 +41,12 @@ export async function siteByPublicKey(pk: string): Promise<Site | null> {
   return site;
 }
 
+/** Site par identifiant, pour une route déjà authentifiée par la session (import CSV). */
+export async function siteById(id: string): Promise<Site | null> {
+  const { data } = await supabaseAdmin().from("tracking_sites").select(SITE_COLS).eq("id", id).maybeSingle();
+  return toSite(data);
+}
+
 /** Site par clé d'envoi (API serveur, webhooks). Pas de cache : une révocation doit être immédiate. */
 export async function siteBySecretKey(sk: string): Promise<Site | null> {
   if (!/^sk_[a-f0-9]{16,96}$/.test(sk)) return null;
@@ -367,7 +373,7 @@ function parseTs(ts: string | number | undefined) {
   return new Date(Math.min(now, Math.max(now - 400 * 864e5, d.getTime())));
 }
 
-export async function recordConversion(site: Site, input: ConversionInput, source: "api" | "stripe" = "api") {
+export async function recordConversion(site: Site, input: ConversionInput, source: "api" | "stripe" | "webhook" | "import" = "api") {
   const sb = supabaseAdmin();
   if (!input.email && !input.anon_id && !input.phone) return { ok: false as const, status: 400, error: "email, téléphone ou anon_id requis" };
   const email = input.email ? EmailSchema.safeParse(input.email) : null;

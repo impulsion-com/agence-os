@@ -23,7 +23,7 @@ const ALIASES: Record<Field, string[]> = {
 const norm = (s: string) => s.trim().toLowerCase().replace(/^﻿/, "").replace(/\s*\(.*?\)\s*$/, (m) => (m.includes("tous") ? m : "")).trim();
 
 /** Découpe une ligne CSV (guillemets gérés). */
-function splitLine(line: string, sep: string) {
+export function splitLine(line: string, sep: string) {
   const out: string[] = [];
   let cur = "";
   let q = false;

@@ -60,6 +60,12 @@ export async function loadKeys(siteId: string): Promise<SiteKey[]> {
 // ---------------------------------------------------------------------
 // Entonnoir
 // ---------------------------------------------------------------------
+export async function loadStages(siteId: string): Promise<Stage[]> {
+  const sb = await supabaseServer();
+  const { data } = await sb.from("tracking_stages").select("id, key, label, position, kind, has_value, aliases").eq("site_id", siteId).order("position");
+  return (data ?? []) as Stage[];
+}
+
 export async function loadFunnel(siteId: string, period: Period): Promise<{ stages: Stage[]; funnel: Funnel }> {
   const sb = await supabaseServer();
   const [st, agg] = await Promise.all([
