@@ -22,11 +22,13 @@ import {
   type Period,
 } from "@/lib/ads/metrics";
 import { chartSeries, groupTotals, splitTotals } from "@/lib/ads/series";
+import type { AdTreeData } from "@/lib/ads/tree";
 import type { TrackedAccount } from "@/lib/ads/types";
 import type { SiteAnalytics } from "@/lib/analytics/types";
+import { CampaignTree } from "./campaign-tree";
 import { BehaviorTab, OverviewTab, SiteTab, type DashTab } from "./company-analytics";
 import { DailyChart, ShareBars } from "./charts";
-import { CompanyMark, Crumbs, ReportsTable, SortTh, SyncButton, useSort, type ReportItem } from "./common";
+import { CompanyMark, Crumbs, ReportsTable, SyncButton, type ReportItem } from "./common";
 import { Delta, KpiCards } from "./kpi";
 import { CsvImportModal, TargetsModal } from "./modals";
 import { PeriodPicker } from "./period-picker";
@@ -63,6 +65,8 @@ interface Props {
   /** Analytics de site du client (GA4, Clarity, tracking first-party) ; null s'il n'a aucune source */
   analytics: SiteAnalytics | null;
   tab: DashTab;
+  /** détail par ensemble et publicité, chargé pour l'onglet Publicité seulement */
+  tree: AdTreeData | null;
 }
 
 // `tool` : précision masquée sur mobile, où les quatre onglets doivent tenir sur une ligne
@@ -74,9 +78,8 @@ const TABS: { id: DashTab; name: string; tool?: string; icon: typeof Globe }[] =
 ];
 
 const CHART_METRICS: Kpi[] = ["conversions", "roas", "cpa", "ctr", "cpc"];
-type CampCol = "name" | "spend" | "dspend" | "impressions" | "clicks" | "ctr" | "cpc" | "conversions" | "cpa" | "value" | "roas";
 
-export function CompanyDashboard({ period, company, accounts, rows, campaigns, prevCampaigns, targets, reports, analytics, tab }: Props) {
+export function CompanyDashboard({ period, company, accounts, rows, campaigns, prevCampaigns, targets, reports, analytics, tab, tree }: Props) {
   const ws = useWorkspace();
   const router = useRouter();
   const path = usePathname();
@@ -100,19 +103,6 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
     rows.filter((r) => r.date >= period.prevStart && r.date <= period.prevEnd),
     (r) => r.ad_account_id,
   );
-
-  const prevCamp = useMemo(() => new Map(prevCampaigns.map((c) => [`${c.ad_account_id}|${c.campaign_id}`, c])), [prevCampaigns]);
-  const { sort, toggle, apply } = useSort<CampCol>("spend");
-  const campLines = campaigns.map((c) => ({
-    ...c,
-    t: { spend: c.spend, impressions: c.impressions, clicks: c.clicks, conversions: c.conversions, value: c.conversion_value },
-    prevSpend: prevCamp.get(`${c.ad_account_id}|${c.campaign_id}`)?.spend ?? null,
-  }));
-  const sortedCamps = apply(campLines, (c, k) => {
-    if (k === "name") return c.campaign_name;
-    if (k === "dspend") return c.prevSpend ? (c.spend - c.prevSpend) / c.prevSpend : null;
-    return kpi(c.t, k as Kpi);
-  });
 
   const ga4 = analytics?.ga4 ?? null;
   const clarity = analytics?.clarity ?? null;
@@ -324,65 +314,7 @@ export function CompanyDashboard({ period, company, accounts, rows, campaigns, p
             </div>
           </div>
 
-          <div className="card rp-section">
-            <div className="card-h">
-              <h2>Campagnes</h2>
-              <span className="faint" style={{ fontSize: 12 }}>{campaigns.length} campagne{campaigns.length > 1 ? "s" : ""} actives sur la période</span>
-            </div>
-            {campaigns.length ? (
-              <div className="rp-scroll">
-                <table className="tbl rp-tbl" style={{ minWidth: 1000 }}>
-                  <thead>
-                    <tr>
-                      <SortTh k="name" sort={sort} onSort={toggle}>Campagne</SortTh>
-                      <SortTh k="spend" sort={sort} onSort={toggle} right>Dépense</SortTh>
-                      <SortTh k="dspend" sort={sort} onSort={toggle} right>Évol.</SortTh>
-                      <SortTh k="impressions" sort={sort} onSort={toggle} right>Impr.</SortTh>
-                      <SortTh k="clicks" sort={sort} onSort={toggle} right>Clics</SortTh>
-                      <SortTh k="ctr" sort={sort} onSort={toggle} right>CTR</SortTh>
-                      <SortTh k="cpc" sort={sort} onSort={toggle} right>CPC</SortTh>
-                      <SortTh k="conversions" sort={sort} onSort={toggle} right>Conv.</SortTh>
-                      <SortTh k="cpa" sort={sort} onSort={toggle} right>CPA</SortTh>
-                      <SortTh k="value" sort={sort} onSort={toggle} right>Valeur</SortTh>
-                      <SortTh k="roas" sort={sort} onSort={toggle} right>ROAS</SortTh>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedCamps.map((c) => {
-                      const a = accById.get(c.ad_account_id);
-                      return (
-                        <tr key={`${c.ad_account_id}|${c.campaign_id}`}>
-                          <td style={{ maxWidth: 320 }}>
-                            <span className="client">
-                              <span className="rp-dot" style={{ ["--c" as string]: platformColor(a?.platform ?? "other") }} title={platformName(a?.platform ?? "other")} />
-                              <span style={{ minWidth: 0 }}>
-                                <span className="trunc" style={{ display: "block", fontWeight: 500 }}>{c.campaign_name || c.campaign_id}</span>
-                                <span className="sub trunc" style={{ display: "block" }}>{a?.name}</span>
-                              </span>
-                            </span>
-                          </td>
-                          <td className="r" style={{ fontWeight: 500 }}>{fmtKpi("spend", c.spend, currency)}</td>
-                          <td className="r"><Delta metric="spend" cur={c.spend} prev={c.prevSpend} /></td>
-                          <td className="r">{fmtKpi("impressions", c.impressions, currency)}</td>
-                          <td className="r">{fmtKpi("clicks", c.clicks, currency)}</td>
-                          <td className="r">{fmtKpi("ctr", kpi(c.t, "ctr"), currency)}</td>
-                          <td className="r">{fmtKpi("cpc", kpi(c.t, "cpc"), currency)}</td>
-                          <td className="r">{fmtKpi("conversions", c.conversions, currency)}</td>
-                          <td className="r">{fmtKpi("cpa", kpi(c.t, "cpa"), currency)}</td>
-                          <td className="r">{fmtKpi("value", c.conversion_value, currency)}</td>
-                          <td className="r">{fmtKpi("roas", kpi(c.t, "roas"), currency)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="empty" style={{ padding: 32 }}>
-                <p>Aucune dépense sur la période.</p>
-              </div>
-            )}
-          </div>
+          <CampaignTree period={period} company={company} accounts={accounts} campaigns={campaigns} prevCampaigns={prevCampaigns} data={tree} />
         </>
         ))}
 

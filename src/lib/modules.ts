@@ -18,7 +18,7 @@ export interface ModuleDef {
   id: ModuleId;
   name: string;
   icon: string;
-  group: "Production" | "Commercial" | "Performance";
+  group: "Performance" | "Commercial" | "Production";
   desc: string;
   // ce que l'élève y trouve, en quelques mots
   includes: string[];
@@ -30,22 +30,40 @@ export interface ModuleDef {
 
 export const MODULES: ModuleDef[] = [
   {
-    id: "projects",
-    name: "Gestion de projet",
-    icon: "folder-kanban",
-    group: "Production",
-    desc: "Projets clients, tâches, tableau, liste, calendrier et timeline.",
-    includes: ["Projets et modèles", "Tâches et sous-tâches", "Calendrier et timeline", "Mes tâches"],
-    routes: ["/projects", "/tasks", "/my-tasks", "/calendar", "/timeline", "/overview", "/favorites"],
+    id: "reporting",
+    name: "Reporting",
+    icon: "chart-column",
+    group: "Performance",
+    desc: "Meta Ads et Google Ads synchronisés, tableaux de bord et rapports clients.",
+    includes: ["Connexions Meta et Google", "Tableau de bord par client", "Rapports partagés"],
+    routes: ["/reporting", "/settings/integrations"],
   },
   {
     id: "creatives",
-    name: "Bibliothèque créa",
+    name: "Créas",
     icon: "palette",
-    group: "Production",
-    desc: "Concepts, angles, hooks, briefs créateurs et performance par annonce.",
+    group: "Performance",
+    desc: "Performance de chaque publicité, fatigue, concepts gagnants et veille concurrentielle.",
     includes: ["Concepts et variantes", "Kanban de production", "Analyse créative et fatigue", "Veille concurrentielle et recommandations IA"],
     routes: ["/creatives"],
+  },
+  {
+    id: "tracking",
+    name: "Attribution",
+    icon: "mouse-pointer-click",
+    group: "Performance",
+    desc: "Script first-party, parcours clients et ROAS réel face aux plateformes.",
+    includes: ["Script de tracking", "Modèles d'attribution", "Parcours clients"],
+    routes: ["/tracking"],
+  },
+  {
+    id: "links",
+    name: "Liens trackés",
+    icon: "link",
+    group: "Performance",
+    desc: "Générateur d'UTM, liens courts, QR codes et statistiques de clics.",
+    includes: ["Générateur UTM", "Raccourcisseur et QR codes", "Conventions UTM"],
+    routes: ["/links", "/settings/utm"],
   },
   {
     id: "crm",
@@ -94,31 +112,13 @@ export const MODULES: ModuleDef[] = [
     routes: ["/portal"],
   },
   {
-    id: "reporting",
-    name: "Reporting",
-    icon: "chart-column",
-    group: "Performance",
-    desc: "Meta Ads et Google Ads synchronisés, tableaux de bord et rapports clients.",
-    includes: ["Connexions Meta et Google", "Tableau de bord par client", "Rapports partagés"],
-    routes: ["/reporting", "/settings/integrations"],
-  },
-  {
-    id: "tracking",
-    name: "Attribution",
-    icon: "mouse-pointer-click",
-    group: "Performance",
-    desc: "Script first-party, parcours clients et ROAS réel face aux plateformes.",
-    includes: ["Script de tracking", "Modèles d'attribution", "Parcours clients"],
-    routes: ["/tracking"],
-  },
-  {
-    id: "links",
-    name: "Liens trackés",
-    icon: "link",
-    group: "Performance",
-    desc: "Générateur d'UTM, liens courts, QR codes et statistiques de clics.",
-    includes: ["Générateur UTM", "Raccourcisseur et QR codes", "Conventions UTM"],
-    routes: ["/links", "/settings/utm"],
+    id: "projects",
+    name: "Gestion de projet",
+    icon: "folder-kanban",
+    group: "Production",
+    desc: "Projets clients, tâches, tableau, liste, calendrier et timeline.",
+    includes: ["Projets et modèles", "Tâches et sous-tâches", "Calendrier et timeline", "Mes tâches"],
+    routes: ["/projects", "/tasks", "/my-tasks", "/calendar", "/timeline", "/overview", "/favorites"],
   },
 ];
 
@@ -127,24 +127,23 @@ export const ALL_MODULES = MODULES.map((m) => m.id);
 
 // Profils de départ proposés à la création d'un espace et dans les réglages
 export const PRESETS: { id: string; name: string; desc: string; icon: string; modules: ModuleId[] }[] = [
-  { id: "all", name: "Agence complète", desc: "Tout, de la prospection au reporting", icon: "sparkles", modules: ALL_MODULES },
-  {
-    id: "freelance",
-    name: "Media buyer freelance",
-    desc: "Trouver des clients, livrer, prouver les résultats",
-    icon: "target",
-    modules: ["projects", "crm", "proposals", "onboarding", "booking", "portal", "reporting", "links"],
-  },
-  { id: "crm", name: "CRM seul", desc: "Pipeline, contacts, propositions et rendez-vous", icon: "handshake", modules: ["crm", "proposals", "booking"] },
-  { id: "projects", name: "Gestion de projet seule", desc: "Projets, tâches, calendrier et timeline", icon: "folder-kanban", modules: ["projects"] },
-  { id: "tracking", name: "Tracking OS", desc: "Le suivi et l'attribution seuls, avec n'importe quel CRM", icon: "mouse-pointer-click", modules: ["reporting", "tracking", "links"] },
   {
     id: "performance",
-    name: "Pilotage de la performance",
-    desc: "Reporting, attribution, liens et créas",
+    name: "Media buyer",
+    desc: "Reporting, analyse créa, attribution et liens trackés",
     icon: "chart-column",
-    modules: ["reporting", "tracking", "links", "creatives"],
+    modules: ["reporting", "creatives", "tracking", "links"],
   },
+  {
+    id: "freelance",
+    name: "Media buyer + clients",
+    desc: "La performance, plus le CRM, les propositions et le portail client",
+    icon: "target",
+    modules: ["reporting", "creatives", "tracking", "links", "crm", "proposals", "onboarding", "booking", "portal"],
+  },
+  { id: "tracking", name: "Tracking OS", desc: "Le suivi et l'attribution seuls, avec n'importe quel CRM", icon: "mouse-pointer-click", modules: ["reporting", "tracking", "links"] },
+  { id: "all", name: "Agence complète", desc: "Tout, gestion de projet comprise", icon: "sparkles", modules: ALL_MODULES },
+  { id: "crm", name: "CRM seul", desc: "Pipeline, contacts, propositions et rendez-vous", icon: "handshake", modules: ["crm", "proposals", "booking"] },
 ];
 
 /** Liste nettoyée : ids connus uniquement ; null / vide en base = tout activé (espaces existants). */

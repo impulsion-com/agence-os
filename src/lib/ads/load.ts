@@ -4,6 +4,7 @@ import { loadSiteAnalytics, loadSiteOverview } from "@/lib/analytics/load";
 import type { SiteAnalytics } from "@/lib/analytics/types";
 import { supabaseServer } from "@/lib/supabase/server";
 import { withPrevious, type Period } from "./metrics";
+import { aggregateAds, type AdAgg, type AdInfo, type AdTreeData } from "./tree";
 import type { TrackedAccount } from "./types";
 
 type SB = Awaited<ReturnType<typeof supabaseServer>>;
@@ -122,6 +123,57 @@ export async function loadCompany(ws: string, companyId: string, period: Period)
     prevCampaigns: prevCampaigns.map(num),
     targets: (targets.data ?? []).map((t) => ({ ...t, target: Number(t.target) })),
     reports: (reports.data ?? []) as ReportListItem[],
+  };
+}
+
+/**
+ * Détail par ensemble et par publicité d'un client (onglet Publicité) : métriques de la
+ * période et de la précédente, fiches des annonces, ventes suivies et concepts créa.
+ */
+export async function loadAdTree(ws: string, companyId: string, period: Period): Promise<AdTreeData> {
+  const sb = await supabaseServer();
+  const [rows, accounts, links] = await Promise.all([
+    paged<AdAgg & { date: string }>((a, b) =>
+      sb.rpc("creative_ad_daily", { p_ws: ws, p_start: period.prevStart, p_end: period.end, p_company: companyId }).range(a, b) as never,
+    ),
+    sb.from("ad_accounts").select("id").eq("workspace_id", ws).eq("company_id", companyId),
+    sb.from("creative_ads").select("concept_id, ad_id").eq("workspace_id", ws),
+  ]);
+  const ids = (accounts.data ?? []).map((a) => a.id);
+  const info = ids.length
+    ? await paged<AdInfo & { ad_account_id: string; ad_id: string }>((a, b) =>
+        sb
+          .from("ad_ads")
+          .select("ad_account_id, ad_id, name, adset_name, status, format, thumbnail_url, frequency_7d")
+          .in("ad_account_id", ids)
+          .order("ad_id")
+          .range(a, b) as never,
+      )
+    : [];
+  const num = (r: AdAgg & { date: string }) => ({
+    ...r,
+    spend: Number(r.spend),
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    conversions: Number(r.conversions),
+    conversion_value: Number(r.conversion_value),
+  });
+  const cur = aggregateAds(rows.filter((r) => r.date >= period.start).map(num));
+  const prev = aggregateAds(rows.filter((r) => r.date <= period.prevEnd).map(num));
+
+  let attribution: AdTreeData["attribution"] = {};
+  const keys = [...new Set(cur.map((a) => a.ad_id))];
+  if (keys.length) {
+    // ventes suivies facultatives : sans tracking (ou en cas d'erreur) les colonnes restent masquées
+    const { data, error } = await sb.rpc("creative_ad_attribution", { p_ws: ws, p_start: period.start, p_end: period.end, p_ad_keys: keys });
+    if (!error) attribution = Object.fromEntries((data ?? []).map((r) => [r.ad_key, { sales: Number(r.sales), revenue: Number(r.revenue) }]));
+  }
+  return {
+    ads: cur,
+    prevAds: prev,
+    info: Object.fromEntries(info.map(({ ad_account_id, ad_id, ...r }) => [`${ad_account_id}|${ad_id}`, { ...r, frequency_7d: r.frequency_7d === null ? null : Number(r.frequency_7d) }])),
+    attribution,
+    concepts: Object.fromEntries((links.data ?? []).map((l) => [l.ad_id, l.concept_id])),
   };
 }
 

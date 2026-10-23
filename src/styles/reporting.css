@@ -352,3 +352,14 @@ ul.rp-steps { list-style: disc; }
 @media print {
   .rp-insights li { break-inside: avoid; }
 }
+
+/* Détail campagne > ensemble > publicité */
+.tr-tbl .tr-tog { width: 18px; height: 18px; flex-shrink: 0; display: inline-grid; place-items: center; border-radius: 4px; color: var(--text-3); }
+.tr-tbl button.tr-tog:hover { background: var(--surface-3); color: var(--text); }
+.tr-tbl .tr-thumb { width: 30px; height: 30px; flex-shrink: 0; border-radius: 6px; object-fit: cover; background: var(--surface-3); }
+.tr-tbl tr.tr-adset td { background-color: color-mix(in srgb, var(--surface-3) 35%, transparent); }
+.tr-tbl tr.tr-ad td { background-color: color-mix(in srgb, var(--surface-3) 60%, transparent); }
+.tr-tbl .tr-att { background-image: linear-gradient(var(--accent-soft), var(--accent-soft)); }
+.tr-tbl .tr-concept { margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); color: var(--text-3); padding: 2px 6px; border-radius: 99px; border: 1px solid var(--border); }
+.tr-tbl .tr-concept:hover { color: var(--text); border-color: var(--border-strong); }
+.tr-foot { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: var(--fs-xs); padding: 10px 16px 14px; margin: 0; }

@@ -17,7 +17,7 @@ export function OnboardingForm() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [touched, setTouched] = useState(false);
-  const [modules, setModules] = useState<ModuleId[]>(PRESETS.find((p) => p.id === "freelance")!.modules);
+  const [modules, setModules] = useState<ModuleId[]>(PRESETS.find((p) => p.id === "performance")!.modules);
   const [demo, setDemo] = useState(true);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);

@@ -247,8 +247,8 @@ kbd, .kbd {
 .side-item:hover { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
 .side-item.on { background: var(--surface); color: var(--text); font-weight: 500; box-shadow: var(--shadow-card); }
 .side-item .count { margin-left: auto; }
-.side-add-mod { margin-top: 12px; color: var(--text-3); border: 1px dashed var(--border-strong); }
-.side-add-mod:hover { color: var(--text); border-color: var(--text-4); }
+.side-mods { color: var(--accent); background: var(--accent-soft); font-weight: 500; margin-bottom: 2px; }
+.side-mods:hover { color: var(--text); }
 .side-item.sub { padding-left: 30px; height: 28px; font-size: var(--fs-sm); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {

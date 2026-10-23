@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { MODULE, MODULES, PRESETS, withRequirements, withoutModule, type ModuleId } from "@/lib/modules";
 import "@/styles/modules.css";
 
-const GROUPS = ["Production", "Commercial", "Performance"] as const;
+const GROUPS = ["Performance", "Commercial", "Production"] as const;
 const same = (a: ModuleId[], b: ModuleId[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /**
