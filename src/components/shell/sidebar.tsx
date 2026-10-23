@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronsUpDown, PanelLeft, Plus, Star } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, PanelLeft, Plus, SlidersHorizontal, Star } from "lucide-react";
 
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
@@ -134,18 +134,12 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <kbd style={{ marginLeft: "auto" }}>⌘K</kbd>
         </button>
 
-        {(has("projects") || has("creatives")) && (
-          <Section id="prod" title="Production">
-            {has("projects") && (
-              <>
-                <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
-                <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
-                <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
-                <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
-                <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
-              </>
-            )}
-            {has("creatives") && <Item href={`${b}/creatives`} icon="palette" label="Bibliothèque créa" />}
+        {(has("reporting") || has("creatives") || has("tracking") || has("links")) && (
+          <Section id="perf" title="Performance">
+            {has("reporting") && <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />}
+            {has("creatives") && <Item href={`${b}/creatives`} icon="palette" label="Créas" />}
+            {has("tracking") && <Item href={`${b}/tracking`} icon="mouse-pointer-click" label="Attribution" />}
+            {has("links") && <Item href={`${b}/links`} icon="link" label="Liens trackés" />}
           </Section>
         )}
 
@@ -162,11 +156,13 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           </Section>
         )}
 
-        {(has("reporting") || has("tracking") || has("links")) && (
-          <Section id="perf" title="Performance">
-            {has("reporting") && <Item href={`${b}/reporting`} icon="chart-column" label="Reporting" />}
-            {has("tracking") && <Item href={`${b}/tracking`} icon="mouse-pointer-click" label="Attribution" />}
-            {has("links") && <Item href={`${b}/links`} icon="link" label="Liens trackés" />}
+        {has("projects") && (
+          <Section id="prod" title="Production">
+            <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
+            <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
+            <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
+            <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
+            <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
           </Section>
         )}
 
@@ -221,15 +217,16 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         </Section>
         )}
 
-        {ws.isAdmin && ws.modules.length < MODULES.length && (
-          <Link href={`${b}/settings/modules`} className="side-item side-add-mod">
-            <Plus size={15} />
-            <span>Ajouter des modules</span>
-          </Link>
-        )}
       </div>
 
       <div style={{ borderTop: "1px solid var(--border)", padding: 8 }}>
+        {ws.isAdmin && (
+          <Link href={`${b}/settings/modules`} className="side-item side-mods">
+            <SlidersHorizontal size={16} aria-hidden />
+            <span className="trunc">Choisir mes modules</span>
+            {ws.modules.length < MODULES.length && <span className="count">{ws.modules.length}/{MODULES.length}</span>}
+          </Link>
+        )}
         <Item href={`${b}/archive`} icon="archive" label="Archives" />
         <Item href={`${b}/settings`} icon="settings" label="Réglages" />
         <Menu
