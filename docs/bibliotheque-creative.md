@@ -25,16 +25,29 @@ Filtres : client, angle, format, niveau de conscience, persona, statut, platefor
 - **Hook rate** = vues de 3 secondes / impressions : la part des gens que la vidéo arrête. Meta uniquement (Google ne publie pas les vues de 3 s).
 - **Hold rate** = ThruPlay / vues de 3 secondes : la part de ceux qui restent jusqu'à 15 s ou la fin.
 - **ROAS réel** = chiffre d'affaires attribué par le [tracking first-party](./tracking.md) / dépense. Modèle : dernier point de contact portant un identifiant d'annonce (paramètre `aos_ad`) dans la fenêtre du site, visiteurs fusionnés par email. Achats et deals gagnés.
-- **Fatigue** : CTR et ROAS des 7 derniers jours comparés au meilleur 7 jours glissant des 60 derniers jours, plus la fréquence 7 j (Meta). Fatigue si le CTR baisse d'au moins 30 %, ou d'au moins 20 % avec un ROAS en baisse d'au moins 25 % ou une fréquence d'au moins 3,5. À surveiller dès 15 % de baisse de CTR, 25 % de ROAS ou une fréquence de 3. Il faut au moins 14 jours de diffusion.
+- **Fatigue** : CTR, ROAS et hook rate des 7 derniers jours comparés au meilleur 7 jours glissant des 60 derniers jours, CPM comparé à son creux, plus la fréquence 7 j (Meta). Fatigue si le CTR baisse d'au moins 30 %, ou d'au moins 20 % avec un ROAS en baisse d'au moins 25 % ou une fréquence d'au moins 3,5, **et** si le CTR était déjà en baisse d'au moins 15 % une semaine plus tôt (une seule mauvaise semaine ne suffit pas, comme chez Creaboost) ; sinon « à surveiller, à confirmer la semaine prochaine ». À surveiller dès 15 % de baisse de CTR, 25 % de ROAS ou une fréquence de 3. Il faut au moins 14 jours de diffusion.
+- **Scores 1 à 100** (façon Motion) : Accroche (hook rate), Rétention (hold rate), Clic (CTR) et Ventes (ROAS réel du tracking dès qu'une annonce du périmètre a une vente suivie, sinon ROAS déclaré, sinon CPA). C'est le rang centile de l'annonce parmi celles du client au-dessus du seuil de dépense, pas un benchmark extérieur ; il faut au moins 3 annonces comparables. Couleurs : 80 et plus, 60 à 80, 40 à 60, moins de 40.
+- **Rétention** : la part des personnes arrêtées par la vidéo (vues de 3 s) encore là à 25, 50, 75 % et à la fin (quartiles Meta).
 
 ## L'analyse
 
 Choisis un client et un **seuil de dépense minimum** (50 € par défaut) : sous ce seuil, une créa n'entre ni dans le classement ni dans les verdicts, pour éviter les faux gagnants.
 
-- Classement des annonces par ROAS, CPA, CTR, hook rate ou hold rate.
+- **Classement de la semaine** : top 10 par dépense sur les 7 derniers jours finis, rang gagné ou perdu, dépense face à la semaine d'avant, mouvement (nouvelle, en hausse au-delà de +30 %, en baisse sous −30 %, en pause), semaines passées dans le top 10 sur les 8 dernières, scores et courbe de rétention.
+- Classement des annonces par ROAS, CPA, CTR, hook rate ou hold rate, avec leurs scores.
+- **Comparer** par n'importe quel champ de la nomenclature (format, angle, accroche, créateur…) ou par **même créa** : les annonces qui diffusent la même vidéo ou la même image (identifiant Meta `video_id` ou `image_hash`, vidéo YouTube côté Google) sont jugées ensemble.
 - Performance agrégée par angle, format, hook (celui de la variante si l'annonce y est rattachée) et persona ou niveau de conscience, avec l'écart à la moyenne du client.
 - Tableau de fatigue avec la courbe du CTR glissant.
 - Suggestions : angle ou format qui surperforme (à décliner en nouveaux hooks), qui sous-performe, concepts en test prêts à passer Gagnant ou Perdant, annonces qui s'essoufflent, hook rate faible, bon hook mais hold faible, dépendance à une seule créa, niveaux de conscience non couverts.
+
+## La nomenclature
+
+Les propriétés d'une annonce se lisent dans son nom, sans avoir à la lier à un concept. Deux styles :
+
+- **Préfixes** (façon Motion) : `F:UGC | A:Routine | H:Problème | C:Léa | Routine du soir`. Sans aucun réglage, tout préfixe court suivi de `:` ou `=` est reconnu. Le texte sans préfixe devient le nom affiché.
+- **Positions** (façon Creaboost) : `UGC_Routine_Problème_V2`, le 1er champ est le format, le 2e l'angle, etc.
+
+Bouton **Nomenclature** (admins) dans le bloc Comparer : style, séparateur, champs et leur nom, avec un aperçu sur tes annonces. Réglage par espace (`workspaces.creative_naming`).
 
 ## Le verdict d'un test
 

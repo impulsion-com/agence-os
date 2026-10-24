@@ -451,3 +451,28 @@ button.crv-status:hover { filter: brightness(0.96); }
 .crv-in-help ul, .crv-rc-opp .cols ul { list-style: disc; }
 .crv-rc { display: flex; flex-direction: column; gap: 16px; }
 .crv-rc > .crv-an-controls { margin-bottom: 0; }
+
+/* Analyse façon Motion : scores, classement de la semaine, rétention, comparaison */
+.crv-scores { display: inline-flex; gap: 3px; }
+.crv-score { display: inline-flex; align-items: baseline; gap: 2px; min-width: 34px; justify-content: center; padding: 2px 5px; border-radius: 5px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.crv-score b { font-size: 9px; font-weight: 600; opacity: 0.7; }
+.crv-score.top { background: color-mix(in srgb, var(--green) 26%, transparent); color: var(--green); }
+.crv-score.good { background: var(--green-soft); color: var(--green); }
+.crv-score.mid { background: var(--amber-soft); color: var(--amber); }
+.crv-score.low { background: var(--red-soft); color: var(--red); }
+.crv-score.none { background: var(--surface-3); color: var(--text-3); }
+.crv-ret { display: inline-flex; align-items: flex-end; gap: 2px; height: 22px; }
+.crv-ret i { display: block; width: 7px; height: var(--h); border-radius: 2px 2px 0 0; background: var(--viz-1, var(--accent)); opacity: 0.85; }
+.crv-moves { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 10px; }
+.crv-move { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 500; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.crv-move b { font-variant-numeric: tabular-nums; }
+.crv-move.new { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.crv-move.scaling { background: var(--green-soft); color: var(--green); }
+.crv-move.declining { background: var(--amber-soft); color: var(--amber); }
+.crv-move.paused { background: var(--red-soft); color: var(--red); }
+.crv-rk { display: inline-flex; align-items: center; margin-left: 4px; font-size: 10px; font-weight: 600; }
+.crv-rk.up { color: var(--green); }
+.crv-rk.down { color: var(--red); }
+.crv-noimg { width: 34px; height: 34px; border-radius: 6px; background: var(--surface-3); flex-shrink: 0; }
+.crv-naming-prev { display: grid; gap: 6px; font-size: var(--fs-sm); }
+.crv-naming-prev li { display: grid; gap: 1px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }

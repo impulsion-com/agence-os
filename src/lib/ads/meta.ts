@@ -267,7 +267,7 @@ interface AdNode {
   effective_status?: string;
   campaign?: { id: string; name?: string };
   adset?: { id: string; name?: string };
-  creative?: { id: string; object_type?: string; thumbnail_url?: string; image_url?: string; video_id?: string; product_set_id?: string };
+  creative?: { id: string; object_type?: string; thumbnail_url?: string; image_url?: string; image_hash?: string; video_id?: string; product_set_id?: string };
 }
 
 const FORMAT: Record<string, string> = { VIDEO: "video", PHOTO: "image", SHARE: "image", STATUS: "other", APPLICATION: "other" };
@@ -284,7 +284,7 @@ export async function metaAdCatalog(token: string, accountId: string, adIds: str
     const res = await graph<Record<string, AdNode>>(
       `${GRAPH}/?${qs({
         ids: ids.join(","),
-        fields: "id,name,effective_status,campaign{id,name},adset{id,name},creative{id,object_type,thumbnail_url,image_url,video_id,product_set_id}",
+        fields: "id,name,effective_status,campaign{id,name},adset{id,name},creative{id,object_type,thumbnail_url,image_url,image_hash,video_id,product_set_id}",
         access_token: token,
       })}`,
     );
@@ -330,6 +330,7 @@ export async function metaAdCatalog(token: string, accountId: string, adIds: str
       thumbnail_url: (format === "image" ? c?.image_url : null) || (c?.id ? thumbs.get(c.id) : null) || c?.thumbnail_url || c?.image_url || null,
       frequency_7d: f ? Math.round(f.frequency * 100) / 100 : null,
       reach_7d: f ? f.reach : null,
+      asset_key: c?.video_id ? `v:${c.video_id}` : c?.image_hash ? `i:${c.image_hash}` : null,
     };
   });
 }

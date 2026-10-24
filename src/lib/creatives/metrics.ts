@@ -23,10 +23,12 @@ export interface CTotals {
   v3h: number;
   thru: number;
   p25: number;
+  p50: number;
+  p75: number;
   p100: number;
 }
 
-export const CZERO: CTotals = { spend: 0, impressions: 0, clicks: 0, conversions: 0, value: 0, vImp: 0, v3: 0, v3h: 0, thru: 0, p25: 0, p100: 0 };
+export const CZERO: CTotals = { spend: 0, impressions: 0, clicks: 0, conversions: 0, value: 0, vImp: 0, v3: 0, v3h: 0, thru: 0, p25: 0, p50: 0, p75: 0, p100: 0 };
 
 export function cadd(t: CTotals, r: AdDay): CTotals {
   const has3 = r.video_3s !== null && r.video_3s !== undefined;
@@ -42,6 +44,8 @@ export function cadd(t: CTotals, r: AdDay): CTotals {
     v3h: t.v3h + (hasT ? Number(r.video_3s) : 0),
     thru: t.thru + (hasT ? Number(r.thruplay) : 0),
     p25: t.p25 + Number(r.video_p25 ?? 0),
+    p50: t.p50 + Number(r.video_p50 ?? 0),
+    p75: t.p75 + Number(r.video_p75 ?? 0),
     p100: t.p100 + Number(r.video_p100 ?? 0),
   };
 }
@@ -57,6 +61,8 @@ export const cmerge = (a: CTotals, b: CTotals): CTotals => ({
   v3h: a.v3h + b.v3h,
   thru: a.thru + b.thru,
   p25: a.p25 + b.p25,
+  p50: a.p50 + b.p50,
+  p75: a.p75 + b.p75,
   p100: a.p100 + b.p100,
 });
 
@@ -206,6 +212,12 @@ export interface Fatigue {
   level: FatigueLevel;
   ctrDrop: number | null; // en %, positif = baisse
   roasDrop: number | null;
+  /** Hook rate vs son pic, en % (positif = baisse) */
+  hookDrop: number | null;
+  /** CPM vs son creux, en % (positif = hausse) */
+  cpmRise: number | null;
+  /** La baisse du CTR était déjà là une semaine plus tôt : la fatigue est confirmée */
+  confirmed: boolean;
   frequency: number | null;
   days: number; // jours de diffusion
   /** CTR sur 7 j glissants (courbe) */
@@ -219,6 +231,9 @@ const MIN_WINDOW_IMPRESSIONS = 1500;
  * Compare la fenêtre des 7 derniers jours au meilleur 7 jours glissant des 60 derniers jours.
  * Fatigue : CTR en baisse d'au moins 30 %, ou d'au moins 20 % avec un ROAS en baisse d'au moins 25 %
  * ou une fréquence 7 j ≥ 3,5. À surveiller : baisse de 15 % (CTR) ou 25 % (ROAS), ou fréquence ≥ 3.
+ * Comme Creaboost, une seule semaine ne suffit pas : la fatigue n'est confirmée que si le CTR était
+ * déjà en baisse d'au moins 15 % sur la fenêtre finie 7 jours plus tôt ; sinon elle reste « à surveiller ».
+ * Hook rate en baisse et CPM en hausse complètent le diagnostic.
  */
 export function fatigue(rows: AdDay[], end: string, frequency: number | null = null): Fatigue {
   const e = parseDay(end)!;
@@ -236,26 +251,39 @@ export function fatigue(rows: AdDay[], end: string, frequency: number | null = n
   });
   const ctrSeries = win.map((t) => (t ? ck(t, "ctr") : null));
   const last = win[win.length - 1];
-  const base: Fatigue = { level: "ok", ctrDrop: null, roasDrop: null, frequency, days: active, ctrSeries, reason: "" };
+  const base: Fatigue = { level: "ok", ctrDrop: null, roasDrop: null, hookDrop: null, cpmRise: null, confirmed: false, frequency, days: active, ctrSeries, reason: "" };
   if (!last || active < 14) {
     if (frequency !== null && frequency >= 3.5) return { ...base, level: "watch", reason: `Fréquence 7 j de ${fmtN(frequency)}` };
     return { ...base, reason: active < 14 ? "Moins de 14 jours de diffusion" : "Volume insuffisant sur 7 jours" };
   }
   const peak = (k: CKpi) => Math.max(...win.map((t) => (t ? (ck(t, k) ?? 0) : 0)));
-  const drop = (k: CKpi) => {
+  const drop = (k: CKpi, at: CTotals | null = last) => {
     const p = peak(k);
-    const c = ck(last, k);
+    const c = at ? ck(at, k) : null;
     return p > 0 && c !== null ? Math.max(0, ((p - c) / p) * 100) : null;
   };
   const ctrDrop = drop("ctr");
   const roasDrop = drop("roas");
+  const hookDrop = drop("hook");
+  const cpms = win.map((t) => (t ? ck(t, "cpm") : null)).filter((x): x is number => x !== null && x > 0);
+  const cpmNow = ck(last, "cpm");
+  const cpmRise = cpms.length && cpmNow !== null ? Math.max(0, ((cpmNow - Math.min(...cpms)) / Math.min(...cpms)) * 100) : null;
+  const weekBefore = win[win.length - 8] ?? null;
+  const confirmed = (drop("ctr", weekBefore) ?? 0) >= 15;
   const c = ctrDrop ?? 0;
   const r = roasDrop ?? 0;
   const f = frequency ?? 0;
-  const level: FatigueLevel = c >= 30 || (c >= 20 && (r >= 25 || f >= 3.5)) ? "fatigued" : c >= 15 || r >= 25 || f >= 3 ? "watch" : "ok";
-  const drops = [ctrDrop !== null && ctrDrop >= 1 ? `CTR −${Math.round(ctrDrop)} %` : null, roasDrop !== null && roasDrop >= 1 ? `ROAS −${Math.round(roasDrop)} %` : null].filter(Boolean);
-  const parts = [drops.length ? `${drops.join(", ")} vs son pic` : null, frequency ? `fréquence ${fmtN(frequency)}` : null].filter(Boolean);
-  return { level, ctrDrop, roasDrop, frequency, days: active, ctrSeries, reason: parts.join(", ") };
+  const raw: FatigueLevel = c >= 30 || (c >= 20 && (r >= 25 || f >= 3.5)) ? "fatigued" : c >= 15 || r >= 25 || f >= 3 ? "watch" : "ok";
+  const level: FatigueLevel = raw === "fatigued" && !confirmed ? "watch" : raw;
+  const pct = (v: number | null, sign: string, label: string) => (v !== null && v >= 10 ? `${label} ${sign}${Math.round(v)} %` : null);
+  const drops = [pct(ctrDrop, "−", "CTR"), pct(roasDrop, "−", "ROAS"), pct(hookDrop, "−", "hook rate")].filter(Boolean);
+  const parts = [
+    drops.length ? `${drops.join(", ")} vs son pic` : null,
+    pct(cpmRise, "+", "CPM") ? `${pct(cpmRise, "+", "CPM")} vs son creux` : null,
+    frequency ? `fréquence ${fmtN(frequency)}` : null,
+    raw === "fatigued" && !confirmed ? "à confirmer la semaine prochaine" : null,
+  ].filter(Boolean);
+  return { level, ctrDrop, roasDrop, hookDrop, cpmRise, confirmed, frequency, days: active, ctrSeries, reason: parts.join(", ") };
 }
 
 const fmtN = (v: number) => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(v);

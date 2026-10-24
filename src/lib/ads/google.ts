@@ -350,6 +350,7 @@ export async function googleAdCatalog(token: string, customerId: string, adIds: 
         thumbnail_url: null,
         frequency_7d: null,
         reach_7d: null,
+        asset_key: null,
       });
     }
   }
@@ -365,7 +366,10 @@ export async function googleAdCatalog(token: string, customerId: string, adIds: 
       const yt = new Map(assets.map((a) => [a.asset.resourceName, a.asset.youtubeVideoAsset?.youtubeVideoId]));
       for (const a of out) {
         const id = yt.get(videoOf.get(a.ad_id) ?? "");
-        if (id) a.thumbnail_url = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+        if (id) {
+          a.thumbnail_url = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+          a.asset_key = `yt:${id}`;
+        }
       }
     } catch {
       /* vignette facultative */

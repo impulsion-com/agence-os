@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
           // Portail client : après les créas (trois sont envoyées en validation), puis les fichiers partagés
           () => admin.rpc("_demo_portal", { ws }),
           () => seedDemoPortalFiles(admin, ws, user.id),
+          // En dernier : noms d'annonces avec nomenclature (le tracking a calculé ses identifiants sur les noms d'origine)
+          () => admin.rpc("_demo_creative_naming", { ws }),
         ]
       : [
           () => removeDemoPortalFiles(admin, ws),

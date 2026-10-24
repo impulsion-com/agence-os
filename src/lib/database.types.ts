@@ -162,6 +162,7 @@ export type Database = {
           ad_id: string
           adset_id: string | null
           adset_name: string
+          asset_key: string | null
           campaign_id: string | null
           campaign_name: string
           format: string | null
@@ -178,6 +179,7 @@ export type Database = {
           ad_id: string
           adset_id?: string | null
           adset_name?: string
+          asset_key?: string | null
           campaign_id?: string | null
           campaign_name?: string
           format?: string | null
@@ -194,6 +196,7 @@ export type Database = {
           ad_id?: string
           adset_id?: string | null
           adset_name?: string
+          asset_key?: string | null
           campaign_id?: string | null
           campaign_name?: string
           format?: string | null
@@ -4642,6 +4645,7 @@ export type Database = {
           accent: string
           created_at: string
           created_by: string | null
+          creative_naming: Json | null
           currency: string
           id: string
           modules: string[] | null
@@ -4652,6 +4656,7 @@ export type Database = {
           accent?: string
           created_at?: string
           created_by?: string | null
+          creative_naming?: Json | null
           currency?: string
           id?: string
           modules?: string[] | null
@@ -4662,6 +4667,7 @@ export type Database = {
           accent?: string
           created_at?: string
           created_by?: string | null
+          creative_naming?: Json | null
           currency?: string
           id?: string
           modules?: string[] | null
@@ -4777,6 +4783,7 @@ export type Database = {
       _demo_analytics: { Args: { ws: string }; Returns: number }
       _demo_bk_day: { Args: { n: number }; Returns: string }
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
+      _demo_creative_naming: { Args: { ws: string }; Returns: undefined }
       _demo_creatives: { Args: { ws: string }; Returns: number }
       _demo_intel: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }

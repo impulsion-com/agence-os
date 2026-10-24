@@ -35,6 +35,8 @@ export interface Workspace {
   currency: string;
   // modules activés (null = tous) : voir src/lib/modules.ts
   modules: string[] | null;
+  // lecture des noms d'annonces (null = préfixes détectés) : voir src/lib/creatives/naming.ts
+  creative_naming?: unknown;
   created_at: string;
 }
 

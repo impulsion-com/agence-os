@@ -67,7 +67,11 @@ L'édition se choisit à l'installation (`NEXT_PUBLIC_EDITION`). Ajouter les mod
 
 **Creative strategy**
 - Bibliothèque de concepts (angle, hook, niveau de conscience, format), kanban de production,
-  briefs créateurs, performance par annonce (hook rate, hold rate, ROAS réel), détection de fatigue.
+  briefs créateurs, performance par annonce (hook rate, hold rate, ROAS réel), détection de fatigue
+  confirmée sur deux semaines.
+- Analyse façon Motion : scores 1 à 100 (accroche, rétention, clic, ventes), classement de la semaine
+  avec ses mouvements, courbe de rétention vidéo, comparaison par nomenclature des noms d'annonces
+  (préfixes ou positions) et par créa diffusée dans plusieurs annonces.
 
 **Claude et IA**
 - Serveur MCP : Claude Code, Claude Desktop ou Cowork lisent et pilotent tâches, CRM, propositions,

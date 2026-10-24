@@ -30,6 +30,9 @@ import {
   type Dim,
   type Group,
 } from "@/lib/creatives/metrics";
+import { scoreAds, weeklyBoard } from "@/lib/creatives/board";
+import { displayName, readNaming } from "@/lib/creatives/naming";
+import { Compare, ScoreChips, WeeklyBoard, type BoardAd } from "./board";
 import type { LibraryData, Model } from "./model";
 import { Cover, FatigueBadge, MiniLine } from "./parts";
 
@@ -73,6 +76,7 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
   const inScope = (k: string) => scope === "all" || companyAds.get(k) === scope;
   const co = scope === "all" ? null : ws.company(scope);
 
+  const naming = useMemo(() => readNaming(ws.workspace.creative_naming), [ws.workspace.creative_naming]);
   const a = useMemo(() => {
     const byAd = new Map([...model.byAd].filter(([k]) => inScope(k)));
     const baseline = [...byAd.values()].reduce(cmerge, CZERO);
@@ -85,24 +89,37 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
       awareness: groupBy("awareness", byAd, model.idx, model.concepts),
       persona: groupBy("persona", byAd, model.idx, model.concepts),
     };
-    const ads = [...byAd].map(([k, t]) => {
-      const link = model.idx.byAd.get(k);
+    const mk = (k: string, t: CTotals): BoardAd => {
       const cat = model.idx.catalog.get(k);
       const row = model.rowsByAd.get(k)?.[0];
+      const adId = k.split("|")[1];
+      const att = data.attribution[adId];
+      const raw = cat?.name || row?.ad_name || adId;
       return {
         key: k,
-        adId: k.split("|")[1],
-        name: cat?.name || row?.ad_name || k.split("|")[1],
+        adId,
+        name: displayName(raw, naming),
+        raw,
         campaign: cat?.campaign_name ?? "",
         thumb: cat?.thumbnail_url ?? null,
-        conceptId: link?.concept_id ?? null,
+        conceptId: model.idx.byAd.get(k)?.concept_id ?? null,
+        assetKey: cat?.asset_key ?? null,
         t,
-        fatigue: model.adFatigue.get(k)!,
+        real: att ? { sales: att.sales, revenue: att.revenue } : null,
       };
-    });
-    return { byAd, baseline, concepts, conceptTotals, groups, ads };
+    };
+    const ads = [...byAd].map(([k, t]) => ({ ...mk(k, t), fatigue: model.adFatigue.get(k)! }));
+    // Classement de la semaine : toujours les 14 derniers jours, quelle que soit la période choisie
+    const rowsInScope = new Map([...model.rowsByAd].filter(([k]) => inScope(k)));
+    const board = weeklyBoard(rowsInScope, model.end);
+    const boardAds = new Map(board.map((r) => [r.key, byAd.has(r.key) ? ads.find((x) => x.key === r.key)! : mk(r.key, CZERO)]));
+    const scores = scoreAds(
+      ads.map((x) => ({ key: x.key, t: x.t, realRevenue: x.real?.revenue ?? null })),
+      min,
+    );
+    return { byAd, baseline, concepts, conceptTotals, groups, ads, board, boardAds, scores };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, data.concepts, scope, companyAds]);
+  }, [model, data.concepts, data.attribution, scope, companyAds, min, naming]);
 
   const tips = useMemo(
     () =>
@@ -225,6 +242,8 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
         )}
       </section>
 
+      <WeeklyBoard rows={a.board} ads={a.boardAds} scores={a.scores} currency={currency} end={model.end} />
+
       <section className="card crv-sec" aria-labelledby="crv-rank-h">
         <div className="card-h">
           <h2 id="crv-rank-h">Classement des annonces</h2>
@@ -239,6 +258,7 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
                 <th className="crv-rank">#</th>
                 <th>Annonce</th>
                 <th>Concept</th>
+                <th title="Scores 1 à 100 face aux autres annonces : Accroche, Rétention, Clic, Ventes">Scores</th>
                 <th className="r">Dépense</th>
                 <th className="r">ROAS</th>
                 <th className="r" title="Chiffre d'affaires attribué par ton tracking / dépense">ROAS réel</th>
@@ -273,6 +293,9 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
                     <td className="trunc" style={{ maxWidth: 200 }}>
                       {c ? <Link href={`${ws.base}/creatives/${c.id}`} className="muted">{c.title}</Link> : <span className="fainter">Non liée</span>}
                     </td>
+                    <td>
+                      <ScoreChips scores={a.scores.get(x.key)} />
+                    </td>
                     <td className="r">{fmtCk("spend", x.t.spend, currency)}</td>
                     <Cell k="roas" t={x.t} refV={ref("roas")} currency={currency} strong={metric === "roas"} />
                     <td className="r real">{att && x.t.spend ? <>{fmtCk("roas", att.revenue / x.t.spend)}<small>{att.sales} v.</small></> : <span className="fainter">–</span>}</td>
@@ -286,13 +309,15 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
               })}
               {!ranked.length && (
                 <tr>
-                  <td colSpan={11} className="faint" style={{ textAlign: "center", height: 60 }}>Aucune annonce au-dessus du seuil de dépense.</td>
+                  <td colSpan={12} className="faint" style={{ textAlign: "center", height: 60 }}>Aucune annonce au-dessus du seuil de dépense.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <Compare ads={a.ads} naming={naming} baseline={a.baseline} min={min} currency={currency} />
 
       <div className="crv-an-grid">
         <DimCard title="Par angle" dim="angle" groups={a.groups.angle} baseline={a.baseline} min={min} currency={currency} />
@@ -325,11 +350,11 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
       <section className="card crv-sec" aria-labelledby="crv-fat-h">
         <div className="card-h">
           <h2 id="crv-fat-h">Fatigue créative</h2>
-          <span className="faint" style={{ fontSize: 12 }}>CTR et ROAS sur 7 jours glissants comparés à leur pic (60 derniers jours), fréquence 7 j</span>
+          <span className="faint" style={{ fontSize: 12 }}>CTR, ROAS et hook rate sur 7 jours glissants comparés à leur pic (60 jours), CPM à son creux ; confirmée si la baisse était déjà là une semaine plus tôt</span>
         </div>
         {fatigued.length ? (
           <div style={{ overflowX: "auto" }}>
-            <table className="tbl crv-tbl" style={{ minWidth: 760 }}>
+            <table className="tbl crv-tbl" style={{ minWidth: 900 }}>
               <thead>
                 <tr>
                   <th>Annonce</th>
@@ -337,6 +362,8 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
                   <th>CTR 7 j glissants</th>
                   <th className="r">CTR vs pic</th>
                   <th className="r">ROAS vs pic</th>
+                  <th className="r">Hook vs pic</th>
+                  <th className="r">CPM vs creux</th>
                   <th className="r">Fréquence 7 j</th>
                   <th className="r">Dépense</th>
                 </tr>
@@ -355,6 +382,8 @@ export function Analysis({ data, model, period, company, min }: { data: LibraryD
                     <td><MiniLine values={x.fatigue.ctrSeries} width={120} label={`Évolution du CTR de ${x.name}`} /></td>
                     <td className="r">{x.fatigue.ctrDrop !== null ? `−${Math.round(x.fatigue.ctrDrop)} %` : "–"}</td>
                     <td className="r">{x.fatigue.roasDrop !== null ? `−${Math.round(x.fatigue.roasDrop)} %` : "–"}</td>
+                    <td className="r">{x.fatigue.hookDrop !== null ? `−${Math.round(x.fatigue.hookDrop)} %` : "–"}</td>
+                    <td className="r">{x.fatigue.cpmRise !== null ? `+${Math.round(x.fatigue.cpmRise)} %` : "–"}</td>
                     <td className="r">{x.fatigue.frequency !== null ? new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(x.fatigue.frequency) : "–"}</td>
                     <td className="r">{fmtCk("spend", x.t.spend, currency)}</td>
                   </tr>

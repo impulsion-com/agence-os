@@ -102,6 +102,14 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
   `scripts/test-tracking-sources.mjs`, `scripts/test-tracking-campaigns.mjs` et `scripts/test-tracking-ext.mjs`
   (parcours réels, serveur de dev lancé).
 
+## Analyse créa
+
+- Modules purs testés sous Node (aucun import d'exécution, types seulement) : `src/lib/creatives/naming.ts`
+  (nomenclature des noms d'annonces, réglage `workspaces.creative_naming`) et `src/lib/creatives/board.ts` (scores
+  1 à 100, classement de la semaine, rétention, même créa via `ad_ads.asset_key`). Tests :
+  `node --experimental-strip-types --test src/lib/creatives/tests/*.test.mjs`.
+- `fatigue()` (`metrics.ts`) ne déclare « Fatigue » que si la baisse du CTR était déjà là une semaine plus tôt.
+
 ## Développement
 
 - `npm run dev` puis http://localhost:3000. Variables : voir `.env.example`.
