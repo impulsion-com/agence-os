@@ -2180,6 +2180,24 @@ export type Database = {
           },
         ]
       }
+      cron_calls: {
+        Row: {
+          created_at: string
+          request_id: number
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          request_id: number
+          url: string
+        }
+        Update: {
+          created_at?: string
+          request_id?: number
+          url?: string
+        }
+        Relationships: []
+      }
       deals: {
         Row: {
           billing: string
@@ -4742,6 +4760,20 @@ export type Database = {
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
       _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
       _clear_demo_portal: { Args: { ws: string }; Returns: undefined }
+      _cron_call: {
+        Args: { p_timeout_ms: number; p_url: string }
+        Returns: number
+      }
+      _cron_jobs: {
+        Args: never
+        Returns: {
+          name: string
+          path: string
+          schedule: string
+          timeout_ms: number
+        }[]
+      }
+      _cron_url: { Args: { p_command: string }; Returns: string }
       _demo_analytics: { Args: { ws: string }; Returns: number }
       _demo_bk_day: { Args: { n: number }; Returns: string }
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
@@ -4925,6 +4957,14 @@ export type Database = {
           manual_ok: boolean
         }[]
       }
+      cron_install: {
+        Args: { p_app_url: string; p_secret: string }
+        Returns: Json
+      }
+      cron_ping: { Args: never; Returns: number }
+      cron_response: { Args: { p_request: number }; Returns: Json }
+      cron_status: { Args: never; Returns: Json }
+      cron_uninstall: { Args: never; Returns: undefined }
       demo_task: {
         Args: {
           descr?: string
@@ -5241,6 +5281,7 @@ export type Database = {
       restore_onboarding_templates: { Args: { ws: string }; Returns: undefined }
       revoke_api_token: { Args: { p_id: string }; Returns: undefined }
       revoke_tracking_key: { Args: { p_id: string }; Returns: undefined }
+      schema_version: { Args: never; Returns: number }
       seed_onboarding: { Args: { ws: string }; Returns: undefined }
       seed_utm_presets: { Args: { ws: string }; Returns: undefined }
       seed_workspace_defaults: { Args: { ws: string }; Returns: undefined }

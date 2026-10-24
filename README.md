@@ -7,6 +7,17 @@ une interface sobre et rapide, pensée pour le quotidien d'une agence.
 Projet libre (licence MIT) porté par [Impulsion](https://impulsion.com) pour ses élèves :
 chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 
+## Trois éditions, un seul code
+
+| Édition | Pour qui | Modules |
+| --- | --- | --- |
+| **Agence OS Tracking** | le media buyer qui veut piloter sa performance | Reporting Meta et Google, attribution first-party, analyse créa, liens trackés |
+| **Agence OS Freelance** | le freelance qui veut signer et suivre ses clients | CRM, propositions signées en ligne, rendez-vous, onboarding, portail client |
+| **Agence OS Projet** | l'agence qui produit pour ses clients | Projets, tâches, calendrier, timeline, portail client |
+
+L'édition se choisit à l'installation (`NEXT_PUBLIC_EDITION`). Ajouter les modules d'une autre
+édition se fait plus tard d'un clic dans **Réglages > Modules** : mêmes données, même base.
+
 ## Ce que ça fait
 
 **Gestion de projet**
@@ -81,8 +92,10 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 
 ## Démarrer
 
-Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase + Vercel, gratuit,
-environ 30 minutes. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md), [portail client](docs/portail-client.md), [analytics GA4 et Clarity](docs/analytics.md).
+Suis le guide [docs/deploiement.md](docs/deploiement.md) : Supabase (gratuit) et un hébergement
+Node.js (Hostinger, VPS ou Vercel Pro), environ 30 à 45 minutes, l'essentiel fait par Claude Code.
+Ensuite, **Réglages > Installation** donne pour chaque connexion un prompt Claude in Chrome et un
+bouton qui teste le résultat. Pour brancher Meta Ads et Google Ads : [docs/reporting.md](docs/reporting.md). Guides : [tracking](docs/tracking.md), [liens](docs/liens.md), [signature](docs/signature-electronique.md), [onboarding client](docs/onboarding-client.md), [rendez-vous](docs/rendez-vous.md), [bibliothèque créa](docs/bibliotheque-creative.md), [MCP](docs/mcp.md), [portail client](docs/portail-client.md), [analytics GA4 et Clarity](docs/analytics.md).
 
 ## Stack technique
 

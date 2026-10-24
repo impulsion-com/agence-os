@@ -125,7 +125,8 @@ export const MODULES: ModuleDef[] = [
 export const MODULE = Object.fromEntries(MODULES.map((m) => [m.id, m])) as Record<ModuleId, ModuleDef>;
 export const ALL_MODULES = MODULES.map((m) => m.id);
 
-// Profils de départ proposés à la création d'un espace et dans les réglages
+// Profils de départ proposés à la création d'un espace et dans les réglages.
+// Les trois premiers correspondent aux éditions (src/lib/edition.ts) : garder les mêmes listes.
 export const PRESETS: { id: string; name: string; desc: string; icon: string; modules: ModuleId[] }[] = [
   {
     id: "performance",
@@ -135,6 +136,14 @@ export const PRESETS: { id: string; name: string; desc: string; icon: string; mo
     modules: ["reporting", "creatives", "tracking", "links"],
   },
   {
+    id: "commercial",
+    name: "Freelance",
+    desc: "CRM, propositions, rendez-vous, onboarding et portail client",
+    icon: "handshake",
+    modules: ["crm", "proposals", "onboarding", "booking", "portal"],
+  },
+  { id: "projet", name: "Gestion de projet", desc: "Projets, tâches, calendrier, timeline et portail client", icon: "folder-kanban", modules: ["projects", "portal"] },
+  {
     id: "freelance",
     name: "Media buyer + clients",
     desc: "La performance, plus le CRM, les propositions et le portail client",
@@ -143,7 +152,6 @@ export const PRESETS: { id: string; name: string; desc: string; icon: string; mo
   },
   { id: "tracking", name: "Tracking OS", desc: "Le suivi et l'attribution seuls, avec n'importe quel CRM", icon: "mouse-pointer-click", modules: ["reporting", "tracking", "links"] },
   { id: "all", name: "Agence complète", desc: "Tout, gestion de projet comprise", icon: "sparkles", modules: ALL_MODULES },
-  { id: "crm", name: "CRM seul", desc: "Pipeline, contacts, propositions et rendez-vous", icon: "handshake", modules: ["crm", "proposals", "booking"] },
 ];
 
 /** Liste nettoyée : ids connus uniquement ; null / vide en base = tout activé (espaces existants). */

@@ -49,10 +49,7 @@ Réglages > Page et types > « Intégrer sur ton site » : une iframe `?embed=1`
 
 Facultatifs : `RESEND_API_KEY` et `EMAIL_FROM`. Confirmation, report, annulation (prospect et membre), rappels 24 h et 1 h avant.
 
-Rappels : `GET /api/cron/booking-reminders` avec `Authorization: Bearer <CRON_SECRET>`, toutes les 15 minutes.
-
-- Vercel Pro : ajoute `{ "path": "/api/cron/booking-reminders", "schedule": "*/15 * * * *" }` dans `vercel.json`.
-- Vercel Hobby (crons quotidiens seulement) : un cron externe (cron-job.org, GitHub Actions, pg_cron + pg_net) qui appelle l'URL avec l'en-tête.
+Rappels : `GET /api/cron/booking-reminders` avec `Authorization: Bearer <CRON_SECRET>`, toutes les 15 minutes, programmé dans Supabase depuis **Réglages > Installation > Tâches planifiées** (pg_cron + pg_net, chez n'importe quel hébergeur).
 
 ## Cal.com
 

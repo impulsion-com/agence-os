@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { ModuleSelector } from "@/components/modules/module-selector";
 import { runDemo } from "@/lib/demo";
+import { currentEdition } from "@/lib/edition";
 import { PRESETS, type ModuleId } from "@/lib/modules";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { slugify } from "@/lib/format";
@@ -17,7 +18,10 @@ export function OnboardingForm() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [touched, setTouched] = useState(false);
-  const [modules, setModules] = useState<ModuleId[]>(PRESETS.find((p) => p.id === "performance")!.modules);
+  const [modules, setModules] = useState<ModuleId[]>(
+    // L'édition installée choisit le profil de départ ; l'édition complète part sur la performance
+    currentEdition().id === "complete" ? PRESETS.find((p) => p.id === "performance")!.modules : currentEdition().modules,
+  );
   const [demo, setDemo] = useState(true);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);

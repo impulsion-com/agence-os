@@ -5,6 +5,7 @@ import { appUrl, integrationStatus, redirectUri } from "@/lib/ads/config";
 import type { ConnectionPublic, TrackedAccount } from "@/lib/ads/types";
 import { loadAnalyticsSources } from "@/lib/analytics/load";
 import { supabaseServer } from "@/lib/supabase/server";
+import { cronStatus } from "@/lib/setup/checks";
 import { loadWorkspace } from "@/lib/workspace/load";
 
 export const metadata: Metadata = { title: "Connexions" };
@@ -14,7 +15,7 @@ export default async function IntegrationsPage({ params, searchParams }: PagePro
   const sp = await searchParams;
   const { workspace } = await loadWorkspace(slug);
   const sb = await supabaseServer();
-  const [conns, accounts, sources] = await Promise.all([
+  const [conns, accounts, sources, jobs] = await Promise.all([
     sb
       .from("ad_connections_public")
       .select("id, workspace_id, platform, label, expires_at, created_at, accounts, accounts_refreshed_at, last_error")
@@ -26,6 +27,7 @@ export default async function IntegrationsPage({ params, searchParams }: PagePro
       .eq("workspace_id", workspace.id)
       .order("name"),
     loadAnalyticsSources(workspace.id),
+    cronStatus(),
   ]);
   const st = integrationStatus();
   const str = (v: string | string[] | undefined) => (typeof v === "string" ? v.slice(0, 400) : undefined);
@@ -35,7 +37,8 @@ export default async function IntegrationsPage({ params, searchParams }: PagePro
         meta: st.meta,
         google: st.google,
         ga4: st.ga4,
-        cron: st.cron,
+        // Active = secret posé ET tâches programmées dans Supabase (les crons de vercel.json sont retirés)
+        cron: st.cron && !!jobs?.length && jobs.every((j) => j.scheduled),
         redirect: { meta: redirectUri("meta"), google: redirectUri("google"), ga4: redirectUri("ga4") },
         cronPath: `${appUrl()}/api/cron/sync`,
       }}

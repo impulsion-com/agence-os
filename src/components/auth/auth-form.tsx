@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import "@/styles/portal.css";
 import { Logo } from "@/components/shell/sidebar";
-import { APP_NAME } from "@/lib/constants";
+import { currentEdition } from "@/lib/edition";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 /**
@@ -33,7 +33,7 @@ export function AuthShell({ title, sub, children, foot, brand }: { title: string
           ) : (
             <>
               <Logo size={26} />
-              {APP_NAME}
+              {currentEdition().name}
             </>
           )}
         </div>

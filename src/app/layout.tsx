@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ToastProvider } from "@/components/ui/toast";
-import { APP_NAME } from "@/lib/constants";
+import { currentEdition } from "@/lib/edition";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const APP_NAME = currentEdition().name;
 
 export const metadata: Metadata = {
   title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
