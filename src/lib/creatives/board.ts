@@ -26,8 +26,11 @@ export interface ScoreInput {
   realRevenue?: number | null;
 }
 
+/** Mesure du score Ventes, la même pour tout le périmètre (on ne compare pas un ROAS à un CPA). */
+export type ConvertBasis = "real" | "roas" | "cpa";
+
 /** Valeur brute d'un score (plus haut = mieux), null si non calculable. */
-export function scoreValue(k: ScoreKey, x: ScoreInput, useReal: boolean): number | null {
+export function scoreValue(k: ScoreKey, x: ScoreInput, basis: ConvertBasis): number | null {
   const t = x.t;
   switch (k) {
     case "hook":
@@ -37,9 +40,10 @@ export function scoreValue(k: ScoreKey, x: ScoreInput, useReal: boolean): number
     case "click":
       return t.impressions > 0 ? t.clicks / t.impressions : null;
     case "convert":
+      if (!(t.spend > 0)) return null;
       // Sans vente suivie, on ne sait pas : pas de score plutôt qu'un faux zéro (tracking partiel)
-      if (useReal) return t.spend > 0 && x.realRevenue !== null && x.realRevenue !== undefined ? x.realRevenue / t.spend : null;
-      if (t.spend > 0 && t.value > 0) return t.value / t.spend;
+      if (basis === "real") return x.realRevenue !== null && x.realRevenue !== undefined ? x.realRevenue / t.spend : null;
+      if (basis === "roas") return t.value / t.spend;
       return t.conversions > 0 ? -(t.spend / t.conversions) : null;
   }
 }
@@ -51,12 +55,13 @@ export function scoreValue(k: ScoreKey, x: ScoreInput, useReal: boolean): number
  */
 export function scoreAds(ads: ScoreInput[], minSpend: number): Map<string, Scores> {
   const eligible = ads.filter((a) => a.t.spend >= minSpend);
-  // Conversion : le ROAS réel dès qu'une annonce du périmètre a une vente suivie
-  const useReal = eligible.some((a) => (a.realRevenue ?? 0) > 0);
+  // Ventes : le ROAS réel dès qu'une annonce du périmètre a une vente suivie, sinon le ROAS déclaré
+  // si au moins une annonce a une valeur de conversion, sinon le CPA (génération de prospects)
+  const basis: ConvertBasis = eligible.some((a) => (a.realRevenue ?? 0) > 0) ? "real" : eligible.some((a) => a.t.value > 0) ? "roas" : "cpa";
   const out = new Map<string, Scores>();
   for (const a of ads) out.set(a.key, { hook: null, watch: null, click: null, convert: null });
   for (const k of Object.keys(SCORE_LABEL) as ScoreKey[]) {
-    const vals = eligible.map((a) => ({ key: a.key, v: scoreValue(k, a, useReal) })).filter((x): x is { key: string; v: number } => x.v !== null);
+    const vals = eligible.map((a) => ({ key: a.key, v: scoreValue(k, a, basis) })).filter((x): x is { key: string; v: number } => x.v !== null);
     if (vals.length < 3) continue;
     for (const x of vals) {
       const below = vals.filter((y) => y.v < x.v).length;
@@ -75,9 +80,9 @@ export const band = (s: number): Band => (s >= 80 ? "top" : s >= 60 ? "good" : s
 // ---------------------------------------------------------------------
 // Classement de la semaine
 // ---------------------------------------------------------------------
-export type Move = "new" | "scaling" | "declining" | "paused" | "steady";
+export type Move = "new" | "back" | "scaling" | "declining" | "paused" | "steady";
 
-export const MOVE_LABEL: Record<Move, string> = { new: "Nouvelle", scaling: "En hausse", declining: "En baisse", paused: "En pause", steady: "Stable" };
+export const MOVE_LABEL: Record<Move, string> = { new: "Nouvelle", back: "Reprise", scaling: "En hausse", declining: "En baisse", paused: "En pause", steady: "Stable" };
 
 export interface BoardRow {
   key: string;
@@ -111,7 +116,8 @@ function ranks(spend: Map<string, number>) {
 
 /**
  * Semaine glissante finissant à `end` (7 jours) comparée à la précédente : rang par dépense,
- * mouvement (+30 % = en hausse, −30 % = en baisse, plus rien = en pause, première dépense = nouvelle)
+ * mouvement (+30 % = en hausse, −30 % = en baisse, plus rien = en pause, première dépense = nouvelle,
+ * rien la semaine d'avant mais des dépenses plus anciennes = reprise)
  * et nombre de semaines dans le top 10 sur les 8 dernières.
  */
 export function weeklyBoard(rowsByAd: Map<string, DayRow[]>, end: string, size = 10): BoardRow[] {
@@ -125,9 +131,19 @@ export function weeklyBoard(rowsByAd: Map<string, DayRow[]>, end: string, size =
   for (const key of keys) {
     const spend = spendByWeek[0].get(key) ?? 0;
     const prevSpend = spendByWeek[1].get(key) ?? 0;
-    const before = spendIn(rowsByAd.get(key) ?? [], "0000-01-01", weeks[0].start === weeks[0].end ? weeks[0].start : shift(weeks[0].start, -1));
+    const before = spendIn(rowsByAd.get(key) ?? [], "0000-01-01", shift(weeks[0].start, -1));
     const move: Move =
-      spend === 0 ? "paused" : before === 0 ? "new" : prevSpend > 0 && spend >= prevSpend * 1.3 ? "scaling" : spend <= prevSpend * 0.7 ? "declining" : "steady";
+      spend === 0
+        ? "paused"
+        : before === 0
+          ? "new"
+          : prevSpend === 0
+            ? "back"
+            : spend >= prevSpend * 1.3
+              ? "scaling"
+              : spend <= prevSpend * 0.7
+                ? "declining"
+                : "steady";
     rows.push({ key, rank: cur.get(key) ?? null, prevRank: prev.get(key) ?? null, spend, prevSpend, move, weeksTop: rankByWeek.filter((r) => (r.get(key) ?? 99) <= size).length });
   }
   return rows

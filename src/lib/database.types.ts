@@ -4761,6 +4761,7 @@ export type Database = {
     Functions: {
       _clear_demo_analytics: { Args: { ws: string }; Returns: undefined }
       _clear_demo_booking: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_creative_naming: { Args: { ws: string }; Returns: undefined }
       _clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       _clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }

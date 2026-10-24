@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         ]
       : [
           () => removeDemoPortalFiles(admin, ws),
+          () => admin.rpc("_clear_demo_creative_naming", { ws }),
           () => sb.rpc("clear_demo_portal", { ws }),
           () => sb.rpc("clear_demo_booking", { ws }),
           () => sb.rpc("clear_demo_onboarding", { ws }),

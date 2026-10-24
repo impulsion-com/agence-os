@@ -32,28 +32,37 @@ export function readNaming(raw: unknown): NamingConfig {
   return { mode: r.mode === "position" ? "position" : "prefix", separator: typeof r.separator === "string" ? r.separator : "", fields };
 }
 
-/** Séparateur le plus probable d'un nom : celui qui découpe en plus de morceaux. */
+const PREFIX = /^(\p{L}[\p{L}\p{N}]{0,14})\s*[:=]\s*(.+)$/u;
+
+/**
+ * Séparateur le plus probable d'un nom : celui qui donne le plus de propriétés « préfixe:valeur »
+ * (un « _ » dans une valeur ne doit pas l'emporter sur les « | » entre les champs), puis le plus de morceaux.
+ */
 export function guessSeparator(name: string): string {
   let best = "";
-  let n = 1;
+  let score = [0, 1];
   for (const s of SEPARATORS) {
-    const c = name.split(s).length;
-    if (c > n) {
-      n = c;
+    const parts = name.split(s);
+    const sc = [parts.filter((p) => PREFIX.test(p.trim())).length, parts.length];
+    if (sc[0] > score[0] || (sc[0] === score[0] && sc[1] > score[1])) {
+      score = sc;
       best = s;
     }
   }
   return best;
 }
 
-const split = (name: string, sep: string) => (sep ? name.split(sep) : [name]).map((x) => x.trim()).filter(Boolean);
-const PREFIX = /^([\p{L}\p{N}]{1,15})\s*[:=]\s*(.+)$/u;
+/** Morceaux d'un nom ; en mode positions, les morceaux vides comptent (« UGC__V2 » : le 2e champ est vide). */
+const split = (name: string, sep: string, keepEmpty = false) => {
+  const parts = (sep ? name.split(sep) : [name]).map((x) => x.trim());
+  return keepEmpty ? parts : parts.filter(Boolean);
+};
 
 /** Propriétés lues dans un nom : libellé du champ → valeur. */
 export function parseAdName(name: string, cfg: NamingConfig = DEFAULT_NAMING): Record<string, string> {
   const out: Record<string, string> = {};
   const sep = cfg.separator || guessSeparator(name);
-  const parts = split(name, sep);
+  const parts = split(name, sep, cfg.mode === "position");
   if (cfg.mode === "position") {
     for (const f of cfg.fields) {
       const i = Number(f.key) - 1;

@@ -69,3 +69,17 @@ begin
 end $$;
 revoke execute on function public._demo_creative_naming(uuid) from anon, authenticated, public;
 grant execute on function public._demo_creative_naming(uuid) to service_role;
+
+-- Retrait de la démo : on oublie la nomenclature de démo, sinon les vraies annonces seraient lues
+-- avec ses seuls préfixes F, A, H, C et son séparateur imposé.
+create or replace function public._clear_demo_creative_naming(ws uuid)
+returns void language sql security definer set search_path = public as $$
+  update workspaces set creative_naming = null
+  where id = ws and creative_naming = jsonb_build_object(
+      'mode', 'prefix', 'separator', '|',
+      'fields', jsonb_build_array(
+        jsonb_build_object('key', 'F', 'label', 'Format'), jsonb_build_object('key', 'A', 'label', 'Angle'),
+        jsonb_build_object('key', 'H', 'label', 'Accroche'), jsonb_build_object('key', 'C', 'label', 'Créateur')))
+$$;
+revoke execute on function public._clear_demo_creative_naming(uuid) from anon, authenticated, public;
+grant execute on function public._clear_demo_creative_naming(uuid) to service_role;

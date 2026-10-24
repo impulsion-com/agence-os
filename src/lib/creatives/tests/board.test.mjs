@@ -90,3 +90,19 @@ test("scores : sans vente suivie, pas de score de conversion", () => {
   assert.equal(s.get("d").convert, null);
   assert.equal(s.get("c").convert, 100);
 });
+
+test("relecture : Ventes sur une seule mesure, reprise après une pause", () => {
+  // Sans valeur de conversion nulle part : CPA pour tous (le moins cher gagne)
+  const lead = [
+    { key: "a", t: T({ spend: 100, conversions: 50 }) },
+    { key: "b", t: T({ spend: 100, conversions: 10 }) },
+    { key: "c", t: T({ spend: 100, conversions: 20 }) },
+  ];
+  assert.equal(scoreAds(lead, 0).get("a").convert, 100);
+  // Une seule annonce avec valeur : ROAS pour tous, ROAS 0 pour les autres
+  const mixed = [...lead, { key: "d", t: T({ spend: 100, value: 10 }) }];
+  assert.equal(scoreAds(mixed, 0).get("d").convert, 100);
+  const day = (date, spend) => ({ date, spend });
+  const b = weeklyBoard(new Map([["x", [day("2026-09-01", 50), day("2026-10-20", 40)]], ["y", [day("2026-10-20", 10)]]]), "2026-10-23");
+  assert.equal(b.find((r) => r.key === "x").move, "back");
+});

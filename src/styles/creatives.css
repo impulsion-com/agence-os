@@ -466,7 +466,7 @@ button.crv-status:hover { filter: brightness(0.96); }
 .crv-moves { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 10px; }
 .crv-move { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: var(--fs-2xs); font-weight: 500; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .crv-move b { font-variant-numeric: tabular-nums; }
-.crv-move.new { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.crv-move.new, .crv-move.back { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .crv-move.scaling { background: var(--green-soft); color: var(--green); }
 .crv-move.declining { background: var(--amber-soft); color: var(--amber); }
 .crv-move.paused { background: var(--red-soft); color: var(--red); }

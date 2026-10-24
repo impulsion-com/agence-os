@@ -256,9 +256,10 @@ export function fatigue(rows: AdDay[], end: string, frequency: number | null = n
     if (frequency !== null && frequency >= 3.5) return { ...base, level: "watch", reason: `Fréquence 7 j de ${fmtN(frequency)}` };
     return { ...base, reason: active < 14 ? "Moins de 14 jours de diffusion" : "Volume insuffisant sur 7 jours" };
   }
-  const peak = (k: CKpi) => Math.max(...win.map((t) => (t ? (ck(t, k) ?? 0) : 0)));
-  const drop = (k: CKpi, at: CTotals | null = last) => {
-    const p = peak(k);
+  // Pic sur les fenêtres jusqu'à `upto` incluse : la baisse d'il y a une semaine se mesure au pic connu à ce moment-là
+  const peak = (k: CKpi, upto = win.length - 1) => Math.max(...win.slice(0, upto + 1).map((t) => (t ? (ck(t, k) ?? 0) : 0)));
+  const drop = (k: CKpi, at: CTotals | null = last, upto = win.length - 1) => {
+    const p = peak(k, upto);
     const c = at ? ck(at, k) : null;
     return p > 0 && c !== null ? Math.max(0, ((p - c) / p) * 100) : null;
   };
@@ -269,7 +270,7 @@ export function fatigue(rows: AdDay[], end: string, frequency: number | null = n
   const cpmNow = ck(last, "cpm");
   const cpmRise = cpms.length && cpmNow !== null ? Math.max(0, ((cpmNow - Math.min(...cpms)) / Math.min(...cpms)) * 100) : null;
   const weekBefore = win[win.length - 8] ?? null;
-  const confirmed = (drop("ctr", weekBefore) ?? 0) >= 15;
+  const confirmed = (drop("ctr", weekBefore, win.length - 8) ?? 0) >= 15;
   const c = ctrDrop ?? 0;
   const r = roasDrop ?? 0;
   const f = frequency ?? 0;

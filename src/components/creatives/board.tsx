@@ -103,7 +103,7 @@ export function WeeklyBoard({ rows, ads, scores, currency, end }: { rows: BoardR
       {rows.length ? (
         <>
           <div className="crv-moves">
-            {(["new", "scaling", "declining", "paused"] as const).map((m) => (
+            {(["new", "back", "scaling", "declining", "paused"] as const).map((m) => (
               <span key={m} className={`crv-move ${m}`}>
                 {MOVE_LABEL[m]} <b>{counts[m] ?? 0}</b>
               </span>
@@ -185,7 +185,7 @@ export function Compare({ ads, naming, baseline, min, currency }: { ads: BoardAd
   const fields = useMemo(() => namingFields(names, naming), [names, naming]);
   const coverage = namingCoverage(names, naming);
   const [field, setField] = useState<string | null>(null);
-  const current = field ?? fields[0]?.label ?? ASSET;
+  const current = field === ASSET || fields.some((f) => f.label === field) ? field! : (fields[0]?.label ?? ASSET);
 
   const groups = useMemo(() => {
     if (current === ASSET) {

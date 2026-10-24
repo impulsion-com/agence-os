@@ -44,3 +44,11 @@ test("nom lisible sans les propriétés", async () => {
   assert.equal(displayName("F:UGC | A:Routine"), "F:UGC | A:Routine");
   assert.equal(displayName("UGC_Routine", { mode: "position", separator: "_", fields: [] }), "UGC_Routine");
 });
+
+test("relecture : séparateur, positions vides, heures et ratios", () => {
+  assert.equal(guessSeparator("F:UGC | A:Routine_du_soir_v2"), "|");
+  assert.deepEqual(parseAdName("F:UGC | A:Routine_du_soir_v2"), { F: "UGC", A: "Routine_du_soir_v2" });
+  const pos = readNaming({ mode: "position", separator: "_", fields: [{ key: "2", label: "Angle" }, { key: "3", label: "Accroche" }] });
+  assert.deepEqual(parseAdName("UGC__Problème_V2", pos), { Accroche: "Problème" });
+  assert.deepEqual(parseAdName("Live 12:30 | 4:5 | F:UGC"), { F: "UGC" });
+});
