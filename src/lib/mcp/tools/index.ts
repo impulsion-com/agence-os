@@ -14,7 +14,6 @@ import { linkTools } from "./links";
 import { portalTools } from "./portal";
 import { projectTools } from "./projects";
 import { proposalTools } from "./proposals";
-import { prospectTools } from "./prospects";
 import { reportingTools } from "./reporting";
 import { taskTools } from "./tasks";
 import { workspaceTools } from "./workspace";
@@ -25,7 +24,6 @@ export const DOMAINS: { label: string; tools: AnyTool[]; module?: ModuleId }[] =
   { label: "Projets", tools: projectTools, module: "projects" },
   { label: "Tâches", tools: taskTools, module: "projects" },
   { label: "CRM", tools: crmTools, module: "crm" },
-  { label: "Prospection", tools: prospectTools, module: "crm" },
   { label: "Propositions", tools: proposalTools, module: "proposals" },
   { label: "Reporting", tools: reportingTools, module: "reporting" },
   { label: "Attribution", tools: attributionTools, module: "tracking" },

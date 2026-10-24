@@ -77,11 +77,6 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 - Pages publiques (proposition `/p/`, onboarding `/f/`, rendez-vous `/b/`, rapport `/r/`, liens `/l/`) :
   lecture et écriture uniquement via routes serveur en service role ou RPC `security definer`.
 - MCP : `/api/mcp`, outils dans `src/lib/mcp/tools/` (un fichier par domaine, voir `docs/mcp.md`).
-- Prospection (`/crm/prospects`, module CRM, migration `0110_prospects.sql`) : fiches Google Maps importées par CSV
-  (export gosom/google-maps-scraper) ou par l'outil MCP `import_prospects`, séparées de `companies` jusqu'à
-  « Ajouter au CRM ». Lecture et nettoyage purs dans `src/lib/prospects-parse.ts` (tests :
-  `node --experimental-strip-types --test src/lib/tests/prospects.test.mjs`), écritures dans `src/lib/prospects.ts`,
-  partagées par l'écran et le MCP. Voir `docs/prospection.md`.
 - Tracking (« Tracking OS », plan dans `docs/plan-tracking.md`) : les clés d'envoi sont dans `tracking_keys`
   (hash SHA-256 seulement, colonne `key_hash` illisible côté client) et se créent ou se révoquent par les RPC
   `create_tracking_key` / `revoke_tracking_key`. L'entonnoir d'un site est dans `tracking_stages` ; un
