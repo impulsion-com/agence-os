@@ -168,7 +168,7 @@ export function Integrations({ status, connections, accounts, sources, notice }:
               <div className="rp-note warn">
                 <Info size={15} />
                 <span>
-                  Ajoute la variable <code>CRON_SECRET</code> (une longue chaîne aléatoire) dans ton hébergement, puis programme la synchro dans Supabase depuis{" "}
+                  Ajoute la variable <code>CRON_SECRET</code> (une longue chaîne aléatoire) dans ton hébergement si elle manque, puis programme la synchro dans Supabase depuis{" "}
                   <Link href={`${ws.base}/settings/installation`}>Réglages &gt; Installation</Link> : elle appellera <code>{status.cronPath}</code> tous les jours à 5 h (UTC), chez n&apos;importe quel
                   hébergeur.
                 </span>

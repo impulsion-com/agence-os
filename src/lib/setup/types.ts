@@ -11,7 +11,9 @@ export interface CronJob {
   schedule: string;
   scheduled: boolean;
   url: string | null;
+  /** Dernier appel lancé par la tâche */
   last_run: string | null;
-  last_status: string | null;
-  last_message: string | null;
+  /** Code HTTP renvoyé par l'app (null si pas encore arrivé ou plus vieux que 6 h) */
+  last_http: number | null;
+  last_error: string | null;
 }

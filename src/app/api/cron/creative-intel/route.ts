@@ -11,7 +11,7 @@ export const maxDuration = 300;
  * Vercel Cron envoie automatiquement « Authorization: Bearer <CRON_SECRET> ».
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: "CRON_SECRET non configuré" }, { status: 503 });
   const got = Buffer.from(req.headers.get("authorization") ?? "");
   const want = Buffer.from(`Bearer ${secret}`);

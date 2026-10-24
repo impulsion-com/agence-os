@@ -38,7 +38,8 @@ export function Installation({ items, envSet, schema, jobs: initialJobs, ctx, ed
     const r = i.check ? results[i.check] : undefined;
     if (r) return r.ok ? "ok" : i.required || i.env.some((k) => envSet[k]) ? "todo" : "optional";
     if (i.id === "schema") return schema.db >= schema.code ? "ok" : "todo";
-    if (i.id === "cron") return envSet.CRON_SECRET && jobs?.length && jobs.every((j) => j.scheduled) ? "ok" : "todo";
+    if (i.id === "cron")
+      return envSet.CRON_SECRET && jobs?.length && jobs.every((j) => j.scheduled) && !jobs.some((j) => j.last_error || (j.last_http && j.last_http !== 200)) ? "ok" : "todo";
     if (!i.env.length) return i.required ? "todo" : "optional";
     if (i.env.every((k) => envSet[k])) return "ok";
     return i.required || i.env.some((k) => envSet[k]) ? "todo" : "optional";
@@ -80,7 +81,21 @@ export function Installation({ items, envSet, schema, jobs: initialJobs, ctx, ed
                 Base à la migration {schema.db || "antérieure à 0120"}, code à la {schema.code} : exécute dans l&apos;ordre les fichiers de <code>supabase/migrations</code> de numéro supérieur.
               </p>
             )}
-            {i.id === "cron" && <CronBlock jobs={jobs} canInstall={envSet.CRON_SECRET} onJobs={setJobs} />}
+            {i.id === "cron" && (
+              <CronBlock
+                jobs={jobs}
+                canInstall={envSet.CRON_SECRET}
+                onJobs={(j) => {
+                  setJobs(j);
+                  // L'ancien résultat du test ne vaut plus après une (re)programmation
+                  setResults((r) => {
+                    const next = { ...r };
+                    delete next.cron;
+                    return next;
+                  });
+                }}
+              />
+            )}
           </Step>
         ))}
       </div>
@@ -113,10 +128,15 @@ function Step({
 
   const test = async () => {
     setBusy(true);
-    const res = await fetch("/api/setup/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: ws.workspace.slug, check: item.check }) });
-    const body = (await res.json().catch(() => ({}))) as CheckResult & { error?: string };
-    setBusy(false);
-    onResult(res.ok ? body : { ok: false, message: body.error ?? `Erreur ${res.status}` });
+    try {
+      const res = await fetch("/api/setup/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: ws.workspace.slug, check: item.check }) });
+      const body = (await res.json().catch(() => ({}))) as CheckResult & { error?: string };
+      onResult(res.ok ? body : { ok: false, message: body.error ?? `Erreur ${res.status}` });
+    } catch {
+      onResult({ ok: false, message: "Le serveur ne répond pas. Réessaie dans un instant." });
+    } finally {
+      setBusy(false);
+    }
   };
   const copy = () =>
     navigator.clipboard.writeText(prompt ?? "").then(
@@ -186,12 +206,17 @@ function CronBlock({ jobs, canInstall, onJobs }: { jobs: CronJob[] | null; canIn
 
   const run = async (action: "install" | "uninstall") => {
     setBusy(true);
-    const res = await fetch("/api/setup/cron", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: ws.workspace.slug, action }) });
-    const body = (await res.json().catch(() => ({}))) as { jobs?: CronJob[]; error?: string };
-    setBusy(false);
-    if (!res.ok) return toast(body.error ?? `Erreur ${res.status}`, { error: true });
-    onJobs(body.jobs ?? null);
-    toast(action === "install" ? "Tâches programmées dans Supabase" : "Tâches retirées");
+    try {
+      const res = await fetch("/api/setup/cron", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: ws.workspace.slug, action }) });
+      const body = (await res.json().catch(() => ({}))) as { jobs?: CronJob[]; error?: string };
+      if (!res.ok) return toast(body.error ?? `Erreur ${res.status}`, { error: true });
+      onJobs(body.jobs ?? null);
+      toast(action === "install" ? "Tâches programmées : clique sur « Tester » pour un appel réel" : "Tâches retirées");
+    } catch {
+      toast("Le serveur ne répond pas. Réessaie dans un instant.", { error: true });
+    } finally {
+      setBusy(false);
+    }
   };
   const scheduled = jobs.some((j) => j.scheduled);
 
@@ -209,8 +234,9 @@ function CronBlock({ jobs, canInstall, onJobs }: { jobs: CronJob[] | null; canIn
                 {!j.scheduled ? (
                   <span className="faint">non programmée</span>
                 ) : j.last_run ? (
-                  <span className={j.last_status === "failed" ? "setup-ko" : "muted"}>
-                    dernier passage {fmtDate(j.last_run)} {j.last_status === "failed" ? "en échec" : ""}
+                  <span className={j.last_error || (j.last_http && j.last_http !== 200) ? "setup-ko" : "muted"}>
+                    dernier appel {fmtDate(j.last_run)}
+                    {j.last_error ? `, ${j.last_error}` : j.last_http === 200 ? ", réponse 200" : j.last_http ? `, réponse ${j.last_http}` : ""}
                   </span>
                 ) : (
                   <span className="muted">programmée, pas encore passée</span>

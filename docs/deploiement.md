@@ -142,6 +142,10 @@ npx supabase gen types typescript --project-id <ref> > src/lib/database.types.ts
 
 ## Mettre à jour
 
+> **Depuis la migration 0120**, les tâches planifiées (synchro quotidienne, veille créa, rappels)
+> ne passent plus par `vercel.json` : après la mise à jour, applique la migration puis clique sur
+> **Programmer dans Supabase** dans Réglages > Installation, sinon la synchro quotidienne s'arrête.
+
 Récupère les changements du dépôt d'origine (**Sync fork** sur GitHub), redéploie, puis ouvre
 **Réglages > Installation** : l'étape « Base de données à jour » indique si des migrations sont à
 exécuter et donne le prompt pour que Claude Code les applique dans l'ordre. À la main : exécute

@@ -6,7 +6,7 @@ import { Installation } from "@/components/setup/installation";
 import { appUrl } from "@/lib/ads/config";
 import { currentEdition } from "@/lib/edition";
 import { readModules } from "@/lib/modules";
-import { SCHEMA_VERSION, cronStatus, schemaVersion } from "@/lib/setup/checks";
+import { SCHEMA_VERSION, cronStatus, publicAppUrl, schemaVersion } from "@/lib/setup/checks";
 import { itemsFor } from "@/lib/setup/items";
 import { requestOrigin } from "@/lib/setup/origin";
 import { loadWorkspace } from "@/lib/workspace/load";
@@ -28,7 +28,7 @@ export default async function InstallationPage({ params }: PageProps<"/w/[slug]/
       envSet={envSet}
       schema={{ db: version, code: SCHEMA_VERSION }}
       jobs={jobs}
-      ctx={{ appUrl: (process.env.NEXT_PUBLIC_APP_URL?.trim() || origin).replace(/\/$/, ""), host: process.env.VERCEL ? "vercel" : "autre", agency: workspace.name }}
+      ctx={{ appUrl: publicAppUrl() || origin, host: process.env.VERCEL ? "vercel" : "autre", agency: workspace.name }}
       edition={currentEdition().name}
     />
   );

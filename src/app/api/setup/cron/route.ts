@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { guard } from "@/lib/ads/guard";
-import { cronStatus } from "@/lib/setup/checks";
+import { cronStatus, publicAppUrl } from "@/lib/setup/checks";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 /**
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ jobs: await cronStatus() });
   }
-  const url = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "");
+  const url = publicAppUrl();
   const secret = process.env.CRON_SECRET?.trim();
   if (!url || !/^https:\/\//.test(url)) return NextResponse.json({ error: "NEXT_PUBLIC_APP_URL doit être l'adresse publique en https de l'app : Supabase ne peut pas appeler localhost." }, { status: 400 });
   if (!secret || secret.length < 16) return NextResponse.json({ error: "Ajoute d'abord CRON_SECRET (16 caractères minimum) dans les variables du serveur, puis redéploie." }, { status: 400 });

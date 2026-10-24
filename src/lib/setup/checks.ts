@@ -2,6 +2,7 @@ import "server-only";
 
 import { META_GRAPH_VERSION, integrationStatus } from "@/lib/ads/config";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { normalizeOrigin } from "./origin";
 import type { CheckId, CheckResult, CronJob } from "./types";
 
 /** Numéro de la dernière migration que ce code attend (fonction schema_version() en base). */
@@ -19,6 +20,20 @@ export async function cronStatus(): Promise<CronJob[] | null> {
 }
 
 const env = (k: string) => process.env[k]?.trim() || "";
+/**
+ * Adresse publique telle que l'app l'utilise : une variable NEXT_PUBLIC_ est figée au build, donc lue
+ * en accès statique (comme partout ailleurs), pas par process.env[k] qui donnerait la valeur du moment.
+ */
+export const publicAppUrl = () => (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/+$/, "");
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Lit un code HTTP de tâche en clair. */
+function httpHint(status: number) {
+  if (status === 401) return "401 : le secret programmé ne correspond plus à CRON_SECRET. Clique sur « Reprogrammer ».";
+  if (status === 503) return "503 : CRON_SECRET est absent du serveur.";
+  if (status === 404) return "404 : l'adresse programmée ne mène pas à l'app. Vérifie NEXT_PUBLIC_APP_URL puis reprogramme.";
+  return `HTTP ${status}`;
+}
 const fail = (message: string): CheckResult => ({ ok: false, message });
 const pass = (message: string): CheckResult => ({ ok: true, message });
 
@@ -37,9 +52,11 @@ export async function runCheck(id: CheckId, origin: string): Promise<CheckResult
   try {
     switch (id) {
       case "app_url": {
-        const url = env("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
-        if (!url) return fail("NEXT_PUBLIC_APP_URL est vide : les liens d'invitation et les connexions Meta et Google ne marcheront pas.");
-        if (url !== origin) return fail(`NEXT_PUBLIC_APP_URL vaut ${url} alors que l'app est ouverte sur ${origin}. Mets la même adresse, sans / à la fin, puis redéploie.`);
+        const url = publicAppUrl();
+        if (!url) return fail("NEXT_PUBLIC_APP_URL est vide (ou l'app n'a pas été reconstruite depuis) : les liens d'invitation et les connexions Meta et Google ne marcheront pas.");
+        if (!/^https?:\/\//.test(url)) return fail(`NEXT_PUBLIC_APP_URL vaut « ${url} » : il manque https:// au début.`);
+        if (normalizeOrigin(url) !== origin)
+          return fail(`NEXT_PUBLIC_APP_URL vaut ${url} alors que l'app est ouverte sur ${origin}. Mets la même adresse, sans / à la fin, puis reconstruis l'app (variable lue au build).`);
         return pass(`Adresse publique cohérente : ${url}`);
       }
       case "schema": {
@@ -53,11 +70,22 @@ export async function runCheck(id: CheckId, origin: string): Promise<CheckResult
         if (!jobs) return fail("Impossible de lire les tâches planifiées : la migration 0120 n'est pas appliquée.");
         const missing = jobs.filter((j) => !j.scheduled);
         if (missing.length) return fail(`Non programmées : ${missing.map((j) => j.path).join(", ")}.`);
-        const wrong = jobs.find((j) => j.url && !j.url.startsWith(env("NEXT_PUBLIC_APP_URL").replace(/\/$/, "") + "/"));
-        if (wrong) return fail(`Les tâches visent ${new URL(wrong.url!).origin} : reprogramme-les pour viser l'adresse actuelle.`);
-        const failed = jobs.find((j) => j.last_status === "failed");
-        if (failed) return fail(`Dernier passage en échec pour ${failed.path} : ${failed.last_message ?? "erreur inconnue"}`);
-        return pass("Les trois tâches sont programmées dans Supabase.");
+        const wrong = jobs.find((j) => j.url && !j.url.startsWith(publicAppUrl() + "/"));
+        if (wrong) return fail(`Les tâches visent ${normalizeOrigin(wrong.url!)} : clique sur « Reprogrammer » pour viser l'adresse actuelle.`);
+        // Appel réel par Supabase (rappels de rendez-vous, la tâche la plus légère), puis lecture de la réponse
+        const admin = supabaseAdmin();
+        const ping = await admin.rpc("cron_ping");
+        if (ping.error) return fail(`Appel de test impossible : ${ping.error.message}`);
+        for (let i = 0; i < 12; i++) {
+          await sleep(1000);
+          const { data } = await admin.rpc("cron_response", { p_request: Number(ping.data) });
+          const r = data as { status: number | null; timed_out: boolean | null; error: string | null } | null;
+          if (!r) continue;
+          if (r.status === 200) return pass("Supabase a appelé l'app avec le bon secret : les trois tâches sont programmées et répondent.");
+          if (r.status) return fail(`Supabase a appelé l'app, qui répond ${httpHint(r.status)}`);
+          return fail(`Supabase n'a pas pu joindre l'app : ${r.error ?? (r.timed_out ? "délai dépassé" : "erreur réseau")}.`);
+        }
+        return fail("Pas de réponse de l'app en 12 secondes. Réessaie ; si ça persiste, vérifie que l'adresse publique répond.");
       }
       case "meta": {
         const st = integrationStatus().meta;
@@ -89,6 +117,7 @@ export async function runCheck(id: CheckId, origin: string): Promise<CheckResult
         if (!domain) return fail("EMAIL_FROM doit ressembler à « Mon agence <bonjour@mon-agence.fr> ».");
         const r = await getJson("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${env("RESEND_API_KEY")}` } });
         if (r.status === 401 || r.status === 403) return fail("Resend refuse la clé (ou c'est une clé « envoi seulement » : la vérification du domaine demande une clé « accès complet »).");
+        if (r.status !== 200) return fail(`Resend ne répond pas normalement (HTTP ${r.status}). Réessaie dans un instant.`);
         const list = (r.body.data ?? []) as { name: string; status: string }[];
         const d = list.find((x) => x.name.toLowerCase() === domain);
         if (!d) return fail(`Le domaine ${domain} n'est pas ajouté dans Resend.`);

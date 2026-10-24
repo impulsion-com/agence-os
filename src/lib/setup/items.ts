@@ -27,10 +27,19 @@ export interface SetupItem {
   prompt?: (c: SetupCtx) => string;
 }
 
+/** Nom de domaine de l'app, sans planter si l'adresse est mal saisie (c'est justement ce que la page aide à corriger). */
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url.replace(/^https?:\/\//, "").split("/")[0];
+  }
+};
+
 const where = (c: SetupCtx) =>
   c.host === "vercel"
     ? "Sur vercel.com, ouvre le projet de cette app, Settings > Environment Variables, ajoute chaque variable pour l'environnement Production, puis Deployments > Redeploy sur le dernier déploiement."
-    : "Ouvre mon hébergement. Sur Hostinger : hPanel > Sites web > le site de l'app > Node.js (ou « Applications web »), section Variables d'environnement, ajoute chaque variable puis relance le build. Sur un VPS : ajoute-les au fichier .env.local de l'app puis redémarre le service. Si tu ne trouves pas, demande-moi où l'app est hébergée.";
+    : "Ouvre mon hébergement. Sur Hostinger : hPanel > Sites web > le site de l'app > Node.js (ou « Applications web »), section Variables d'environnement, ajoute chaque variable puis relance le build. Sur un VPS : ajoute-les au fichier .env.local de l'app, reconstruis (npm run build : les variables NEXT_PUBLIC_ sont figées au build) puis redémarre le service. Si tu ne trouves pas, demande-moi où l'app est hébergée.";
 
 const outro = (c: SetupCtx, test = true) =>
   `\n\nRègles : ne colle jamais une clé secrète ailleurs que dans les variables d'environnement de l'hébergement ou le champ prévu, ne la recopie pas dans ta réponse. Si une étape demande un paiement, une vérification d'identité ou un choix que tu ne peux pas faire, arrête-toi et explique-moi quoi faire. ${
@@ -95,7 +104,7 @@ export const SETUP_ITEMS: SetupItem[] = [
     check: "meta",
     tool: "chrome",
     prompt: (c) =>
-      `Crée une app Meta pour que mon outil Agence OS (${c.appUrl}) lise mes comptes publicitaires en lecture seule.\n\n1. Sur developers.facebook.com > Mes apps > Créer une app. Nom : « ${c.agency} reporting ». Rattache-la à mon portefeuille d'entreprise (Business Manager). Choisis le cas d'usage qui donne accès à l'API Marketing (« Créer et gérer des publicités avec l'API Marketing » ou type d'app « Entreprise » selon l'interface).\n2. Ajoute le produit « Facebook Login for Business » (ou « Facebook Login »). Dans ses paramètres, URI de redirection OAuth valides : ${c.appUrl}/api/integrations/meta/callback\n3. Paramètres > Général : domaine de l'app = ${new URL(c.appUrl).hostname}. Laisse l'app en mode développement : pas besoin d'examen par Meta tant que seuls les admins de l'app s'en servent.\n4. Récupère l'identifiant de l'app et la clé secrète (Paramètres > Général > Afficher). Ajoute-les comme variables META_APP_ID et META_APP_SECRET.\n\n${where(c)}${outro(c)}\n\nEnsuite, dans ${c.appUrl} > Réglages > Connexions, je cliquerai moi-même sur « Connecter Meta Ads ».`,
+      `Crée une app Meta pour que mon outil Agence OS (${c.appUrl}) lise mes comptes publicitaires en lecture seule.\n\n1. Sur developers.facebook.com > Mes apps > Créer une app. Nom : « ${c.agency} reporting ». Rattache-la à mon portefeuille d'entreprise (Business Manager). Choisis le cas d'usage qui donne accès à l'API Marketing (« Créer et gérer des publicités avec l'API Marketing » ou type d'app « Entreprise » selon l'interface).\n2. Ajoute le produit « Facebook Login for Business » (ou « Facebook Login »). Dans ses paramètres, URI de redirection OAuth valides : ${c.appUrl}/api/integrations/meta/callback\n3. Paramètres > Général : domaine de l'app = ${hostOf(c.appUrl)}. Laisse l'app en mode développement : pas besoin d'examen par Meta tant que seuls les admins de l'app s'en servent.\n4. Récupère l'identifiant de l'app et la clé secrète (Paramètres > Général > Afficher). Ajoute-les comme variables META_APP_ID et META_APP_SECRET.\n\n${where(c)}${outro(c)}\n\nEnsuite, dans ${c.appUrl} > Réglages > Connexions, je cliquerai moi-même sur « Connecter Meta Ads ».`,
   },
   {
     id: "google",
