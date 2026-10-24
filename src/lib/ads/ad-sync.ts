@@ -104,6 +104,7 @@ export async function syncAccountAds(admin: Admin, acc: AdSyncAccount, token: st
         thumbnail_url: null,
         frequency_7d: null,
         reach_7d: null,
+        asset_key: null,
       }));
     }
     const now = new Date().toISOString();

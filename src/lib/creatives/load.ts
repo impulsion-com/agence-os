@@ -59,11 +59,12 @@ async function catalog(sb: SB, ws: string): Promise<CatalogAd[]> {
     format: string | null;
     thumbnail_url: string | null;
     frequency_7d: number | null;
+    asset_key: string | null;
     account: { platform: string; company_id: string | null } | null;
   }>((a, b) =>
     sb
       .from("ad_ads")
-      .select("ad_account_id, ad_id, name, campaign_name, adset_name, status, format, thumbnail_url, frequency_7d, account:ad_accounts(platform, company_id)")
+      .select("ad_account_id, ad_id, name, campaign_name, adset_name, status, format, thumbnail_url, frequency_7d, asset_key, account:ad_accounts(platform, company_id)")
       .eq("workspace_id", ws)
       .order("ad_id")
       .range(a, b) as never,

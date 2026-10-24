@@ -79,6 +79,8 @@ export interface CatalogAd {
   format: string | null;
   thumbnail_url: string | null;
   frequency_7d: number | null;
+  /** Même vidéo ou même image que d'autres annonces (voir FetchedAd.asset_key) */
+  asset_key: string | null;
   platform: string;
   company_id: string | null;
 }

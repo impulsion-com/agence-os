@@ -97,4 +97,6 @@ export interface FetchedAd {
   thumbnail_url: string | null;
   frequency_7d: number | null;
   reach_7d: number | null;
+  /** Vidéo ou image diffusée (Meta v:<video_id> ou i:<image_hash>, Google yt:<id>) : regroupe les copies d'une même créa */
+  asset_key: string | null;
 }
