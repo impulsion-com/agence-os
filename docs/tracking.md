@@ -139,6 +139,12 @@ téléphone, tous appareils) dans la fenêtre (1 à 90 jours) :
 | Linéaire | parts égales |
 | Décroissance temporelle | poids 2^(-âge / 7 j), normalisé |
 | En U | 40 % premier, 40 % dernier, 20 % répartis au milieu |
+| Scientifique 7 j / 30 j (le « Scientific » de Hyros) | 100 % au premier clic si la conversion arrive dans les 7 (ou 30) jours qui le suivent, sinon 100 % au dernier clic |
+
+Le Scientifique crédite la campagne qui a fait découvrir l'offre quand la vente suit vite, et celle qui a
+relancé quand elle traîne. Choisis 7 jours pour un cycle de vente court, 30 jours pour un cycle long (règle de
+Hyros : au moins ton délai moyen entre le premier clic et la vente). Le Scientifique 30 j demande une fenêtre
+d'attribution de 60 ou 90 jours : avec 30 jours, il ne voit aucun clic plus ancien et revient au premier clic.
 
 ROAS réel = valeur attribuée aux canaux payants dont la dépense est connue / dépense.
 Objectif « Prospects » : première conversion lead/booking par personne sur la période.
@@ -191,8 +197,28 @@ confiance du reste : si 30 % seulement des ventes ont une source, le tableau des
 sous un autre email ou depuis un autre appareil. **Compte tes ventes dans l'onglet Entonnoir, et cherche
 leur provenance dans l'onglet Campagnes : jamais l'inverse.**
 
-Code : `src/lib/tracking/campaigns.ts` (pur, testé), `loadCampaigns` et `loadPerson` dans `load.ts`,
-RPC `tracking_person` et `tracking_funnel`.
+**Façon Hyros.** Quatre lectures de plus dans l'onglet Campagnes :
+
+- **CA régie et Écart**, à chaque niveau (campagne, ensemble, publicité) : le chiffre d'affaires que la régie
+  s'attribue dans sa propre fenêtre, face à celui que ton tracking mesure. Un écart de −60 % veut dire que la
+  régie s'attribue bien plus que ce que tu vois arriver : c'est le « Reporting Gap » de Hyros.
+- **Valeur par prospect à 30, 60 ou 90 jours** : ce que rapporte en moyenne une personne entrée par la ligne
+  (première conversion d'étape d'entrée de la période, créditée au premier clic payant), dans les N jours qui
+  suivent ce clic, **non-acheteurs compris**. Une personne ne compte qu'une fois sa fenêtre écoulée, pour ne pas
+  sous-estimer la valeur. Les ventes postérieures à la période sont prises jusqu'à aujourd'hui. Sans étape
+  d'entrée (entonnoir e-commerce), la première conversion de chaque personne sert d'entrée. Limite : seule la
+  période est lue, une personne déjà entrée avant compte comme nouvelle ; prends une période longue (90 jours).
+  **Valeur ÷ coût** divise par le coût d'un prospect de la ligne : au-dessus de 1, on peut monter le budget.
+- **Comparer les modèles** : le même chiffre d'affaires réparti par chacun des huit modèles, campagne par
+  campagne. Une campagne forte en premier clic et faible en dernier clic fait découvrir ; l'inverse, elle
+  récolte.
+- **Cohortes** : par mois d'entrée, les prospects (dont ceux venus de la publicité), la dépense du mois, le
+  coût par prospect, la valeur à 30, 60, 90 jours et le ROAS à date.
+
+Code : `src/lib/tracking/campaigns.ts` et `src/lib/tracking/ltv.ts` (purs, testés :
+`node --experimental-strip-types --test src/lib/tracking/tests/ltv.test.mjs`), `loadCampaigns` et `loadPerson`
+dans `load.ts`, RPC `tracking_person` et `tracking_funnel`. L'API de l'extension garde son contrat : conversions
+de la régie au niveau campagne seulement.
 
 ## 11. API serveur
 

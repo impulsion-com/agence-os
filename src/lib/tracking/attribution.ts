@@ -1,7 +1,7 @@
 // Moteur d'attribution multi-touch. Pur (aucun import d'exécution) : utilisable
 // côté serveur, côté client et dans les tests (node --experimental-strip-types).
 
-export type ModelId = "first_click" | "last_click" | "last_non_direct" | "linear" | "time_decay" | "position";
+export type ModelId = "first_click" | "last_click" | "last_non_direct" | "linear" | "time_decay" | "position" | "scientific_7" | "scientific_30";
 
 export const MODELS: { id: ModelId; name: string; help: string }[] = [
   { id: "last_click", name: "Dernier clic", help: "100 % au dernier point de contact avant la conversion" },
@@ -10,6 +10,9 @@ export const MODELS: { id: ModelId; name: string; help: string }[] = [
   { id: "linear", name: "Linéaire", help: "Crédit réparti à parts égales entre tous les points de contact" },
   { id: "time_decay", name: "Décroissance temporelle", help: "Plus le point de contact est proche de la conversion, plus il compte (demi-vie 7 jours)" },
   { id: "position", name: "En U (40/20/40)", help: "40 % au premier, 40 % au dernier, 20 % répartis entre ceux du milieu" },
+  // Modèle « Scientific » de Hyros : le premier clic tant que la conversion arrive vite, sinon le dernier
+  { id: "scientific_7", name: "Scientifique 7 j", help: "100 % au premier clic si la conversion arrive dans les 7 jours qui le suivent, sinon au dernier clic (cycle de vente court)" },
+  { id: "scientific_30", name: "Scientifique 30 j", help: "100 % au premier clic si la conversion arrive dans les 30 jours qui le suivent, sinon au dernier clic (cycle de vente long). Avec une fenêtre de 30 jours ou moins, il revient au premier clic : choisis 60 ou 90 jours" },
 ];
 export const MODEL_IDS = MODELS.map((m) => m.id);
 export const modelName = (m: string) => MODELS.find((x) => x.id === m)?.name ?? m;
@@ -83,6 +86,12 @@ export function credits(c: Conversion, model: ModelId, windowDays: number, halfL
       const raw = ts.map((t) => Math.pow(2, -(end - Date.parse(t.ts)) / (halfLife * DAY_MS)));
       const sum = raw.reduce((s, x) => s + x, 0);
       return ts.map((t, i) => ({ touch: t, weight: raw[i] / sum }));
+    }
+    case "scientific_7":
+    case "scientific_30": {
+      const days = model === "scientific_7" ? 7 : 30;
+      const first = ts[0];
+      return [{ touch: Date.parse(c.ts) - Date.parse(first.ts) <= days * DAY_MS ? first : ts[n - 1], weight: 1 }];
     }
     case "position": {
       if (n === 1) return [{ touch: ts[0], weight: 1 }];

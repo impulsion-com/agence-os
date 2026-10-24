@@ -2,7 +2,7 @@
 // campagne, ensemble de publicités et publicité. Pur : client, serveur et tests.
 // Chemins relatifs avec extension : ce module est chargé tel quel par les tests (node --experimental-strip-types).
 
-import { NONE, credits, type Conversion, type ModelId } from "./attribution.ts";
+import { MODEL_IDS, NONE, credits, type Conversion, type ModelId, type Touch } from "./attribution.ts";
 import { isPaid, platformChannel } from "./channels.ts";
 
 export interface StageDef {
@@ -23,6 +23,9 @@ export interface AdSpend {
   ad_id: string;
   ad_name: string;
   spend: number;
+  /** Conversions et valeur déclarées par la régie pour cette publicité (absentes : inconnues) */
+  pconv?: number;
+  pvalue?: number;
 }
 
 /** Dépense et conversions déclarées par la régie pour une campagne sur la période. */
@@ -51,7 +54,7 @@ export interface CampNode {
   stages: Record<string, number>;
   /** Chiffre d'affaires attribué (étapes de type vente). */
   value: number;
-  /** Conversions et valeur déclarées par la régie (niveau campagne seulement). */
+  /** Conversions et valeur déclarées par la régie (campagne, et ensemble ou publicité quand la synchro par annonce les donne). */
   pconv: number | null;
   pvalue: number | null;
   /** Personnes créditées sur cette ligne, toutes étapes confondues. */
@@ -124,6 +127,12 @@ export function buildCampaignTable(
     const ad = child(s, "ad", a.ad_id, a.ad_name || a.ad_id);
     s.spend = (s.spend ?? 0) + a.spend;
     ad.spend = (ad.spend ?? 0) + a.spend;
+    if (a.pconv !== undefined || a.pvalue !== undefined) {
+      for (const x of [s, ad]) {
+        x.pconv = (x.pconv ?? 0) + (a.pconv ?? 0);
+        x.pvalue = (x.pvalue ?? 0) + (a.pvalue ?? 0);
+      }
+    }
     // Une campagne absente du rapport par campagne tient sa dépense de ses publicités
     if (!campaigns.some((x) => x.campaign_id === a.campaign_id)) c.spend = (c.spend ?? 0) + a.spend;
   }
@@ -148,13 +157,13 @@ export function buildCampaignTable(
         add(organic, stage.key, weight, weight * worth);
         continue;
       }
-      const ck = touch.campaign_key || touch.campaign || NONE;
+      const [ck, sk, ak] = rowPath(touch);
       const cn = camp(ck, touch.campaign || (ck === NONE ? "(sans campagne)" : ck), touch.platform ?? null);
       const line = [cn];
-      if (touch.adset_key || touch.ad_key) {
-        const sn = child(cn, "adset", touch.adset_key || NONE, touch.term || touch.adset_key || "(ensemble inconnu)");
+      if (sk) {
+        const sn = child(cn, "adset", sk, touch.term || touch.adset_key || "(ensemble inconnu)");
         line.push(sn);
-        if (touch.ad_key) line.push(child(sn, "ad", touch.ad_key, touch.content || touch.ad_key));
+        if (ak) line.push(child(sn, "ad", ak, touch.content || ak));
       }
       for (const n of line) {
         add(n, stage.key, weight, weight * worth);
@@ -175,6 +184,44 @@ export function buildCampaignTable(
   }
   rows.sort(order);
   return { rows, organic, total };
+}
+
+/**
+ * Clés de la ligne créditée par un point de contact payant : campagne, puis ensemble et publicité quand
+ * l'URL les porte. Les identifiants de ligne du tableau en découlent : « c », « c|s », « c|s|a ».
+ */
+export function rowPath(t: Touch): [string, string | null, string | null] {
+  const ck = t.campaign_key || t.campaign || NONE;
+  if (!t.adset_key && !t.ad_key) return [ck, null, null];
+  return [ck, t.adset_key || NONE, t.ad_key || null];
+}
+
+/** Identifiants des lignes du tableau créditées par un point de contact (campagne, ensemble, publicité). */
+export function rowIds(t: Touch): string[] {
+  const [c, s, a] = rowPath(t);
+  return [c, ...(s ? [`${c}|${s}`] : []), ...(s && a ? [`${c}|${s}|${a}`] : [])];
+}
+
+/**
+ * Chiffre d'affaires attribué à chaque campagne sous chaque modèle (comparateur façon Hyros) :
+ * le même jeu de ventes, réparti par les huit modèles. Clé : identifiant de campagne.
+ */
+export function modelMatrix(convs: Conversion[], stages: StageDef[], windowDays: number): Map<string, Record<ModelId, number>> {
+  const out = new Map<string, Record<ModelId, number>>();
+  const zero = () => Object.fromEntries(MODEL_IDS.map((m) => [m, 0])) as Record<ModelId, number>;
+  for (const c of convs) {
+    const stage = stageOf(c.type, stages);
+    if (stage?.kind !== "sale" || !c.value) continue;
+    for (const m of MODEL_IDS)
+      for (const { touch, weight } of credits(c, m, windowDays)) {
+        if (!touch || !isPaid(touch.channel)) continue;
+        const k = rowPath(touch)[0];
+        const r = out.get(k) ?? zero();
+        r[m] += weight * c.value;
+        out.set(k, r);
+      }
+  }
+  return out;
 }
 
 /** Canal payant d'une ligne, pour sa pastille de couleur. */

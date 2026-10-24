@@ -4,7 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { dayList, type Period } from "@/lib/ads/metrics";
 import { NONE, DIMENSIONS, attributeTree, attributedByDay, credits, inWindow, linkCampaigns, type Conversion, type ModelId, type Touch, type TreeNode } from "./attribution";
 import { isPaid, platformChannel } from "./channels";
-import { buildCampaignTable, type AdSpend, type CampaignSpend, type CampaignTable } from "./campaigns";
+import { buildCampaignTable, modelMatrix, type AdSpend, type CampaignSpend, type CampaignTable } from "./campaigns";
+import { acquisitions, cohorts, ltvByRow, type Cohort, type LtvCell } from "./ltv";
 import { buildFunnel, type Funnel, type Stage } from "./funnel";
 import { readSettings, type SiteSettings } from "./settings";
 
@@ -454,6 +455,17 @@ export interface CampaignsData {
   adLevel: boolean;
 }
 
+/** Ce que les écrans ajoutent au tableau (l'API de l'extension n'en a pas besoin). */
+export interface CampaignsScreen extends CampaignsData {
+  /** Valeur par prospect à 30, 60, 90 jours, par identifiant de ligne */
+  ltv: Record<string, LtvCell>;
+  cohorts: Cohort[];
+  /** Chiffre d'affaires de chaque campagne sous chaque modèle */
+  models: Record<string, Record<ModelId, number>>;
+  /** Au moins une étape de vente : sinon ni valeur dans le temps ni comparateur */
+  hasSales: boolean;
+}
+
 /** D'où viennent les données : la session d'un membre (écrans) ou le service role au nom d'un jeton (API de l'extension). */
 export interface CampaignAccess {
   sb: Pick<SB, "from">;
@@ -467,9 +479,21 @@ export interface CampaignsFull extends CampaignsData {
   emails: Record<string, string | null>;
   accountIds: string[];
   platforms: Record<string, string>;
+  /** Dépense par mois (AAAA-MM) sur la période */
+  spendByMonth: Map<string, number>;
 }
 
-export async function campaignsData(access: CampaignAccess, site: { id: string; company_id: string | null }, ws: string, period: { start: string; end: string }, opts: { model: ModelId; window: number }): Promise<CampaignsFull> {
+/**
+ * `opts.adPlatform` : conversions déclarées par la régie aussi sous la campagne (ensembles et publicités).
+ * Les écrans le demandent ; l'API de l'extension non, son contrat les veut à null sous la campagne.
+ */
+export async function campaignsData(
+  access: CampaignAccess,
+  site: { id: string; company_id: string | null },
+  ws: string,
+  period: { start: string; end: string },
+  opts: { model: ModelId; window: number; adPlatform?: boolean },
+): Promise<CampaignsFull> {
   const { sb } = access;
   const { data: st } = await sb.from("tracking_stages").select("id, key, label, position, kind, has_value, aliases").eq("site_id", site.id).order("position");
   const stages = (st ?? []) as Stage[];
@@ -483,13 +507,13 @@ export async function campaignsData(access: CampaignAccess, site: { id: string; 
   const [raw, spendDaily, adRows, adNames] = await Promise.all([
     types.length ? access.conversions(types) : Promise.resolve([] as RawConv[]),
     ids.length
-      ? paged<{ ad_account_id: string; campaign_id: string; campaign_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
-          sb.from("ad_metrics_daily").select("ad_account_id, campaign_id, campaign_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("campaign_id").range(a, b),
+      ? paged<{ ad_account_id: string; date: string; campaign_id: string; campaign_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
+          sb.from("ad_metrics_daily").select("ad_account_id, date, campaign_id, campaign_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("campaign_id").range(a, b),
         )
       : Promise.resolve([]),
     ids.length
-      ? paged<{ ad_account_id: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number }>((a, b) =>
-          sb.from("ad_metrics_ad_daily").select("ad_account_id, campaign_id, adset_id, ad_id, ad_name, spend").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
+      ? paged<{ ad_account_id: string; date: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
+          sb.from("ad_metrics_ad_daily").select("ad_account_id, date, campaign_id, adset_id, ad_id, ad_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
         )
       : Promise.resolve([]),
     ids.length
@@ -500,7 +524,10 @@ export async function campaignsData(access: CampaignAccess, site: { id: string; 
   ]);
 
   const camps = new Map<string, CampaignSpend>();
+  const spendByMonth = new Map<string, number>();
   for (const r of spendDaily) {
+    const m = String(r.date).slice(0, 7);
+    spendByMonth.set(m, (spendByMonth.get(m) ?? 0) + Number(r.spend));
     const c = camps.get(r.campaign_id) ?? { platform: platform.get(r.ad_account_id) ?? "other", campaign_id: r.campaign_id, campaign_name: r.campaign_name, spend: 0, pconv: 0, pvalue: 0 };
     c.spend += Number(r.spend);
     c.pconv += Number(r.conversions);
@@ -520,8 +547,18 @@ export async function campaignsData(access: CampaignAccess, site: { id: string; 
       ad_id: r.ad_id,
       ad_name: n?.name || r.ad_name,
       spend: 0,
+      ...(opts.adPlatform ? { pconv: 0, pvalue: 0 } : {}),
     };
     a.spend += Number(r.spend);
+    // Une campagne absente du rapport par campagne tient sa dépense de ses publicités (comme le tableau)
+    if (!camps.has(r.campaign_id)) {
+      const m = String(r.date).slice(0, 7);
+      spendByMonth.set(m, (spendByMonth.get(m) ?? 0) + Number(r.spend));
+    }
+    if (opts.adPlatform) {
+      a.pconv = (a.pconv ?? 0) + Number(r.conversions || 0);
+      a.pvalue = (a.pvalue ?? 0) + Number(r.conversion_value || 0);
+    }
     ads.set(r.ad_id, a);
   }
 
@@ -549,23 +586,37 @@ export async function campaignsData(access: CampaignAccess, site: { id: string; 
     emails,
     accountIds: ids,
     platforms: Object.fromEntries(platform),
+    spendByMonth,
   };
 }
 
-export async function loadCampaigns(site: { id: string; company_id: string | null }, ws: string, period: Period, opts: { model: ModelId; window: number }): Promise<CampaignsData> {
+export async function loadCampaigns(site: { id: string; company_id: string | null }, ws: string, period: Period, opts: { model: ModelId; window: number }): Promise<CampaignsScreen> {
   const sb = await supabaseServer();
-  const full = await campaignsData(
-    {
-      sb,
-      conversions: (types) => paged<RawConv>((a, b) => sb.rpc("tracking_conversions", { p_site: site.id, p_start: period.start, p_end: period.end, p_window: opts.window, p_types: types }).range(a, b)),
-    },
-    site,
-    ws,
-    period,
-    opts,
-  );
+  const conversions = (types: string[], start: string, end: string, window: number) =>
+    paged<RawConv>((a, b) => sb.rpc("tracking_conversions", { p_site: site.id, p_start: start, p_end: end, p_window: window, p_types: types }).range(a, b));
+  const full = await campaignsData({ sb, conversions: (types) => conversions(types, period.start, period.end, opts.window) }, site, ws, period, { ...opts, adPlatform: true });
+
+  // Valeur dans le temps (façon Hyros) : les ventes des personnes entrées sur la période, jusqu'à aujourd'hui,
+  // pour mesurer 30, 60 et 90 jours après leur premier clic même quand la période est courte.
+  const saleStages = full.stages.filter((s) => s.kind === "sale");
+  const saleTypes = new Set(saleStages.flatMap((s) => [s.key, ...s.aliases]));
+  const now = new Date().toISOString();
+  const acq = acquisitions(full.convs, full.stages, opts.window, period.start, period.end);
+  const sales = saleTypes.size && acq.length ? await conversions([...saleTypes], period.start, now.slice(0, 10), 1) : [];
+  const saleConvs = sales.map((c) => ({ id: c.id, ts: c.ts, type: c.type, value: Number(c.value) || 0, person: c.person, touches: [] }));
+
   // Les écrans n'ont besoin ni des conversions brutes ni des emails en clair
-  return { table: full.table, stages: full.stages, who: full.who, accounts: full.accounts, adLevel: full.adLevel };
+  return {
+    table: full.table,
+    stages: full.stages,
+    who: full.who,
+    accounts: full.accounts,
+    adLevel: full.adLevel,
+    hasSales: saleTypes.size > 0,
+    ltv: Object.fromEntries(ltvByRow(acq, saleConvs, saleTypes, now)),
+    cohorts: saleTypes.size ? cohorts(acq, saleConvs, saleTypes, full.spendByMonth, now) : [],
+    models: Object.fromEntries(modelMatrix(full.convs, full.stages, opts.window)),
+  };
 }
 
 // ---------------------------------------------------------------------
