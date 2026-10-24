@@ -12,7 +12,7 @@ export const MODELS: { id: ModelId; name: string; help: string }[] = [
   { id: "position", name: "En U (40/20/40)", help: "40 % au premier, 40 % au dernier, 20 % répartis entre ceux du milieu" },
   // Modèle « Scientific » de Hyros : le premier clic tant que la conversion arrive vite, sinon le dernier
   { id: "scientific_7", name: "Scientifique 7 j", help: "100 % au premier clic si la conversion arrive dans les 7 jours qui le suivent, sinon au dernier clic (cycle de vente court)" },
-  { id: "scientific_30", name: "Scientifique 30 j", help: "100 % au premier clic si la conversion arrive dans les 30 jours qui le suivent, sinon au dernier clic (cycle de vente long)" },
+  { id: "scientific_30", name: "Scientifique 30 j", help: "100 % au premier clic si la conversion arrive dans les 30 jours qui le suivent, sinon au dernier clic (cycle de vente long). Avec une fenêtre de 30 jours ou moins, il revient au premier clic : choisis 60 ou 90 jours" },
 ];
 export const MODEL_IDS = MODELS.map((m) => m.id);
 export const modelName = (m: string) => MODELS.find((x) => x.id === m)?.name ?? m;

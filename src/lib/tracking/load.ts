@@ -512,8 +512,8 @@ export async function campaignsData(
         )
       : Promise.resolve([]),
     ids.length
-      ? paged<{ ad_account_id: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
-          sb.from("ad_metrics_ad_daily").select("ad_account_id, campaign_id, adset_id, ad_id, ad_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
+      ? paged<{ ad_account_id: string; date: string; campaign_id: string; adset_id: string; ad_id: string; ad_name: string; spend: number; conversions: number; conversion_value: number }>((a, b) =>
+          sb.from("ad_metrics_ad_daily").select("ad_account_id, date, campaign_id, adset_id, ad_id, ad_name, spend, conversions, conversion_value").in("ad_account_id", ids).gte("date", period.start).lte("date", period.end).order("date").order("ad_id").range(a, b),
         )
       : Promise.resolve([]),
     ids.length
@@ -550,6 +550,11 @@ export async function campaignsData(
       ...(opts.adPlatform ? { pconv: 0, pvalue: 0 } : {}),
     };
     a.spend += Number(r.spend);
+    // Une campagne absente du rapport par campagne tient sa dépense de ses publicités (comme le tableau)
+    if (!camps.has(r.campaign_id)) {
+      const m = String(r.date).slice(0, 7);
+      spendByMonth.set(m, (spendByMonth.get(m) ?? 0) + Number(r.spend));
+    }
     if (opts.adPlatform) {
       a.pconv = (a.pconv ?? 0) + Number(r.conversions || 0);
       a.pvalue = (a.pvalue ?? 0) + Number(r.conversion_value || 0);

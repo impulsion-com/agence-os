@@ -143,7 +143,8 @@ téléphone, tous appareils) dans la fenêtre (1 à 90 jours) :
 
 Le Scientifique crédite la campagne qui a fait découvrir l'offre quand la vente suit vite, et celle qui a
 relancé quand elle traîne. Choisis 7 jours pour un cycle de vente court, 30 jours pour un cycle long (règle de
-Hyros : au moins ton délai moyen entre le premier clic et la vente).
+Hyros : au moins ton délai moyen entre le premier clic et la vente). Le Scientifique 30 j demande une fenêtre
+d'attribution de 60 ou 90 jours : avec 30 jours, il ne voit aucun clic plus ancien et revient au premier clic.
 
 ROAS réel = valeur attribuée aux canaux payants dont la dépense est connue / dépense.
 Objectif « Prospects » : première conversion lead/booking par personne sur la période.
@@ -204,7 +205,9 @@ leur provenance dans l'onglet Campagnes : jamais l'inverse.**
 - **Valeur par prospect à 30, 60 ou 90 jours** : ce que rapporte en moyenne une personne entrée par la ligne
   (première conversion d'étape d'entrée de la période, créditée au premier clic payant), dans les N jours qui
   suivent ce clic, **non-acheteurs compris**. Une personne ne compte qu'une fois sa fenêtre écoulée, pour ne pas
-  sous-estimer la valeur. Les ventes postérieures à la période sont prises jusqu'à aujourd'hui.
+  sous-estimer la valeur. Les ventes postérieures à la période sont prises jusqu'à aujourd'hui. Sans étape
+  d'entrée (entonnoir e-commerce), la première conversion de chaque personne sert d'entrée. Limite : seule la
+  période est lue, une personne déjà entrée avant compte comme nouvelle ; prends une période longue (90 jours).
   **Valeur ÷ coût** divise par le coût d'un prospect de la ligne : au-dessus de 1, on peut monter le budget.
 - **Comparer les modèles** : le même chiffre d'affaires réparti par chacun des huit modèles, campagne par
   campagne. Une campagne forte en premier clic et faible en dernier clic fait découvrir ; l'inverse, elle

@@ -224,14 +224,16 @@ export function CampaignsTab({ site, period, model, window, data }: { site: Site
         </div>
       </section>
 
-      {data.hasSales && table.rows.length > 0 && <ModelCompare data={data} model={model} currency={currency} />}
+      {data.hasSales && table.rows.length > 0 && <ModelCompare data={data} model={model} window={window} currency={currency} />}
       {hasLtv && data.cohorts.length > 0 && <Cohorts data={data} currency={currency} />}
     </div>
   );
 }
 
 /** Le même chiffre d'affaires réparti par chaque modèle, campagne par campagne (Compare Attribution Modes de Hyros). */
-function ModelCompare({ data, model, currency }: { data: CampaignsScreen; model: ModelId; currency: string }) {
+function ModelCompare({ data, model, window, currency }: { data: CampaignsScreen; model: ModelId; window: number; currency: string }) {
+  // Sous 60 jours de fenêtre, le Scientifique 30 j ne voit jamais de premier clic plus ancien que 30 jours : il double le premier clic
+  const models = MODELS.filter((m) => m.id !== "scientific_30" || window > 30 || model === m.id);
   const rows = useMemo(
     () =>
       data.table.rows
@@ -249,11 +251,11 @@ function ModelCompare({ data, model, currency }: { data: CampaignsScreen; model:
         <span className="faint" style={{ fontSize: 12 }}>CA attribué à chaque campagne selon le modèle ; l&apos;écart dit combien une campagne dépend de sa place dans le parcours</span>
       </div>
       <div className="rp-scroll">
-        <table className="tbl rp-tbl" style={{ minWidth: 300 + MODELS.length * 110 }}>
+        <table className="tbl rp-tbl" style={{ minWidth: 300 + models.length * 110 }}>
           <thead>
             <tr>
               <th>Campagne</th>
-              {MODELS.map((m) => (
+              {models.map((m) => (
                 <th key={m.id} className={`r${m.id === model ? " trk-cur" : ""}`} title={m.help}>
                   {m.name}
                 </th>
@@ -262,7 +264,7 @@ function ModelCompare({ data, model, currency }: { data: CampaignsScreen; model:
           </thead>
           <tbody>
             {rows.map((r) => {
-              const vals = MODELS.map((m) => r.v[m.id]);
+              const vals = models.map((m) => r.v[m.id]);
               const max = Math.max(...vals);
               const min = Math.min(...vals);
               return (
@@ -270,7 +272,7 @@ function ModelCompare({ data, model, currency }: { data: CampaignsScreen; model:
                   <td>
                     <ChannelLabel channel={nodeChannel(r.node)}>{r.label}</ChannelLabel>
                   </td>
-                  {MODELS.map((m) => {
+                  {models.map((m) => {
                     const v = r.v[m.id];
                     return (
                       <td
@@ -305,7 +307,7 @@ function Cohorts({ data, currency }: { data: CampaignsScreen; currency: string }
           <thead>
             <tr>
               <th>Mois d&apos;entrée</th>
-              <th className="r">Prospects</th>
+              <th className="r" title="Première entrée de chaque personne sur la période (une personne déjà entrée avant la période y compte comme nouvelle)">Prospects</th>
               <th className="r" title="Prospects venus de la publicité (premier clic payant)">dont publicité</th>
               <th className="r">Dépense</th>
               <th className="r" title="Dépense du mois divisée par les prospects venus de la publicité">Coût / prospect</th>

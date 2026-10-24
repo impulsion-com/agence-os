@@ -84,3 +84,17 @@ test("cohortes par mois d'entrée face à la dépense", () => {
   assert.deepEqual(co.map((c) => [c.month, c.paid, c.spend, c.revenue]), [["2026-07", 1, 100, 300], ["2026-08", 1, 50, 0]]);
   assert.equal(co[0].value[30], 300);
 });
+
+test("relecture : entonnoir e-commerce sans étape d'entrée", () => {
+  const shop = [
+    { key: "add_to_cart", label: "Panier", kind: "step", has_value: false, aliases: [] },
+    { key: "purchase", label: "Achat", kind: "sale", has_value: true, aliases: [] },
+  ];
+  const convs = [
+    { id: "1", ts: day(2), type: "add_to_cart", value: 0, person: "p", touches: [meta(1)] },
+    { id: "2", ts: day(3), type: "purchase", value: 80, person: "p", touches: [meta(1)] },
+  ];
+  const acq = acquisitions(convs, shop, 30, "2026-07-01", "2026-07-31");
+  assert.equal(acq.length, 1);
+  assert.equal(acq[0].ts, day(2));
+});

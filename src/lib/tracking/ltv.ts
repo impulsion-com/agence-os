@@ -34,10 +34,13 @@ export interface LtvCell {
 
 /**
  * Entrées de la période : la première conversion d'étape d'entrée (kind « lead ») de chaque personne
- * entre `start` et `end`, créditée au premier clic de sa fenêtre d'attribution, comme Hyros.
+ * entre `start` et `end`, créditée au premier clic de sa fenêtre d'attribution, comme Hyros. Un entonnoir
+ * sans étape d'entrée (e-commerce : panier, paiement, achat) prend la première conversion de chaque personne.
+ * Limite : une personne déjà entrée avant `start` compte comme nouvelle (seule la période est chargée).
  */
 export function acquisitions(convs: Conversion[], stages: StageDef[], windowDays: number, start: string, end: string): Acquisition[] {
-  const entry = new Set(stages.filter((s) => s.kind === "lead").flatMap((s) => [s.key, ...s.aliases]));
+  const leads = stages.filter((s) => s.kind === "lead");
+  const entry = new Set((leads.length ? leads : stages).flatMap((s) => [s.key, ...s.aliases]));
   const first = new Map<string, Conversion>();
   for (const c of convs) {
     const d = c.ts.slice(0, 10);
