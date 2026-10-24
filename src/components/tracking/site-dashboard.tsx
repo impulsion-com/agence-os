@@ -11,7 +11,7 @@ import { useWorkspace } from "@/lib/workspace/context";
 import type { Period } from "@/lib/ads/metrics";
 import type { ModelId } from "@/lib/tracking/attribution";
 import type { Funnel, Stage } from "@/lib/tracking/funnel";
-import type { CampaignsData, Goal, Overview, Person, PersonSheet, SiteKey, SiteRow } from "@/lib/tracking/load";
+import type { CampaignsScreen, Goal, Overview, Person, PersonSheet, SiteKey, SiteRow } from "@/lib/tracking/load";
 import { ApiTab } from "./api-tab";
 import { AttributionTab } from "./attribution-tab";
 import { CampaignsTab } from "./campaigns-tab";
@@ -45,7 +45,7 @@ export interface DashboardProps {
   overview: Overview | null;
   people: Person[] | null;
   q: string;
-  campaigns: CampaignsData | null;
+  campaigns: CampaignsScreen | null;
   funnel: { stages: Stage[]; funnel: Funnel } | null;
   person: PersonSheet | null;
   keys: SiteKey[];

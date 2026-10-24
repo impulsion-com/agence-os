@@ -200,3 +200,12 @@ p.trk-foot { border-top: 0; display: block; }
 .trk-feed li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .trk-feed .sub { color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .trk-feed li.event b { color: var(--text); font-weight: 600; }
+
+/* Reporting façon Hyros : écart régie, valeur par prospect, comparateur de modèles */
+.trk-gap { font-weight: 600; font-variant-numeric: tabular-nums; }
+.trk-gap.pos { color: var(--green); }
+.trk-gap.neg { color: var(--red); }
+.trk-horizon { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-sm); }
+.rp-tbl th.trk-cur, .rp-tbl td.trk-cur { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.rp-tbl td.trk-max { color: var(--green); }
+.rp-tbl td.trk-min { color: var(--text-3); }

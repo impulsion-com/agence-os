@@ -51,7 +51,10 @@ L'édition se choisit à l'installation (`NEXT_PUBLIC_EDITION`). Ajouter les mod
 - Script first-party à poser sur les sites clients (façon Hyros) : identifiant visiteur, UTM et
   identifiants de clic, capture automatique des emails des formulaires, consentement RGPD.
 - Conversions par le script, l'API serveur (Stripe, Shopify, Zapier) ou les deals gagnés du CRM.
-- Six modèles d'attribution, parcours client, et ROAS réel comparé au ROAS annoncé par les régies.
+- Huit modèles d'attribution dont le Scientifique de Hyros, parcours client, et ROAS réel comparé au ROAS annoncé
+  par les régies.
+- Reporting façon Hyros : écart entre le CA déclaré par la régie et le CA mesuré jusqu'à la publicité, valeur
+  par prospect à 30, 60 et 90 jours (non-acheteurs compris), comparateur de modèles et cohortes par mois d'entrée.
 
 **Liens trackés**
 - Générateur d'UTM avec conventions de nommage et variables dynamiques Meta, Google, TikTok.
