@@ -1,5 +1,6 @@
 // Test de bout en bout du serveur MCP (/api/mcp) contre le serveur de dev et la base de dev.
-// Prérequis : `npm run dev` (http://localhost:3000), .env.local rempli, compte démo et espace studio-demo.
+// Prérequis : `npm run dev` (http://localhost:3000), .env.local rempli, compte démo et espace studio-demo
+// (le compte collègue est créé s'il manque).
 // Usage : node src/lib/mcp/tests/mcp.test.mjs            (MCP_URL=… pour viser une autre instance)
 // Le script crée ses propres jetons et données de test, puis les supprime.
 import { readFileSync } from "node:fs";
@@ -204,7 +205,11 @@ async function main() {
 
   // ------------------------------------------------------------------
   console.log("Cloisonnement");
-  const { data: collegue } = await admin.from("profiles").select("id").eq("email", "collegue@agence-os.dev").single();
+  // Le compte collègue n'existe pas sur une base neuve : on le crée (email confirmé d'office)
+  const COLLEGUE = { email: "collegue@agence-os.dev", password: "Collegue-agence-2026!" };
+  if (!(await admin.from("profiles").select("id").eq("email", COLLEGUE.email).maybeSingle()).data)
+    await admin.auth.admin.createUser({ ...COLLEGUE, email_confirm: true, user_metadata: { full_name: "Collègue de test" } });
+  const { data: collegue } = await admin.from("profiles").select("id").eq("email", COLLEGUE.email).single();
   const { data: other } = await admin.from("workspaces").insert({ name: "Espace test MCP", slug: "mcp-test-autre", created_by: collegue.id }).select("id").single();
   created.workspaces.push(other.id);
   await admin.from("workspace_members").insert({ workspace_id: other.id, user_id: collegue.id, role: "owner" });
