@@ -49,9 +49,9 @@ FROM campaign WHERE segments.date BETWEEN 'a' AND 'b'
 - Quotidienne : `GET /api/cron/sync` avec `Authorization: Bearer <CRON_SECRET>`.
 - Les comptes de démo et les comptes CSV ne sont jamais synchronisés. Les limites de débit déclenchent trois nouvelles tentatives espacées.
 
-**CRON_SECRET sur Vercel** : génère une chaîne (`openssl rand -hex 32`), ajoute-la dans Project > Settings > Environment Variables, puis redéploie. `vercel.json` déclare `{ "crons": [{ "path": "/api/cron/sync", "schedule": "0 5 * * *" }] }` (5 h UTC). Vercel envoie l'en-tête automatiquement, et le plan Hobby autorise un cron quotidien. Tu peux tester depuis Settings > Cron Jobs > Run.
+**Programmation** : ajoute `CRON_SECRET` (`openssl rand -hex 32`) dans les variables de ton hébergement, redéploie, puis **Réglages > Installation > Tâches planifiées > Programmer dans Supabase**. pg_cron appelle la route chaque jour à 5 h UTC par pg_net, avec le secret rangé dans le coffre de Supabase (migration `0120_installation.sql`) : ça marche chez n'importe quel hébergeur. La page affiche le dernier passage de chaque tâche.
 
-Hors Vercel : `curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://agence.exemple.fr/api/cron/sync` une fois par jour.
+Test manuel : `curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://agence.exemple.fr/api/cron/sync`.
 
 Facultatif : `OAUTH_STATE_SECRET` (signature du `state` OAuth ; par défaut, la clé service Supabase).
 

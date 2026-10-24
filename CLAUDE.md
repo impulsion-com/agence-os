@@ -49,7 +49,16 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 ## Base de données
 
 - Migrations dans `supabase/migrations/` (appliquées dans l'ordre). Après une migration,
-  régénérer les types : `./scripts/gen-types.sh <project-ref>` (ou la CLI Supabase).
+  régénérer les types : `./scripts/gen-types.sh <project-ref>` (ou la CLI Supabase), puis `supabase/setup.sql`
+  (`node scripts/build-setup-sql.mjs`). **Chaque migration redéfinit `public.schema_version()`** avec son numéro et
+  met à jour `SCHEMA_VERSION` (`src/lib/setup/checks.ts`) : la page Installation s'en sert pour signaler une base en retard.
+- Éditions (`src/lib/edition.ts`, `NEXT_PUBLIC_EDITION` : `tracking`, `freelance`, `projet`, vide = complète) : elles
+  fixent le profil de modules à la création d'un espace et le nom affiché, rien d'autre. Leurs listes de modules
+  doivent rester identiques aux trois premiers `PRESETS` de `src/lib/modules.ts`.
+- Page Réglages > Installation (`src/lib/setup/`, admins) : une étape par réglage du serveur, avec le prompt Claude
+  (`items.ts`), un test réel sans écriture (`checks.ts`, `POST /api/setup/test`) et la programmation des tâches dans
+  Supabase (`POST /api/setup/cron`, pg_cron + pg_net + Vault, migration 0120 ; plus de crons dans `vercel.json`).
+  Toute nouvelle variable d'environnement ou nouvelle tâche planifiée s'y ajoute (`SETUP_ITEMS`, `_cron_jobs()`).
 - Tout est cloisonné par `workspace_id` + RLS (`is_member`, `can_write`, `is_admin`).
   Le rôle `guest` lit sans écrire.
 - Analytics de site (GA4, Clarity) : `src/lib/analytics/`, voir `docs/analytics.md`. Les jetons Clarity

@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 const BASE = process.env.BASE || "http://localhost:3000";
 const ACCOUNT = { name: "Recette Installation", email: "installation@agence-os.dev", password: "Installation-2026!" };
 const SLUG = "recette-installation";
-const ROUTES = ["", "reporting", "tracking", "creatives", "links", "crm", "crm/contacts", "crm/companies", "proposals", "onboarding", "booking", "portal", "projects", "my-tasks", "calendar", "timeline", "settings/integrations", "settings/api", "settings/workspace"];
+const ROUTES = ["", "reporting", "tracking", "creatives", "links", "crm", "crm/contacts", "crm/companies", "proposals", "onboarding", "booking", "portal", "projects", "my-tasks", "calendar", "timeline", "settings/integrations", "settings/installation", "settings/api", "settings/workspace"];
 // Tables que la démo doit remplir, une ou deux par module
 const DEMO_TABLES = ["companies", "deals", "contacts", "projects", "tasks", "proposals", "ad_accounts", "ad_metrics_daily", "ad_metrics_ad_daily", "tracking_sites", "tracking_events", "visitors", "links", "link_clicks", "creative_concepts", "competitor_ads", "onboarding_forms", "booking_types", "bookings", "client_portals", "analytics_sources"];
 

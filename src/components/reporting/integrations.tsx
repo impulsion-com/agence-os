@@ -168,8 +168,9 @@ export function Integrations({ status, connections, accounts, sources, notice }:
               <div className="rp-note warn">
                 <Info size={15} />
                 <span>
-                  Ajoute la variable <code>CRON_SECRET</code> (une longue chaîne aléatoire) dans ton hébergement. Sur Vercel, le fichier <code>vercel.json</code> déclenche{" "}
-                  <code>{status.cronPath}</code> tous les jours à 5 h (UTC). Ailleurs, appelle cette URL avec l&apos;en-tête <code>Authorization: Bearer &lt;CRON_SECRET&gt;</code>.
+                  Ajoute la variable <code>CRON_SECRET</code> (une longue chaîne aléatoire) dans ton hébergement, puis programme la synchro dans Supabase depuis{" "}
+                  <Link href={`${ws.base}/settings/installation`}>Réglages &gt; Installation</Link> : elle appellera <code>{status.cronPath}</code> tous les jours à 5 h (UTC), chez n&apos;importe quel
+                  hébergeur.
                 </span>
               </div>
             )}
@@ -274,6 +275,10 @@ function PlatformCard({
             <div>
               <p>
                 L&apos;administrateur du serveur doit d&apos;abord renseigner : <code>{st.missing.join(", ")}</code>.
+              </p>
+              <p style={{ marginTop: 6 }}>
+                Le plus simple : <Link href={`${ws.base}/settings/installation`}>Réglages &gt; Installation</Link> donne le prompt à coller dans Claude in Chrome, qui fait ces étapes à ta place, puis un
+                bouton pour tester.
               </p>
               <ol className="rp-steps">
                 {platform === "meta" ? (

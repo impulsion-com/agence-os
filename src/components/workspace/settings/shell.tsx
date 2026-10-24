@@ -35,6 +35,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: "teams", icon: "layers", label: "Équipes" },
       { href: "labels", icon: "filter", label: "Étiquettes" },
       { href: "api", icon: "code", label: "API et MCP" },
+      { href: "installation", icon: "rocket", label: "Installation", admin: true },
     ],
   },
   {
@@ -62,7 +63,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
   return (
     <div className="set">
       <nav className="set-nav" aria-label="Réglages">
-        {SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !i.module || ws.has(i.module)) }))
+        {SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => (!i.module || ws.has(i.module)) && (!i.admin || ws.isAdmin)) }))
           .filter((s) => s.items.length)
           .map((s) => (
           <div key={s.title} style={{ display: "contents" }}>
