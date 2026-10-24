@@ -136,7 +136,11 @@ try {
   // 4. Accès
   // -------------------------------------------------------------------
   const stranger = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, opts);
-  must(await stranger.auth.signInWithPassword({ email: "client@agence-os.dev", password: "Client-agence-2026!" }));
+  const STRANGER = { email: "client@agence-os.dev", password: "Client-agence-2026!" };
+  // Sur une base neuve, le compte client n'existe pas encore : on le crée (email confirmé d'office)
+  if ((await stranger.auth.signInWithPassword(STRANGER)).error)
+    await admin.auth.admin.createUser({ ...STRANGER, email_confirm: true, user_metadata: { full_name: "Claire Dubois" } });
+  must(await stranger.auth.signInWithPassword(STRANGER));
   const pid = must(await user.rpc("tracking_people", { p_site: site }))[0].person_id;
   check("un membre lit la fiche", !!must(await user.rpc("tracking_person", { p_site: site, p_person: pid })));
   check("un compte hors de l'espace n'obtient rien", (await stranger.rpc("tracking_person", { p_site: site, p_person: pid })).data === null);

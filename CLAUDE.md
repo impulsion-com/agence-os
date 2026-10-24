@@ -97,3 +97,9 @@ gestion de projet (façon Linear), CRM, propositions commerciales et reporting p
 
 - `npm run dev` puis http://localhost:3000. Variables : voir `.env.example`.
 - Vérifier : `npx tsc --noEmit` et `npm run lint`.
+- Installation neuve (ce que vit un élève) : après toute migration, `node scripts/build-setup-sql.mjs`, puis rejouer
+  `supabase/setup.sql` sur un projet Supabase vierge jetable (`node scripts/db-apply.mjs <ref> supabase/setup.sql`),
+  brancher un `.env.local` dessus et lancer `node --env-file=.env.local scripts/test-installation.mjs` (inscription,
+  espace, démo, chaque page). Les autres recettes demandent ensuite le compte `demo@agence-os.dev` /
+  `Demo-agence-2026!` et son espace `studio-demo` avec la démo, à créer par l'interface ; elles créent seules les
+  comptes collègue et client. Toutes passaient sur une base vierge le 24 oct. 2026. Supprimer le projet jetable ensuite.
