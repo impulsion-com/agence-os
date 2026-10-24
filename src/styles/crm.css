@@ -326,3 +326,7 @@ th.r .crm-th { flex-direction: row-reverse; }
 .crm-mini-2 .l1, .crm-mini-2 .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .crm-mini-2 .l2 { justify-content: space-between; }
 .crm-mini-2 .l1 .num { white-space: nowrap; font-size: var(--fs-xs); color: var(--text-2); }
+
+/* Prospection : barre d'actions groupées */
+.crm-bulk-count { font-size: var(--fs-sm); font-weight: 600; padding: 0 8px 0 6px; white-space: nowrap; }
+.crm-bulk-opt { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); padding: 0 8px; white-space: nowrap; cursor: pointer; }

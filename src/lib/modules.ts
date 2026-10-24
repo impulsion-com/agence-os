@@ -70,9 +70,9 @@ export const MODULES: ModuleDef[] = [
     name: "CRM",
     icon: "handshake",
     group: "Commercial",
-    desc: "Pipeline de deals, contacts, relances et prévisionnel.",
-    includes: ["Pipeline de deals", "Contacts", "Relances et activités"],
-    routes: ["/crm", "/crm/deals", "/crm/contacts", "/settings/pipeline"],
+    desc: "Pipeline de deals, contacts, relances, prévisionnel et prospection Google Maps.",
+    includes: ["Pipeline de deals", "Contacts", "Relances et activités", "Prospection Google Maps"],
+    routes: ["/crm", "/crm/deals", "/crm/contacts", "/crm/prospects", "/settings/pipeline"],
   },
   {
     id: "proposals",

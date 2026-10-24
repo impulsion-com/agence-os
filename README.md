@@ -22,7 +22,7 @@ chacun installe sa propre copie, gratuite, et la modifie comme il veut.
 **CRM**
 - Pipeline de deals en kanban (de « Nouveau lead » à « Gagné »), valeur mensuelle ou
   ponctuelle, prévisionnel pondéré, MRR signé.
-- Clients et prospects, contacts, historique des échanges et relances.
+- Clients et prospects, contacts, historique des échanges et relances. Prospection Google Maps : import des fiches de google-maps-scraper, tri, ajout au CRM en un clic.
 - Un deal gagné crée le projet d'onboarding du client.
 
 **Propositions commerciales**

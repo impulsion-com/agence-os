@@ -1,7 +1,6 @@
 // Outils du module CRM : libellés, calculs du pipeline, formats.
 import { useState } from "react";
 
-import { COLORS } from "@/lib/constants";
 import { DAY, money, parseDay, today, diffDays } from "@/lib/format";
 import type { Company, Contact, CrmActivity, Deal, PipelineStage } from "@/lib/types";
 
@@ -109,10 +108,5 @@ export function projectKeyFor(name: string, taken: string[]) {
   return key;
 }
 
-// Couleur stable dérivée d'un nom (nouvelles entreprises)
-export function colorForName(name: string) {
-  const palette = Object.values(COLORS).slice(0, 10);
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return palette[h % palette.length];
-}
+// Couleur stable dérivée d'un nom (nouvelles entreprises), partagée avec le serveur MCP
+export { colorForName } from "@/lib/constants";

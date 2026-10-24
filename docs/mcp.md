@@ -47,6 +47,7 @@ Révocation immédiate. Les admins voient et révoquent tous les jetons de l'esp
 - **Espace** : whoami, search
 - **Projets et tâches** : list_projects, get_project, create_project, list_tasks, get_task, create_task, update_task, add_comment
 - **CRM** : list_deals, get_deal, create_deal, update_deal, list_companies, get_company, create_company, list_contacts, create_contact, add_crm_activity
+- **Prospection** : import_prospects (fiches Google Maps de google-maps-scraper), list_prospects, add_prospects_to_crm
 - **Propositions** : list_proposals, get_proposal, create_proposal (brouillon)
 - **Reporting** : get_performance, get_campaigns, get_site_analytics (GA4 et Clarity)
 - **Attribution** : get_attribution

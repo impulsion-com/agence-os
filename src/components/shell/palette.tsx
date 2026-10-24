@@ -88,7 +88,7 @@ export function CommandPalette() {
       ["Accueil", "house", b], ["Boîte de réception", "inbox", `${b}/inbox`], ["Mes tâches", "circle-check", `${b}/my-tasks`],
       ["Vue d'ensemble", "layout-dashboard", `${b}/overview`], ["Projets", "folder-kanban", `${b}/projects`], ["Tâches", "list-checks", `${b}/tasks`],
       ["Calendrier", "calendar", `${b}/calendar`], ["Timeline", "chart-gantt", `${b}/timeline`], ["Pipeline", "handshake", `${b}/crm`],
-      ["Clients & prospects", "building-2", `${b}/crm/companies`], ["Contacts", "contact", `${b}/crm/contacts`], ["Propositions", "file-signature", `${b}/proposals`],
+      ["Clients & prospects", "building-2", `${b}/crm/companies`], ["Contacts", "contact", `${b}/crm/contacts`], ["Prospection", "target", `${b}/crm/prospects`], ["Propositions", "file-signature", `${b}/proposals`],
       ["Reporting", "chart-column", `${b}/reporting`], ["Attribution", "mouse-pointer-click", `${b}/tracking`], ["Liens trackés", "link", `${b}/links`], ["Bibliothèque créa", "palette", `${b}/creatives`], ["Onboarding clients", "list-checks", `${b}/onboarding`], ["Rendez-vous", "calendar", `${b}/booking`], ["Portail client", "door-open", `${b}/portal`], ["Membres", "users", `${b}/members`], ["Équipes", "layers", `${b}/teams`],
       ["Activité", "activity", `${b}/activity`], ["Réglages", "settings", `${b}/settings`],
     ];
