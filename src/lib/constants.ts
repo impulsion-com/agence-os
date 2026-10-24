@@ -173,11 +173,3 @@ export const PROJECT_ICONS = [
   "folder", "megaphone", "target", "palette", "briefcase", "rocket", "globe", "smartphone",
   "shopping-bag", "clapperboard", "pen-tool", "chart-column", "sparkles", "layers", "zap", "heart",
 ];
-
-// Couleur stable tirée du nom (pastille d'une entreprise créée sans choix de couleur)
-export function colorForName(name: string) {
-  const palette = Object.values(COLORS).slice(0, 10);
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return palette[h % palette.length];
-}

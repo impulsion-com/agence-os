@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -3680,99 +3680,6 @@ export type Database = {
           },
           {
             foreignKeyName: "proposals_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      prospects: {
-        Row: {
-          address: string
-          category: string
-          city: string
-          company_id: string | null
-          country: string
-          created_at: string
-          created_by: string | null
-          emails: string[]
-          external_id: string
-          id: string
-          latitude: number | null
-          longitude: number | null
-          maps_url: string
-          name: string
-          phone: string
-          postal_code: string
-          rating: number | null
-          reviews: number | null
-          search: string
-          source: string
-          status: string
-          website: string
-          workspace_id: string
-        }
-        Insert: {
-          address?: string
-          category?: string
-          city?: string
-          company_id?: string | null
-          country?: string
-          created_at?: string
-          created_by?: string | null
-          emails?: string[]
-          external_id?: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          maps_url?: string
-          name: string
-          phone?: string
-          postal_code?: string
-          rating?: number | null
-          reviews?: number | null
-          search?: string
-          source?: string
-          status?: string
-          website?: string
-          workspace_id: string
-        }
-        Update: {
-          address?: string
-          category?: string
-          city?: string
-          company_id?: string | null
-          country?: string
-          created_at?: string
-          created_by?: string | null
-          emails?: string[]
-          external_id?: string
-          id?: string
-          latitude?: number | null
-          longitude?: number | null
-          maps_url?: string
-          name?: string
-          phone?: string
-          postal_code?: string
-          rating?: number | null
-          reviews?: number | null
-          search?: string
-          source?: string
-          status?: string
-          website?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "prospects_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "prospects_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

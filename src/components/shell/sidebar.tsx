@@ -149,7 +149,6 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             {has("crm") && <Item href={`${b}/crm`} icon="handshake" label="Pipeline" exact />}
             {needsCompanies(ws.modules) && <Item href={`${b}/crm/companies`} icon="building-2" label={has("crm") ? "Clients & prospects" : "Clients"} />}
             {has("crm") && <Item href={`${b}/crm/contacts`} icon="contact" label="Contacts" />}
-            {has("crm") && <Item href={`${b}/crm/prospects`} icon="target" label="Prospection" />}
             {has("proposals") && <Item href={`${b}/proposals`} icon="file-signature" label="Propositions" />}
             {has("onboarding") && <Item href={`${b}/onboarding`} icon="list-checks" label="Onboarding clients" />}
             {has("booking") && <Item href={`${b}/booking`} icon="calendar" label="Rendez-vous" />}
