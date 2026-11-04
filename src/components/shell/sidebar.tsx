@@ -128,7 +128,6 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         <Item href={`${b}/inbox`} icon="inbox" label="Boîte de réception" count={ws.unread} accent />
         {has("projects") && <Item href={`${b}/my-tasks`} icon="circle-check" label="Mes tâches" count={ws.myOpen} />}
         {has("projects") && <Item href={`${b}/favorites`} icon="star" label="Favoris" />}
-        {has("docs") && <Item href={`${b}/docs`} icon="book-open" label="Docs & process" />}
         <button className="side-item" onClick={() => ui.setPalette(true)}>
           <Icon name="search" size={16} />
           <span>Rechercher</span>
@@ -157,13 +156,18 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           </Section>
         )}
 
-        {has("projects") && (
+        {(has("projects") || has("docs")) && (
           <Section id="prod" title="Production">
-            <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
-            <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
-            <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
-            <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
-            <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
+            {has("projects") && (
+              <>
+                <Item href={`${b}/overview`} icon="layout-dashboard" label="Vue d'ensemble" />
+                <Item href={`${b}/projects`} icon="folder-kanban" label="Projets" />
+                <Item href={`${b}/tasks`} icon="list-checks" label="Tâches" />
+                <Item href={`${b}/calendar`} icon="calendar" label="Calendrier" />
+                <Item href={`${b}/timeline`} icon="chart-gantt" label="Timeline" />
+              </>
+            )}
+            {has("docs") && <Item href={`${b}/docs`} icon="book-open" label="Docs & process" />}
           </Section>
         )}
 

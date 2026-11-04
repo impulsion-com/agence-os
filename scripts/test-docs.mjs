@@ -38,7 +38,7 @@ try {
   // Accueil
   ok(await p.locator(".docs-space-card", { hasText: "Process" }).count() === 1, "accueil : espace Process");
   ok(await p.locator(".docs-tree", { hasText: "Lancement d'une campagne Meta" }).count() === 1, "arbre : pages de démo");
-  ok(await p.locator(".side", { hasText: "Docs & process" }).count() === 1, "barre latérale : entrée Docs & process");
+  ok(await p.locator(".side-sec", { hasText: "Production" }).filter({ hasText: "Docs & process" }).count() === 1, "barre latérale : Docs & process dans la section Production");
   await shot(p, "1-accueil");
 
   // Page de démo, lien interne vers la sous-page
