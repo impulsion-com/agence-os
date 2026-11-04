@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
           () => admin.rpc("_demo_intel", { ws }),
           () => admin.rpc("_demo_onboarding", { ws }),
           () => admin.rpc("_demo_booking", { ws, uid: user.id }),
+          () => admin.rpc("_demo_docs", { ws }),
           // Portail client : après les créas (trois sont envoyées en validation), puis les fichiers partagés
           () => admin.rpc("_demo_portal", { ws }),
           () => seedDemoPortalFiles(admin, ws, user.id),
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
           () => removeDemoPortalFiles(admin, ws),
           () => admin.rpc("_clear_demo_creative_naming", { ws }),
           () => sb.rpc("clear_demo_portal", { ws }),
+          () => sb.rpc("clear_demo_docs", { ws }),
           () => sb.rpc("clear_demo_booking", { ws }),
           () => sb.rpc("clear_demo_onboarding", { ws }),
           () => sb.rpc("clear_demo_intel", { ws }),

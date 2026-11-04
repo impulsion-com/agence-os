@@ -10,6 +10,7 @@ import type { AnyTool } from "../types";
 import { attributionTools } from "./attribution";
 import { creativeTools } from "./creatives";
 import { crmTools } from "./crm";
+import { docsTools } from "./docs";
 import { linkTools } from "./links";
 import { portalTools } from "./portal";
 import { projectTools } from "./projects";
@@ -30,6 +31,7 @@ export const DOMAINS: { label: string; tools: AnyTool[]; module?: ModuleId }[] =
   { label: "Liens trackés", tools: linkTools, module: "links" },
   { label: "Bibliothèque créa", tools: creativeTools, module: "creatives" },
   { label: "Portail client", tools: portalTools, module: "portal" },
+  { label: "Docs & process", tools: docsTools, module: "docs" },
 ];
 
 export const TOOL_MODULE = new Map<string, ModuleId | undefined>(DOMAINS.flatMap((d) => d.tools.map((t) => [t.name, d.module] as const)));

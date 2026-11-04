@@ -128,6 +128,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         <Item href={`${b}/inbox`} icon="inbox" label="Boîte de réception" count={ws.unread} accent />
         {has("projects") && <Item href={`${b}/my-tasks`} icon="circle-check" label="Mes tâches" count={ws.myOpen} />}
         {has("projects") && <Item href={`${b}/favorites`} icon="star" label="Favoris" />}
+        {has("docs") && <Item href={`${b}/docs`} icon="book-open" label="Docs & process" />}
         <button className="side-item" onClick={() => ui.setPalette(true)}>
           <Icon name="search" size={16} />
           <span>Rechercher</span>

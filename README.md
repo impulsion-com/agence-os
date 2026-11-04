@@ -56,6 +56,11 @@ L'édition se choisit à l'installation (`NEXT_PUBLIC_EDITION`). Ajouter les mod
 - Reporting façon Hyros : écart entre le CA déclaré par la régie et le CA mesuré jusqu'à la publicité, valeur
   par prospect à 30, 60 et 90 jours (non-acheteurs compris), comparateur de modèles et cohortes par mois d'entrée.
 
+**Docs & process**
+- Le wiki de l'agence : espaces, pages et sous-pages pour les process, checklists et conventions.
+- Éditeur avec raccourcis Markdown, images collées, tableaux et cases à cocher ; enregistrement automatique.
+- Historique des versions, corbeille, recherche ⌘K, import d'un export Notion (.zip).
+
 **Liens trackés**
 - Générateur d'UTM avec conventions de nommage et variables dynamiques Meta, Google, TikTok.
 - Raccourcisseur (domaine personnalisé possible), QR codes, création en masse, statistiques de clics.

@@ -12,7 +12,8 @@ export type ModuleId =
   | "reporting"
   | "tracking"
   | "links"
-  | "creatives";
+  | "creatives"
+  | "docs";
 
 export interface ModuleDef {
   id: ModuleId;
@@ -120,6 +121,15 @@ export const MODULES: ModuleDef[] = [
     includes: ["Projets et modèles", "Tâches et sous-tâches", "Calendrier et timeline", "Mes tâches"],
     routes: ["/projects", "/tasks", "/my-tasks", "/calendar", "/timeline", "/overview", "/favorites"],
   },
+  {
+    id: "docs",
+    name: "Docs & process",
+    icon: "book-open",
+    group: "Production",
+    desc: "Le wiki de l'agence : process, checklists et documentation, importables depuis Notion.",
+    includes: ["Espaces, pages et sous-pages", "Éditeur avec raccourcis Markdown", "Historique et corbeille", "Import depuis Notion"],
+    routes: ["/docs"],
+  },
 ];
 
 export const MODULE = Object.fromEntries(MODULES.map((m) => [m.id, m])) as Record<ModuleId, ModuleDef>;
@@ -133,22 +143,22 @@ export const PRESETS: { id: string; name: string; desc: string; icon: string; mo
     name: "Media buyer",
     desc: "Reporting, analyse créa, attribution et liens trackés",
     icon: "chart-column",
-    modules: ["reporting", "creatives", "tracking", "links"],
+    modules: ["reporting", "creatives", "tracking", "links", "docs"],
   },
   {
     id: "commercial",
     name: "Freelance",
     desc: "CRM, propositions, rendez-vous, onboarding et portail client",
     icon: "handshake",
-    modules: ["crm", "proposals", "onboarding", "booking", "portal"],
+    modules: ["crm", "proposals", "onboarding", "booking", "portal", "docs"],
   },
-  { id: "projet", name: "Gestion de projet", desc: "Projets, tâches, calendrier, timeline et portail client", icon: "folder-kanban", modules: ["projects", "portal"] },
+  { id: "projet", name: "Gestion de projet", desc: "Projets, tâches, calendrier, timeline et portail client", icon: "folder-kanban", modules: ["projects", "portal", "docs"] },
   {
     id: "freelance",
     name: "Media buyer + clients",
     desc: "La performance, plus le CRM, les propositions et le portail client",
     icon: "target",
-    modules: ["reporting", "creatives", "tracking", "links", "crm", "proposals", "onboarding", "booking", "portal"],
+    modules: ["reporting", "creatives", "tracking", "links", "crm", "proposals", "onboarding", "booking", "portal", "docs"],
   },
   { id: "tracking", name: "Tracking OS", desc: "Le suivi et l'attribution seuls, avec n'importe quel CRM", icon: "mouse-pointer-click", modules: ["reporting", "tracking", "links"] },
   { id: "all", name: "Agence complète", desc: "Tout, gestion de projet comprise", icon: "sparkles", modules: ALL_MODULES },
@@ -185,4 +195,4 @@ export function moduleOfPath(rel: string): ModuleId | null {
 }
 
 /** Les clients (entreprises) servent à presque tous les modules : la liste reste visible dès qu'un module en a besoin. */
-export const needsCompanies = (on: ModuleId[]) => on.some((m) => m !== "links");
+export const needsCompanies = (on: ModuleId[]) => on.some((m) => m !== "links" && m !== "docs");
