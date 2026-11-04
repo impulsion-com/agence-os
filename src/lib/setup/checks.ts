@@ -6,7 +6,7 @@ import { normalizeOrigin } from "./origin";
 import type { CheckId, CheckResult, CronJob } from "./types";
 
 /** Numéro de la dernière migration que ce code attend (fonction schema_version() en base). */
-export const SCHEMA_VERSION = 121;
+export const SCHEMA_VERSION = 122;
 
 /** Version du schéma en base ; 0 si la fonction n'existe pas encore (base antérieure à 0120). */
 export async function schemaVersion(): Promise<number> {

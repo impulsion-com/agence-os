@@ -1,5 +1,5 @@
 import {
-  Activity, Archive, ArrowUpDown, BadgeEuro, Bell, Briefcase, Building2, Calendar, ChartColumn, ChartGantt, Check,
+  Activity, Archive, ArrowUpDown, BadgeEuro, Bell, BookOpen, Briefcase, Building2, Calendar, ChartColumn, ChartGantt, Check,
   ChevronDown, ChevronRight, Circle, CircleCheck, Clapperboard, Code, Contact, DoorOpen, Ellipsis, Euro, Eye, FileSignature,
   FileText, Filter, Folder, FolderKanban, Globe, Handshake, Heart, House, Inbox, Kanban, Layers, LayoutDashboard,
   LayoutGrid, Link, List, ListChecks, LogOut, Megaphone, MessageSquare, Monitor, Moon, MousePointerClick, Palette,
@@ -9,7 +9,7 @@ import {
 
 // Icônes adressables par nom (projets, équipes, navigation stockés en base).
 export const ICONS: Record<string, LucideIcon> = {
-  activity: Activity, archive: Archive, "arrow-up-down": ArrowUpDown, "badge-euro": BadgeEuro, bell: Bell,
+  activity: Activity, archive: Archive, "arrow-up-down": ArrowUpDown, "badge-euro": BadgeEuro, bell: Bell, "book-open": BookOpen,
   briefcase: Briefcase, "building-2": Building2, calendar: Calendar, "chart-column": ChartColumn, "chart-gantt": ChartGantt,
   check: Check, "chevron-down": ChevronDown, "chevron-right": ChevronRight, circle: Circle, "circle-check": CircleCheck,
   clapperboard: Clapperboard, code: Code, contact: Contact, "door-open": DoorOpen, ellipsis: Ellipsis, euro: Euro, eye: Eye,

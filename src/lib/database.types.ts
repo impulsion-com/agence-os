@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -2280,6 +2280,180 @@ export type Database = {
           },
           {
             foreignKeyName: "deals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doc_pages: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          icon: string | null
+          id: string
+          is_demo: boolean
+          notion_id: string | null
+          parent_id: string | null
+          plain: string
+          position: number
+          space_id: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          icon?: string | null
+          id?: string
+          is_demo?: boolean
+          notion_id?: string | null
+          parent_id?: string | null
+          plain?: string
+          position?: number
+          space_id: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          icon?: string | null
+          id?: string
+          is_demo?: boolean
+          notion_id?: string | null
+          parent_id?: string | null
+          plain?: string
+          position?: number
+          space_id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_pages_parent_id_space_id_fkey"
+            columns: ["parent_id", "space_id"]
+            isOneToOne: false
+            referencedRelation: "doc_pages"
+            referencedColumns: ["id", "space_id"]
+          },
+          {
+            foreignKeyName: "doc_pages_space_id_workspace_id_fkey"
+            columns: ["space_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "doc_spaces"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "doc_pages_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doc_spaces: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_demo: boolean
+          name: string
+          position: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_demo?: boolean
+          name: string
+          position?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_demo?: boolean
+          name?: string
+          position?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_spaces_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doc_versions: {
+        Row: {
+          author_id: string | null
+          content: string
+          created_at: string
+          id: string
+          page_id: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          page_id: string
+          title?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          author_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          page_id?: string
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_versions_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "doc_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_versions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -4763,6 +4937,7 @@ export type Database = {
       _clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       _clear_demo_creative_naming: { Args: { ws: string }; Returns: undefined }
       _clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
+      _clear_demo_docs: { Args: { ws: string }; Returns: undefined }
       _clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       _clear_demo_links: { Args: { ws: string }; Returns: undefined }
       _clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
@@ -4786,11 +4961,13 @@ export type Database = {
       _demo_booking: { Args: { uid: string; ws: string }; Returns: number }
       _demo_creative_naming: { Args: { ws: string }; Returns: undefined }
       _demo_creatives: { Args: { ws: string }; Returns: number }
+      _demo_docs: { Args: { ws: string }; Returns: undefined }
       _demo_intel: { Args: { ws: string }; Returns: number }
       _demo_links: { Args: { ws: string }; Returns: undefined }
       _demo_onboarding: { Args: { ws: string }; Returns: undefined }
       _demo_portal: { Args: { ws: string }; Returns: number }
       _demo_portal_texts: { Args: never; Returns: string[] }
+      _doc_subtree: { Args: { p_id: string }; Returns: string[] }
       _report_analytics: {
         Args: {
           p_company: string
@@ -4886,6 +5063,7 @@ export type Database = {
       clear_demo_booking: { Args: { ws: string }; Returns: undefined }
       clear_demo_creatives: { Args: { ws: string }; Returns: undefined }
       clear_demo_data: { Args: { ws: string }; Returns: undefined }
+      clear_demo_docs: { Args: { ws: string }; Returns: undefined }
       clear_demo_intel: { Args: { ws: string }; Returns: undefined }
       clear_demo_links: { Args: { ws: string }; Returns: undefined }
       clear_demo_onboarding: { Args: { ws: string }; Returns: undefined }
@@ -5009,6 +5187,27 @@ export type Database = {
         }
         Returns: undefined
       }
+      doc_move_page: {
+        Args: {
+          p_id: string
+          p_order?: string[]
+          p_parent?: string
+          p_space?: string
+        }
+        Returns: undefined
+      }
+      doc_restore_page: { Args: { p_id: string }; Returns: undefined }
+      doc_save_page: {
+        Args: {
+          p_content?: string
+          p_id: string
+          p_plain?: string
+          p_read?: string
+          p_title?: string
+        }
+        Returns: Json
+      }
+      doc_trash_page: { Args: { p_id: string }; Returns: number }
       has_role: {
         Args: {
           roles: Database["public"]["Enums"]["member_role"][]

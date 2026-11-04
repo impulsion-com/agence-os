@@ -13,6 +13,7 @@ import { useWorkspace } from "@/lib/workspace/context";
 import type { TaskStatus } from "@/lib/types";
 import { openTask } from "@/components/tasks/view-state";
 import { moduleOfPath, needsCompanies } from "@/lib/modules";
+import { likeSafe } from "@/lib/docs/search";
 import { useUI } from "./ui-context";
 
 interface Cmd {
@@ -62,10 +63,11 @@ export function CommandPalette() {
     const t = setTimeout(async () => {
       const sb = supabaseBrowser();
       const like = `%${q.trim()}%`;
-      const [tasks, deals, contacts] = await Promise.all([
+      const [tasks, deals, contacts, docs] = await Promise.all([
         (ws.has("projects") ? sb.from("tasks").select("id, title, number, status, project_id").eq("workspace_id", ws.workspace.id).ilike("title", like).is("archived_at", null).limit(8) : Promise.resolve({ data: [] as { id: string; title: string; number: number; status: string; project_id: string }[] })),
         (ws.has("crm") ? sb.from("deals").select("id, title").eq("workspace_id", ws.workspace.id).ilike("title", like).limit(5) : Promise.resolve({ data: [] as { id: string; title: string }[] })),
         (ws.has("crm") ? sb.from("contacts").select("id, first_name, last_name, email").eq("workspace_id", ws.workspace.id).or(`first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}`).limit(5) : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string; email: string }[] })),
+        (ws.has("docs") ? sb.from("doc_pages").select("id, title, icon").eq("workspace_id", ws.workspace.id).is("deleted_at", null).or(`title.ilike.%${likeSafe(q)}%,plain.ilike.%${likeSafe(q)}%`).order("updated_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] as { id: string; title: string; icon: string | null }[] })),
       ]);
       const go = (href: string) => () => { router.push(href); close(); };
       setRemote([
@@ -74,6 +76,7 @@ export function CommandPalette() {
           return { id: "t" + t.id, group: "Tâches", label: t.title, icon: <StatusIcon status={t.status as TaskStatus} />, hint: p ? `${p.key}-${t.number}` : "", run: () => { close(); openTaskFrom(`${ws.base}/projects/${p?.key}/board`, t.id, router.push); } };
         }),
         ...(deals.data ?? []).map((d) => ({ id: "d" + d.id, group: "Deals", label: d.title, icon: <Icon name="handshake" size={15} />, run: go(`${ws.base}/crm/deals/${d.id}`) })),
+        ...(docs.data ?? []).map((d) => ({ id: "doc" + d.id, group: "Docs", label: d.title || "Sans titre", icon: d.icon ? <span style={{ width: 15, textAlign: "center" }}>{d.icon}</span> : <Icon name="file-text" size={15} />, run: go(`${ws.base}/docs/${d.id}`) })),
         ...(contacts.data ?? []).map((c) => ({ id: "c" + c.id, group: "Contacts", label: `${c.first_name} ${c.last_name}`.trim() || c.email, icon: <Icon name="contact" size={15} />, hint: c.email, run: go(`${ws.base}/crm/contacts/${c.id}`) })),
       ]);
     }, 160);
@@ -89,7 +92,7 @@ export function CommandPalette() {
       ["Vue d'ensemble", "layout-dashboard", `${b}/overview`], ["Projets", "folder-kanban", `${b}/projects`], ["Tâches", "list-checks", `${b}/tasks`],
       ["Calendrier", "calendar", `${b}/calendar`], ["Timeline", "chart-gantt", `${b}/timeline`], ["Pipeline", "handshake", `${b}/crm`],
       ["Clients & prospects", "building-2", `${b}/crm/companies`], ["Contacts", "contact", `${b}/crm/contacts`], ["Propositions", "file-signature", `${b}/proposals`],
-      ["Reporting", "chart-column", `${b}/reporting`], ["Attribution", "mouse-pointer-click", `${b}/tracking`], ["Liens trackés", "link", `${b}/links`], ["Bibliothèque créa", "palette", `${b}/creatives`], ["Onboarding clients", "list-checks", `${b}/onboarding`], ["Rendez-vous", "calendar", `${b}/booking`], ["Portail client", "door-open", `${b}/portal`], ["Membres", "users", `${b}/members`], ["Équipes", "layers", `${b}/teams`],
+      ["Reporting", "chart-column", `${b}/reporting`], ["Attribution", "mouse-pointer-click", `${b}/tracking`], ["Liens trackés", "link", `${b}/links`], ["Bibliothèque créa", "palette", `${b}/creatives`], ["Onboarding clients", "list-checks", `${b}/onboarding`], ["Rendez-vous", "calendar", `${b}/booking`], ["Portail client", "door-open", `${b}/portal`], ["Docs & process", "book-open", `${b}/docs`], ["Membres", "users", `${b}/members`], ["Équipes", "layers", `${b}/teams`],
       ["Activité", "activity", `${b}/activity`], ["Réglages", "settings", `${b}/settings`],
     ];
     const act = (fn: () => void) => () => { close(); fn(); };
